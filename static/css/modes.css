@@ -1,0 +1,1048 @@
+/* ═══════════════════════════════════════════════════════════════
+   AnnoMaster — Theme Modes
+   ───────────────────────────────────────────────────────────────
+   Component rules for the two NON-palette display modes:
+
+     .custom-mode   user-defined background/text colours chosen in
+                    Settings. theme.js computes a palette at runtime
+                    and writes the tokens onto :root; these rules
+                    cover components needing structural or contrast
+                    tweaks beyond a plain token swap.
+     .compact-mode  higher-density layout. tokens.css scales the
+                    metric tokens (--nav-h, --sp-*); these are the
+                    per-component adjustments it cannot express.
+
+   EXTRACTED FROM theme.css, WHICH IS NOW DELETED.
+   theme.css held three things at once: a light palette (now in
+   tokens.css), 248 light-mode component overrides carrying 573
+   `!important` declarations, and these mode rules. The light
+   overrides existed only to re-state light values on top of
+   hardcoded dark ones; once the component sheets moved onto tokens
+   they became redundant. These mode rules are NOT redundant.
+
+   Note: many selectors were originally grouped with a light-mode
+   twin (":root.light-mode .x, :root.custom-mode .y { … }"). The
+   groups have been split so only the still-needed halves remain.
+
+   Load AFTER tokens.css and the component sheets.
+═══════════════════════════════════════════════════════════════ */
+
+/* Compact Mode Spacing Overrides */
+:root.compact-mode,
+body.compact-mode {
+  --tb-h: 38px;
+  --sb-h: 22px;
+  font-size: 12px;
+}
+
+:root.compact-mode .settings-wrapper {
+  margin: 1.5rem auto;
+  gap: 1.5rem;
+}
+
+:root.compact-mode .settings-sidebar {
+  padding: 1rem 0.5rem;
+}
+
+:root.compact-mode .settings-nav-btn {
+  padding: 0.55rem 0.8rem;
+}
+
+:root.compact-mode .settings-card {
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+:root.compact-mode .form-grid {
+  gap: 0.85rem;
+}
+
+:root.compact-mode .profile-avatar-section {
+  padding: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+:root.compact-mode .avatar-large {
+  width: 60px;
+  height: 60px;
+  font-size: 1.8rem;
+}
+
+:root.compact-mode .panel-header {
+  margin-bottom: 1.25rem;
+}
+
+/* Specific compact mode adjustments for workspace annotate page */
+:root.compact-mode .right-nav-btn {
+  padding: 8px 10px;
+}
+
+:root.compact-mode .toolbar {
+  height: var(--tb-h);
+}
+
+:root.compact-mode .workspace {
+  top: var(--tb-h);
+  bottom: var(--sb-h);
+}
+
+:root.compact-mode .statusbar {
+  height: var(--sb-h);
+  font-size: 11px;
+}
+
+/* ── Custom Theme Mode Overrides (Global Component Overrides) ── */
+:root.custom-mode,
+body.custom-mode {
+  /* Inherit scrollbars to look custom matching custom-mode text */
+  ::-webkit-scrollbar-thumb {
+    background: var(--tx3) !important;
+    opacity: 0.3;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--tx2) !important;
+    opacity: 0.5;
+  }
+}
+
+/* Custom Mode Top Header & Navigation Bars */
+:root.custom-mode .toolbar {
+  background: var(--surface) !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+
+:root.custom-mode .right-nav {
+  background: #0f172a !important;
+  border-left: none !important;
+  border-right: 1px solid rgba(255,255,255,0.07) !important;
+}
+
+:root.custom-mode .rn-brand {
+  border-bottom: 1px solid var(--border) !important;
+}
+
+:root.custom-mode .rn-project-panel {
+  border-top: 1px solid var(--border) !important;
+}
+
+:root.custom-mode .rn-divider {
+  background: var(--border) !important;
+}
+
+/* Custom Mode Canvas Toolbars */
+:root.custom-mode .draw-toolbar {
+  background: var(--surface) !important;
+  border: 1px solid var(--border2) !important;
+  box-shadow: var(--sh-md), 0 0 0 1px var(--accent-glow) !important;
+}
+
+:root.custom-mode .dt-btn {
+  color: var(--tx2) !important;
+}
+
+:root.custom-mode .dt-btn:hover {
+  background: var(--border) !important;
+}
+
+:root.custom-mode .dt-btn.active {
+  background: var(--accent-bg) !important;
+  border-color: var(--accent-dim) !important;
+  color: var(--accent) !important;
+}
+
+/* Custom Mode Popups and Class Selectors */
+:root.custom-mode .cls-popup {
+  background: var(--surface) !important;
+  border: 1px solid var(--border3) !important;
+  box-shadow: var(--sh-lg), 0 0 0 1px var(--accent-glow) !important;
+}
+
+:root.custom-mode .cp-header {
+  border-bottom: 1px solid var(--border) !important;
+  background: var(--accent-bg) !important;
+}
+
+:root.custom-mode .cp-search {
+  border-bottom: 1px solid var(--border) !important;
+}
+
+:root.custom-mode .cp-search input {
+  background: var(--border) !important;
+  border: 1px solid var(--border2) !important;
+  color: var(--tx) !important;
+}
+
+:root.custom-mode .cp-item:hover {
+  background: var(--border) !important;
+}
+
+:root.custom-mode .cp-item.sel {
+  background: var(--accent-bg) !important;
+  border-color: var(--accent) !important;
+}
+
+:root.custom-mode .cp-item .cpn {
+  color: var(--tx) !important;
+}
+
+:root.custom-mode .cp-item .cpk {
+  background: var(--border) !important;
+  border: 1px solid var(--border2) !important;
+  color: var(--tx) !important;
+}
+
+:root.custom-mode .cp-add-cls-section {
+  border-top: 1px solid var(--border) !important;
+}
+
+/* Custom Mode Smart Detect Floating Panel */
+:root.custom-mode #sdPanel {
+  background: var(--surface) !important;
+  border: 1px solid var(--border2) !important;
+  box-shadow: var(--sh-md), 0 0 0 1px var(--accent-glow) !important;
+}
+
+:root.custom-mode #sdPanel > div:first-child {
+  border-bottom: 1px solid var(--border2) !important;
+  background: var(--border) !important;
+}
+
+:root.custom-mode #sdPanel span {
+  color: var(--tx) !important;
+}
+
+:root.custom-mode #sdPanel #sdConfVal {
+  color: var(--accent) !important;
+}
+
+:root.custom-mode #sdPanel #sdModelSelect {
+  background: var(--border) !important;
+  border: 1px solid var(--border2) !important;
+  color: var(--tx) !important;
+}
+
+:root.custom-mode #sdPanel label {
+  background: var(--border) !important;
+  border: 1px solid var(--border2) !important;
+  color: var(--tx2) !important;
+}
+
+:root.custom-mode #sdPanel #sdStatusBar {
+  background: var(--border) !important;
+  color: var(--tx2) !important;
+}
+
+:root.custom-mode #sdPanel #sdModeManualBtn {
+  border-color: var(--border2) !important;
+  color: var(--tx2) !important;
+}
+
+:root.custom-mode #sdPanel #sdModeHint {
+  color: var(--tx3) !important;
+}
+
+/* Custom Mode AI Suggestion Class Picker Popup */
+:root.custom-mode #sdClsPicker {
+  background: var(--surface) !important;
+  border: 1px solid var(--border2) !important;
+  box-shadow: var(--sh-lg), 0 0 0 1px var(--accent-glow) !important;
+}
+
+:root.custom-mode #sdClsPicker > div:first-child {
+  border-bottom: 1px solid var(--border2) !important;
+  background: var(--border) !important;
+}
+
+:root.custom-mode #sdClsPicker span {
+  color: var(--tx2) !important;
+}
+
+:root.custom-mode #sdClsPicker #sdCpPredLabel {
+  background: var(--accent-bg) !important;
+  border: 1px solid var(--accent-glow) !important;
+  color: var(--accent) !important;
+}
+
+:root.custom-mode #sdClsPicker #sdCpSearch {
+  background: var(--border) !important;
+  border: 1px solid var(--border2) !important;
+  color: var(--tx) !important;
+}
+
+:root.custom-mode #sdCpList div {
+  border-color: transparent !important;
+}
+
+:root.custom-mode #sdCpList div.sdcp-selected {
+  border-color: var(--accent) !important;
+  background: var(--accent-bg) !important;
+}
+
+:root.custom-mode #sdCpList span:nth-child(2) {
+  color: var(--tx2) !important;
+}
+
+:root.custom-mode #sdCpList .sdcp-selected span:nth-child(2) {
+  color: var(--tx) !important;
+  font-weight: 700 !important;
+}
+
+:root.custom-mode #sdCpList div:hover {
+  background: var(--border) !important;
+}
+
+:root.custom-mode #sdCpAddRow {
+  border-top: 1px solid var(--border2) !important;
+}
+
+:root.custom-mode #sdCpNewName {
+  background: var(--border) !important;
+  border: 1px solid var(--border2) !important;
+  color: var(--tx) !important;
+}
+
+/* Custom Mode Overlay Modals */
+:root.custom-mode .modal {
+  background: var(--surface) !important;
+  border: 1px solid var(--border2) !important;
+  box-shadow: var(--sh-lg), 0 0 0 1px var(--accent-glow) !important;
+}
+
+:root.custom-mode .modal-head {
+  border-bottom: 1px solid var(--border) !important;
+}
+
+:root.custom-mode .modal-foot {
+  border-top: 1px solid var(--border) !important;
+}
+
+:root.custom-mode .modal-x {
+  background: var(--border) !important;
+  border: 1px solid var(--border2) !important;
+  color: var(--tx2) !important;
+}
+
+:root.custom-mode .modal-x:hover {
+  background: rgba(255,64,96,.12) !important;
+  color: var(--danger) !important;
+  border-color: rgba(255,64,96,.2) !important;
+}
+
+/* Custom Mode Split-to-Dataset Modal */
+:root.custom-mode .usp-modal {
+  background: var(--surface) !important;
+  border: 1px solid var(--border2) !important;
+  box-shadow: var(--sh-lg), 0 0 0 1px var(--accent-glow) !important;
+}
+
+:root.custom-mode .usp-head {
+  border-bottom: 1px solid var(--border) !important;
+}
+
+:root.custom-mode .usp-close {
+  background: var(--border) !important;
+  border: 1px solid var(--border2) !important;
+  color: var(--tx2) !important;
+}
+
+:root.custom-mode .usp-close:hover {
+  background: var(--border2) !important;
+  color: var(--tx) !important;
+}
+
+:root.custom-mode .usp-info-cell {
+  background: var(--border) !important;
+  border-top-width: 2px !important;
+}
+
+:root.custom-mode .usp-info-cell:hover {
+  background: var(--border2) !important;
+}
+
+:root.custom-mode .usp-preview-bar {
+  background: var(--border) !important;
+}
+
+:root.custom-mode .usp-cancel-btn {
+  border: 1px solid var(--border2) !important;
+  background: var(--border) !important;
+  color: var(--tx2) !important;
+}
+
+:root.custom-mode .usp-cancel-btn:hover {
+  border-color: var(--border3) !important;
+  color: var(--tx) !important;
+}
+
+:root.custom-mode .usp-footer {
+  border-top: 1px solid var(--border) !important;
+}
+
+:root.custom-mode .uhp-card-del {
+  color: var(--tx3) !important;
+}
+
+:root.custom-mode .uhp-card-del:hover {
+  color: #ef4444 !important;
+  background: rgba(239, 68, 68, 0.1) !important;
+}
+
+:root.custom-mode .uhp-empty-icon {
+  background: var(--border) !important;
+  border: 1px solid var(--border2) !important;
+  color: var(--tx3) !important;
+}
+
+:root.custom-mode .uhp-empty-title {
+  color: var(--tx) !important;
+}
+
+:root.custom-mode .uhp-empty-sub {
+  color: var(--tx2) !important;
+}
+
+:root.custom-mode .uoc-arrow {
+  color: var(--tx3) !important;
+}
+
+:root.custom-mode .ubd-formats span {
+  border: 1px solid var(--border2) !important;
+  background: var(--border) !important;
+  color: var(--tx2) !important;
+}
+
+:root.custom-mode .up-pipe-connector {
+  color: var(--tx3) !important;
+}
+
+:root.custom-mode .uhp-btn.add-ds {
+  border-color: var(--border2) !important;
+  background: var(--border) !important;
+  color: var(--tx2) !important;
+}
+
+:root.custom-mode .uhp-btn.add-ds:hover {
+  background: var(--border2) !important;
+  color: var(--tx) !important;
+}
+
+:root.custom-mode .status-bar {
+  background: var(--panel) !important;
+  border-top: 1px solid var(--border) !important;
+}
+
+:root.custom-mode .sb-item {
+  color: var(--tx2) !important;
+}
+
+:root.custom-mode .sb-item i {
+  color: var(--tx3) !important;
+}
+
+:root.custom-mode .ds-perpage-select,
+:root.custom-mode .ds-class-select {
+  background: var(--surface) !important;
+  border: 1px solid var(--border2) !important;
+  color: var(--tx) !important;
+}
+
+:root.custom-mode .ds-perpage-select option,
+:root.custom-mode .ds-class-select option {
+  background: var(--surface) !important;
+  color: var(--tx) !important;
+}
+
+:root.custom-mode .ds-class-select:hover {
+  border-color: var(--border3) !important;
+}
+
+:root.custom-mode .workspace-item.active {
+  background: var(--accent-bg) !important;
+  color: var(--accent-dim, #00b88a) !important;
+  border: 1px solid rgba(0, 229, 176, 0.25) !important;
+}
+
+:root.custom-mode .settings-nav-btn.active {
+  background: var(--accent-bg) !important;
+  color: var(--accent-dim, #00b88a) !important;
+  border-color: rgba(0, 229, 176, 0.22) !important;
+}
+
+:root.custom-mode .account-dropdown {
+  background: var(--surface) !important;
+  border: 1px solid var(--border2) !important;
+  box-shadow: var(--sh-lg) !important;
+}
+
+:root.custom-mode .account-dropdown-header {
+  background: var(--panel) !important;
+}
+
+:root.custom-mode .account-dropdown-item:hover {
+  background: var(--panel) !important;
+  color: var(--accent-dim, #00b88a) !important;
+}
+
+:root.custom-mode .settings-sidebar {
+  box-shadow: var(--sh-md) !important;
+}
+
+:root.custom-mode .search-bar input {
+  background: var(--panel) !important;
+  border: 1px solid var(--border2) !important;
+  color: var(--tx) !important;
+}
+
+:root.custom-mode .search-bar input:focus {
+  background: var(--surface) !important;
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px var(--accent-glow) !important;
+}
+
+:root.custom-mode .search-bar input::placeholder {
+  color: var(--tx3) !important;
+}
+
+:root.custom-mode .ftab {
+  border: 1px solid var(--border2) !important;
+  background: var(--panel) !important;
+  color: var(--tx2) !important;
+}
+
+:root.custom-mode .ftab:hover {
+  background: var(--border) !important;
+  border-color: var(--border3) !important;
+  color: var(--tx) !important;
+}
+
+:root.custom-mode .ftab.active {
+  background: var(--accent-bg) !important;
+  border-color: var(--accent-dim, #00b88a) !important;
+  color: var(--accent-dim, #00b88a) !important;
+}
+
+:root.custom-mode .ftab.annotated.active {
+  background: rgba(29,233,122,0.12) !important;
+  border-color: rgba(29,233,122,0.4) !important;
+  color: #15803d !important;
+}
+
+:root.custom-mode .ftab.empty.active {
+  background: rgba(255,64,96,0.1) !important;
+  border-color: rgba(255,64,96,0.4) !important;
+  color: #b91c1c !important;
+}
+
+:root.custom-mode .ftab.train.active {
+  background: var(--accent-bg) !important;
+  border-color: var(--accent-dim, #00b88a) !important;
+  color: var(--accent-dim, #00b88a) !important;
+}
+
+:root.custom-mode .ftab.valid.active {
+  background: rgba(77,166,255,0.12) !important;
+  border-color: rgba(77,166,255,0.4) !important;
+  color: #1d4ed8 !important;
+}
+
+:root.custom-mode .ftab.test.active {
+  background: rgba(160,122,255,0.12) !important;
+  border-color: rgba(160,122,255,0.4) !important;
+  color: #6d28d9 !important;
+}
+
+:root.custom-mode .upload-zone {
+  border: 1.5px dashed var(--border3) !important;
+  background: var(--panel) !important;
+}
+
+:root.custom-mode .upload-zone:hover {
+  border-color: var(--accent) !important;
+  background: var(--accent-bg) !important;
+}
+
+:root.custom-mode .list-page-bar {
+  background: var(--panel) !important;
+  border-top-color: var(--border) !important;
+}
+
+:root.custom-mode .lp-pill.active {
+  background: var(--accent-bg) !important;
+  border-color: var(--accent-dim, #00b88a) !important;
+  color: var(--accent-dim, #00b88a) !important;
+}
+
+:root.custom-mode .jlb-clear-btn {
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--tx2) !important;
+}
+
+:root.custom-mode .jlb-divider {
+  background: var(--border) !important;
+}
+
+:root.custom-mode .jlb-progress-track {
+  background: var(--border) !important;
+}
+
+:root.custom-mode .auth-left {
+  background: linear-gradient(160deg, #f1f5f9 0%, #e2e8f0 100%) !important;
+  border-right: 1px solid var(--border) !important;
+}
+
+:root.custom-mode .auth-left::before {
+  background: radial-gradient(ellipse 80% 60% at 50% 30%, rgba(0,229,176,.04) 0%, transparent 70%) !important;
+}
+
+:root.custom-mode .auth-left-brand {
+  color: var(--tx) !important;
+}
+
+:root.custom-mode .auth-left-tagline {
+  color: var(--tx2) !important;
+}
+
+:root.custom-mode .auth-feature {
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+}
+
+:root.custom-mode .auth-feature-text strong {
+  color: var(--tx) !important;
+}
+
+:root.custom-mode .auth-feature-text {
+  color: var(--tx2) !important;
+}
+
+:root.custom-mode .auth-right {
+  background: var(--surface) !important;
+}
+
+:root.custom-mode .social-btn.google i {
+  color: #ea4335 !important;
+}
+
+:root.custom-mode .social-btn.github i {
+  color: #000000 !important;
+}
+
+:root.custom-mode .layout-preview-lines span {
+  background: rgba(0, 0, 0, 0.12) !important;
+}
+
+:root.custom-mode .compact-lines span {
+  background: rgba(0, 0, 0, 0.16) !important;
+}
+
+:root.custom-mode .mock-qr-code {
+  border: 1px solid var(--border2) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06) !important;
+}
+
+:root.custom-mode .toggle-control-row {
+  background: var(--panel) !important;
+  border: 1px solid var(--border2) !important;
+}
+
+:root.custom-mode .session-item {
+  background: var(--panel) !important;
+  border: 1px solid var(--border2) !important;
+}
+
+:root.custom-mode .session-item:hover {
+  background: var(--surface) !important;
+  border-color: var(--border3) !important;
+}
+
+:root.custom-mode .checkbox-box {
+  background: var(--surface) !important;
+  border: 1px solid var(--border3) !important;
+}
+
+:root.custom-mode .notification-checkbox-row:hover input ~ .checkbox-box {
+  border-color: var(--accent) !important;
+}
+
+:root.custom-mode .settings-sidebar-header {
+  border-bottom-color: var(--border2) !important;
+}
+
+:root.custom-mode .twofa-setup-box {
+  background: var(--panel) !important;
+  border: 1px solid var(--border2) !important;
+}
+
+:root.custom-mode .qr-label {
+  background: var(--panel) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--tx2) !important;
+}
+
+:root.custom-mode .color-picker-container {
+  background: var(--panel) !important;
+  border: 1px solid var(--border2) !important;
+}
+
+:root.custom-mode .project-card {
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--sh-sm) !important;
+}
+
+:root.custom-mode .project-card:hover {
+  border-color: rgba(0,229,176,.35) !important;
+  box-shadow: 0 12px 36px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,229,176,.10) !important;
+}
+
+:root.custom-mode .project-card-cover {
+  background: linear-gradient(135deg, var(--panel) 0%, var(--card2) 100%) !important;
+}
+
+:root.custom-mode .pcs-chip {
+  background: var(--panel) !important;
+  border-color: var(--border2) !important;
+  color: var(--tx2) !important;
+}
+
+:root.custom-mode .pcs-chip.green {
+  background: rgba(29,233,122,.06) !important;
+  border-color: rgba(29,233,122,.18) !important;
+  color: #15803d !important;
+}
+
+:root.custom-mode .pcs-chip.amber {
+  background: rgba(255,176,32,.06) !important;
+  border-color: rgba(255,176,32,.18) !important;
+  color: #b45309 !important;
+}
+
+:root.custom-mode .pcs-chip.blue {
+  background: rgba(77,166,255,.06) !important;
+  border-color: rgba(77,166,255,.18) !important;
+  color: #1d4ed8 !important;
+}
+
+:root.custom-mode .project-progress {
+  background: var(--border) !important;
+}
+
+:root.custom-mode .project-progress-label {
+  color: var(--tx3) !important;
+}
+
+:root.custom-mode .project-card-actions {
+  border-top-color: var(--border) !important;
+}
+
+:root.custom-mode .pca-btn {
+  background: var(--panel) !important;
+  border-color: var(--border2) !important;
+  color: var(--tx2) !important;
+}
+
+:root.custom-mode .pca-btn:hover {
+  background: var(--accent-bg) !important;
+  border-color: rgba(0,229,176,.25) !important;
+  color: var(--accent-dim) !important;
+}
+
+:root.custom-mode .pca-btn.primary {
+  background: var(--accent-bg) !important;
+  border-color: rgba(0,229,176,.22) !important;
+  color: var(--accent-dim, #00b88a) !important;
+}
+
+:root.custom-mode .pca-btn.primary:hover {
+  background: var(--accent) !important;
+  color: #000 !important;
+  border-color: transparent !important;
+}
+
+:root.custom-mode .pca-btn.danger:hover {
+  background: rgba(255,64,96,.07) !important;
+  border-color: rgba(255,64,96,.22) !important;
+  color: #dc2626 !important;
+}
+
+:root.custom-mode .project-card-footer {
+  border-top-color: var(--border) !important;
+}
+
+:root.custom-mode .project-card-date {
+  color: var(--tx3) !important;
+}
+
+:root.custom-mode .empty-icon-wrap {
+  background: var(--surface) !important;
+  border-color: var(--border2) !important;
+  box-shadow: var(--sh-md) !important;
+}
+
+:root.custom-mode .workspace-item {
+  color: var(--tx2) !important;
+}
+
+:root.custom-mode .workspace-item:hover {
+  background: var(--glass-hover) !important;
+  border-color: var(--border) !important;
+  color: var(--tx) !important;
+}
+
+:root.custom-mode .share-panel {
+  background: var(--surface) !important;
+  border-left-color: var(--border) !important;
+  box-shadow: -4px 0 24px rgba(0,0,0,0.08) !important;
+}
+
+:root.custom-mode .share-panel-header {
+  border-bottom-color: var(--border) !important;
+}
+
+:root.custom-mode .share-member-row:hover {
+  background: var(--panel) !important;
+}
+
+:root.custom-mode .img-nav-bar {
+  background: rgba(255, 255, 255, 0.75) !important;
+  backdrop-filter: blur(20px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+  border: 1px solid rgba(0, 0, 0, 0.07) !important;
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.06),
+    0 2px 8px rgba(0, 0, 0, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
+}
+
+:root.custom-mode .img-nav-btn {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+:root.custom-mode .img-nav-btn:hover:not(:disabled) {
+  background: rgba(0, 229, 176, 0.12) !important;
+  color: var(--accent-dim) !important;
+}
+
+:root.custom-mode .img-nav-counter {
+  border-left: 1px solid rgba(0, 0, 0, 0.08) !important;
+  border-right: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.custom-mode .img-nav-current {
+  color: var(--accent-dim) !important;
+  text-shadow: none !important;
+}
+
+:root.custom-mode .img-nav-sep {
+  color: rgba(0, 0, 0, 0.20) !important;
+}
+
+:root.custom-mode .img-nav-total {
+  color: rgba(0, 0, 0, 0.40) !important;
+}
+
+:root.custom-mode .atd-pill {
+  box-shadow:
+    0 6px 20px rgba(0, 229, 176, 0.20),
+    0 2px 6px rgba(0, 0, 0, 0.06) !important;
+}
+
+:root.custom-mode .atd-panel {
+  background: rgba(255, 255, 255, 0.82) !important;
+  backdrop-filter: blur(24px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(160%) !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.08),
+    0 4px 16px rgba(0, 0, 0, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
+}
+
+:root.custom-mode .atd-panel-head {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
+  background: rgba(0, 229, 176, 0.04) !important;
+}
+
+:root.custom-mode .atd-panel-title {
+  color: var(--accent-dim) !important;
+}
+
+:root.custom-mode .atd-panel-close {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+:root.custom-mode .atd-panel-close:hover {
+  background: rgba(0, 0, 0, 0.05) !important;
+  color: #000 !important;
+}
+
+:root.custom-mode .atd-stat + .atd-stat {
+  border-left: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.custom-mode .atd-stat-lbl {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+:root.custom-mode .atd-stat.annotated .atd-stat-n {
+  color: #16a34a !important;
+}
+
+:root.custom-mode .atd-stat.raw .atd-stat-n {
+  color: #dc2626 !important;
+}
+
+:root.custom-mode .atd-stat.total .atd-stat-n {
+  color: rgba(0, 0, 0, 0.6) !important;
+}
+
+:root.custom-mode .atd-progress-track {
+  background: rgba(0, 0, 0, 0.06) !important;
+}
+
+:root.custom-mode .atd-info-note {
+  background: rgba(0, 0, 0, 0.02) !important;
+  border: 1px solid rgba(0, 0, 0, 0.05) !important;
+  color: rgba(0, 0, 0, 0.55) !important;
+}
+
+:root.custom-mode .atd-split-section {
+  border-top: 1px solid rgba(0, 0, 0, 0.06) !important;
+}
+
+:root.custom-mode .atd-split-header {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+:root.custom-mode .atd-slider-lbl {
+  color: rgba(0, 0, 0, 0.55) !important;
+}
+
+:root.custom-mode .atd-slider-pct {
+  color: rgba(0, 0, 0, 0.55) !important;
+}
+
+:root.custom-mode .atd-panel-footer {
+  border-top: 1px solid rgba(0, 0, 0, 0.06) !important;
+}
+
+:root.custom-mode .atd-cancel-btn {
+  border: 1px solid rgba(0, 0, 0, 0.12) !important;
+  color: rgba(0, 0, 0, 0.6) !important;
+}
+
+:root.custom-mode .atd-cancel-btn:hover {
+  background: rgba(0, 0, 0, 0.05) !important;
+  color: #000 !important;
+}
+
+:root.custom-mode #annoBody {
+  background: #f5f5f4 !important;
+  padding: 12px 10px !important;
+  border-radius: 0 0 var(--r-md) var(--r-md) !important;
+}
+
+:root.custom-mode .anno-list {
+  background: transparent !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  padding: 0 !important;
+}
+
+:root.custom-mode .anno-item {
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.05) !important;
+  border-radius: 8px !important;
+  padding: 10px 12px !important;
+  margin-bottom: 0 !important;
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.02),
+    0 2px 8px rgba(0, 0, 0, 0.03) !important;
+  transition:
+    transform 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.15s ease,
+    border-color 0.15s ease !important;
+}
+
+:root.custom-mode .anno-item:hover {
+  background: #ffffff !important;
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.05),
+    0 1px 3px rgba(0, 0, 0, 0.02) !important;
+  transform: translateY(-1px) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.custom-mode .anno-item.sel {
+  background: #ffffff !important;
+  border-color: var(--accent, #00e5b0) !important;
+  box-shadow:
+    0 4px 16px rgba(0, 229, 176, 0.08),
+    0 1px 3px rgba(0, 0, 0, 0.02) !important;
+}
+
+:root.custom-mode .ai-size {
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 9px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.08em !important;
+  color: rgba(0, 0, 0, 0.45) !important;
+  background: rgba(0, 0, 0, 0.04) !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
+  font-weight: 500 !important;
+}
+
+:root.custom-mode .ai-name {
+  font-weight: 600 !important;
+  color: rgba(0, 0, 0, 0.8) !important;
+  font-size: 11px !important;
+}
+
+:root.custom-mode .ai-actions {
+  opacity: 0 !important;
+  transform: translateX(4px) !important;
+  transition:
+    opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+:root.custom-mode .anno-item:hover .ai-actions,
+:root.custom-mode .anno-item.sel .ai-actions {
+  opacity: 1 !important;
+  transform: translateX(0) !important;
+}
+
+:root.custom-mode .ai-act {
+  color: rgba(0, 0, 0, 0.4) !important;
+  background: transparent !important;
+  border-radius: 6px !important;
+  width: 22px !important;
+  height: 22px !important;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    transform 0.1s ease !important;
+}
+
+:root.custom-mode .ai-act:hover {
+  background: rgba(0, 0, 0, 0.05) !important;
+  color: rgba(0, 0, 0, 0.8) !important;
+}
+
+:root.custom-mode .ai-reanno:hover {
+  background: rgba(0, 229, 176, 0.12) !important;
+  color: var(--accent-dim) !important;
+}
+
+:root.custom-mode .ai-select:hover {
+  background: rgba(99, 102, 241, 0.12) !important;
+  color: #6366f1 !important;
+}
+
+:root.custom-mode .ai-del:hover {
+  background: rgba(239, 68, 68, 0.12) !important;
+  color: #ef4444 !important;
+}

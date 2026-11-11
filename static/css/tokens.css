@@ -1,0 +1,538 @@
+/* ═══════════════════════════════════════════════════════════════
+   AnnoMaster — Design Token Layer
+   ───────────────────────────────────────────────────────────────
+   SINGLE SOURCE OF TRUTH for colour, type, spacing, motion.
+   Must be loaded FIRST, before every other stylesheet.
+
+   ARCHITECTURE
+   ────────────
+   Layer 1  Primitives   raw palette values. Never referenced by
+                         component CSS — only by Layer 2.
+   Layer 2  Semantic     role-based tokens (--bg, --tx, --card…).
+                         THIS is the public API that components use.
+
+   Both Dark and Light are *derived* themes. Neither is baked into
+   the base stylesheet. Adding a third theme = adding one block
+   here, and changing nothing else in the codebase.
+
+   WHY THIS FILE EXISTS
+   ────────────────────
+   Previously the dark palette was hardcoded on `:root` in three
+   separate files (main.css, layout.css, login.html's inline
+   <style>), and Light was bolted on afterwards as a 1,742-line
+   override sheet carrying 573 `!important` declarations. Any
+   component nobody remembered to override stayed dark in light
+   mode. That failure mode is structural — it cannot be fixed
+   component-by-component — so the token layer is inverted here.
+
+   NAMING CONTRACT
+   ───────────────
+   The semantic names below (--bg, --surface, --panel, --card,
+   --tx, --tx2, --tx3, --border…) are deliberately IDENTICAL to
+   the names the old stylesheets already used. That is what makes
+   this refactor safe: existing component CSS keeps resolving, it
+   just now resolves against a correct, theme-aware source.
+   Do not rename them without sweeping all consumers.
+═══════════════════════════════════════════════════════════════ */
+
+/* ───────────────────────────────────────────────────────────────
+   LAYER 1 — PRIMITIVES
+   Theme-independent raw values. Not for direct component use.
+─────────────────────────────────────────────────────────────── */
+:root {
+  /* Neutral ramp — cool-tinted slate, dark end */
+  --p-ink-950: #07070d;
+  --p-ink-900: #0d0d16;
+  --p-ink-850: #111119;
+  --p-ink-800: #16161f;
+  --p-ink-750: #1c1c28;
+  --p-ink-700: #242432;
+  --p-ink-400: #70708a;
+  --p-ink-300: #36364a;
+
+  /* Neutral ramp — light end */
+  --p-snow-000: #ffffff;
+  --p-snow-050: #f7f9fb;
+  --p-snow-100: #f2f4f6;
+  --p-snow-200: #eceef0;
+  /* Matches the annotator's former --v2-surface-high exactly, so
+     aliasing that token stays pixel-identical in light mode. */
+  --p-snow-300: #e6e8ea;
+  --p-slate-600: #6c7a71;
+  --p-slate-700: #3c4a42;
+  --p-slate-900: #191c1e;
+
+  /* Brand — electric teal (dark theme) / deep green (light theme) */
+  --p-teal-400: #00e5b0;
+  --p-teal-500: #00b88a;
+  --p-green-600: #006c49;
+  --p-green-700: #005236;
+
+  /* Status hues — dark-theme variants */
+  --p-success-d: #1de97a;
+  --p-danger-d:  #ff4060;
+  --p-warning-d: #ffb020;
+  --p-info-d:    #4da6ff;
+  --p-purple-d:  #a07aff;
+
+  /* Status hues — light-theme variants (darkened for AA on white) */
+  --p-success-l: #04724d;
+  --p-danger-l:  #ba1a1a;
+  --p-warning-l: #96600a;
+  --p-info-l:    #1d4ed8;
+  --p-purple-l:  #6d28d9;
+}
+
+/* ───────────────────────────────────────────────────────────────
+   LAYER 2 — SEMANTIC TOKENS · DARK THEME (default)
+   `:root` with no theme class = dark. Matches previous default so
+   no existing page changes appearance unexpectedly.
+─────────────────────────────────────────────────────────────── */
+:root {
+  color-scheme: dark;
+
+  /* Surface elevation ladder — lowest to highest */
+  --bg:      var(--p-ink-950);
+  --surface: var(--p-ink-900);
+  --panel:   var(--p-ink-850);
+  --card:    var(--p-ink-800);
+  --card2:   var(--p-ink-750);
+  --card3:   var(--p-ink-700);
+
+  /* Borders — ascending prominence */
+  --border:  rgba(255,255,255,.06);
+  --border2: rgba(255,255,255,.10);
+  --border3: rgba(255,255,255,.15);
+
+  /* Text tiers */
+  --tx:  #f0f0f8;   /* primary   — headings, body */
+  --tx2: var(--p-ink-400);  /* secondary — labels, meta */
+  --tx3: var(--p-ink-300);  /* tertiary  — placeholders, disabled */
+
+  /* Brand accent */
+  --accent:      var(--p-teal-400);
+  --accent-dim:  var(--p-teal-500);
+  --accent-bg:   rgba(0,229,176,.07);
+  --accent-glow: rgba(0,229,176,.22);
+  --accent-deep: rgba(0,229,176,.04);
+  /* Foreground for text sitting ON a saturated fill (accent,
+     success, warning, danger…). On the dark theme those fills are
+     bright, so the text must be near-black; on the light theme
+     they are darkened, so it must be white. One token covers every
+     such pairing — see the light block where it flips.
+     --accent-ink is the historical name kept for compatibility. */
+  --on-fill:     #00120c;
+  --accent-ink:  var(--on-fill);
+
+  /* Status */
+  --success: var(--p-success-d);
+  --danger:  var(--p-danger-d);
+  --warning: var(--p-warning-d);
+  --info:    var(--p-info-d);
+  --purple:  var(--p-purple-d);
+  /* Distinct from --purple: the annotator uses violet and indigo
+     to separate its editing modes (poly vs edit), so collapsing
+     both onto one hue would erase a meaningful distinction. */
+  --indigo:  #818cf8;
+
+  /* Tinted status surfaces — replaces ad-hoc rgba() literals */
+  --success-bg: rgba(29,233,122,.10);
+  --danger-bg:  rgba(255,64,96,.10);
+  --warning-bg: rgba(255,176,32,.10);
+  --info-bg:    rgba(77,166,255,.10);
+  --success-br: rgba(29,233,122,.22);
+  --danger-br:  rgba(255,64,96,.28);
+  --warning-br: rgba(255,176,32,.24);
+  --info-br:    rgba(77,166,255,.24);
+
+  /* Glass recipe.
+     NOTE --glass-border was previously `var(--glass-border)` — a
+     self-reference, which is invalid CSS. It silently resolved to
+     nothing, leaving every glass surface borderless. Fixed here. */
+  --glass:        rgba(255,255,255,.025);
+  --glass-hover:  rgba(255,255,255,.04);
+  --glass-border: rgba(255,255,255,.08);
+
+  /* Shadows */
+  --sh-sm:     0 2px 8px rgba(0,0,0,.5);
+  --sh-md:     0 8px 32px rgba(0,0,0,.7);
+  --sh-lg:     0 24px 64px rgba(0,0,0,.9);
+  --sh-accent: 0 8px 24px rgba(0,229,176,.18);
+
+  /* Scrollbar */
+  --scroll-thumb:       rgba(255,255,255,.08);
+  --scroll-thumb-hover: rgba(255,255,255,.15);
+
+  /* Overlay behind modals */
+  --overlay: rgba(0,0,0,.75);
+
+  /* ── Contrast-overlay ramp ────────────────────────────────
+     A translucent wash of the CONTRASTING colour: white on the
+     dark theme, near-black on the light theme.
+
+     The annotator carried ~180 hardcoded rgba(255,255,255,.0x)
+     values used as hairline borders, hover fills and dividers.
+     Those are invisible on a white surface, which is why the
+     annotator's panels lost all their edges in light mode.
+     Collapsing them to a single --border token would have thrown
+     away the design's deliberate gradation, so the ramp is
+     preserved here and simply inverts per theme. */
+  --ink-a02: rgba(255,255,255,.02);
+  --ink-a03: rgba(255,255,255,.03);
+  --ink-a04: rgba(255,255,255,.04);
+  --ink-a05: rgba(255,255,255,.05);
+  --ink-a06: rgba(255,255,255,.06);
+  --ink-a07: rgba(255,255,255,.07);
+  --ink-a08: rgba(255,255,255,.08);
+  --ink-a10: rgba(255,255,255,.10);
+  --ink-a12: rgba(255,255,255,.12);
+  --ink-a15: rgba(255,255,255,.15);
+  --ink-a20: rgba(255,255,255,.20);
+  --ink-a30: rgba(255,255,255,.30);
+
+  /* ── Accent alpha ramp ────────────────────────────────────
+     Same reasoning for the ~200 hardcoded rgba(0,229,176,.xx)
+     values: teal is the DARK theme's accent, so those washes
+     stayed teal on the light theme where the accent is green. */
+  --accent-a04: rgba(0,229,176,.04);
+  --accent-a06: rgba(0,229,176,.06);
+  --accent-a08: rgba(0,229,176,.08);
+  --accent-a10: rgba(0,229,176,.10);
+  --accent-a12: rgba(0,229,176,.12);
+  --accent-a15: rgba(0,229,176,.15);
+  --accent-a18: rgba(0,229,176,.18);
+  --accent-a20: rgba(0,229,176,.20);
+  --accent-a25: rgba(0,229,176,.25);
+  --accent-a30: rgba(0,229,176,.30);
+  --accent-a35: rgba(0,229,176,.35);
+  --accent-a40: rgba(0,229,176,.40);
+
+  /* Ambient page wash — referenced by body::before */
+  --ambient: radial-gradient(ellipse 80% 50% at 20% -10%, rgba(0,229,176,.055) 0%, transparent 60%),
+             radial-gradient(ellipse 60% 40% at 80% 110%, rgba(160,122,255,.04) 0%, transparent 55%);
+}
+
+/* ───────────────────────────────────────────────────────────────
+   SEMANTIC TOKENS · LIGHT THEME
+   Selector doubles as `.light-mode` (legacy class, still emitted
+   by theme.js) and `[data-theme="light"]` (forward-looking).
+   Both are supported so the switch can migrate without a flag day.
+─────────────────────────────────────────────────────────────── */
+:root.light-mode,
+:root[data-theme="light"],
+body.light-mode {
+  color-scheme: light;
+
+  --bg:      var(--p-snow-050);
+  --surface: var(--p-snow-000);
+  --panel:   var(--p-snow-100);
+  --card:    var(--p-snow-000);
+  --card2:   var(--p-snow-200);
+  --card3:   var(--p-snow-300);
+
+  --border:  rgba(25,28,30,.10);
+  --border2: rgba(25,28,30,.16);
+  --border3: rgba(25,28,30,.26);
+
+  --tx:  var(--p-slate-900);
+  --tx2: var(--p-slate-700);
+  --tx3: var(--p-slate-600);
+
+  --accent:      var(--p-green-600);
+  --accent-dim:  var(--p-green-700);
+  --accent-bg:   rgba(0,108,73,.08);
+  --accent-glow: rgba(0,108,73,.18);
+  --accent-deep: rgba(0,108,73,.03);
+  /* Flipped to white. Previously `.btn-primary` hardcoded
+     `color:#000` against a #006c49 fill — a 1.9:1 contrast ratio,
+     well below the 4.5:1 AA floor. White gives 5.9:1. */
+  --on-fill:     #ffffff;
+  --accent-ink:  var(--on-fill);
+
+  --success: var(--p-success-l);
+  --danger:  var(--p-danger-l);
+  --warning: var(--p-warning-l);
+  --info:    var(--p-info-l);
+  --purple:  var(--p-purple-l);
+  --indigo:  #4338ca;
+
+  --success-bg: rgba(4,114,77,.08);
+  --danger-bg:  rgba(186,26,26,.07);
+  --warning-bg: rgba(150,96,10,.09);
+  --info-bg:    rgba(29,78,216,.07);
+  --success-br: rgba(4,114,77,.22);
+  --danger-br:  rgba(186,26,26,.22);
+  --warning-br: rgba(150,96,10,.22);
+  --info-br:    rgba(29,78,216,.20);
+
+  --glass:        rgba(25,28,30,.02);
+  --glass-hover:  rgba(25,28,30,.05);
+  --glass-border: rgba(25,28,30,.08);
+
+  --sh-sm:     0 1px 4px rgba(16,24,40,.04), 0 0 0 1px rgba(16,24,40,.02);
+  --sh-md:     0 4px 16px rgba(16,24,40,.06), 0 1px 4px rgba(16,24,40,.03);
+  --sh-lg:     0 16px 48px rgba(16,24,40,.10), 0 4px 12px rgba(16,24,40,.05);
+  --sh-accent: 0 8px 24px rgba(0,108,73,.14);
+
+  --scroll-thumb:       rgba(25,28,30,.16);
+  --scroll-thumb-hover: rgba(25,28,30,.28);
+
+  --overlay: rgba(16,24,40,.45);
+
+  /* Contrast overlay inverts to near-black on light surfaces.
+     Alphas are nudged up slightly because dark-on-light reads
+     weaker than light-on-dark at the same opacity. */
+  --ink-a02: rgba(25,28,30,.03);
+  --ink-a03: rgba(25,28,30,.04);
+  --ink-a04: rgba(25,28,30,.05);
+  --ink-a05: rgba(25,28,30,.06);
+  --ink-a06: rgba(25,28,30,.08);
+  --ink-a07: rgba(25,28,30,.09);
+  --ink-a08: rgba(25,28,30,.10);
+  --ink-a10: rgba(25,28,30,.13);
+  --ink-a12: rgba(25,28,30,.15);
+  --ink-a15: rgba(25,28,30,.19);
+  --ink-a20: rgba(25,28,30,.25);
+  --ink-a30: rgba(25,28,30,.36);
+
+  --accent-a04: rgba(0,108,73,.04);
+  --accent-a06: rgba(0,108,73,.06);
+  --accent-a08: rgba(0,108,73,.08);
+  --accent-a10: rgba(0,108,73,.10);
+  --accent-a12: rgba(0,108,73,.12);
+  --accent-a15: rgba(0,108,73,.15);
+  --accent-a18: rgba(0,108,73,.18);
+  --accent-a20: rgba(0,108,73,.20);
+  --accent-a25: rgba(0,108,73,.25);
+  --accent-a30: rgba(0,108,73,.30);
+  --accent-a35: rgba(0,108,73,.35);
+  --accent-a40: rgba(0,108,73,.40);
+
+  --ambient: radial-gradient(ellipse 70% 45% at 15% -5%,  rgba(0,108,73,.045) 0%, transparent 65%),
+             radial-gradient(ellipse 55% 40% at 85% 105%, rgba(109,40,217,.030) 0%, transparent 60%);
+}
+
+/* ───────────────────────────────────────────────────────────────
+   THEME-INDEPENDENT TOKENS
+   Type, space, radius, motion, layout, z-index. These do not vary
+   by theme, so they live outside the theme blocks.
+─────────────────────────────────────────────────────────────── */
+:root {
+  /* ── Typography ────────────────────────────────────────────
+     Previously the app used 'Sora' on most pages but 'Inter' on
+     login.html, with no shared stack. Unified here. */
+  --font-sans: 'Sora', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Modular type scale (1.200 minor third), rem-based so it
+     respects the user's browser font-size preference. */
+  --fs-2xs: 0.6875rem;  /* 11px  — micro labels, badges     */
+  --fs-xs:  0.75rem;    /* 12px  — meta, captions           */
+  --fs-sm:  0.8125rem;  /* 13px  — body default             */
+  --fs-md:  0.875rem;   /* 14px  — emphasised body, inputs  */
+  --fs-lg:  1rem;       /* 16px  — card titles              */
+  --fs-xl:  1.25rem;    /* 20px  — section headings         */
+  --fs-2xl: 1.5rem;     /* 24px  — page titles              */
+  --fs-3xl: 2rem;       /* 32px  — hero                     */
+
+  --lh-tight: 1.25;
+  --lh-snug:  1.4;
+  --lh-base:  1.55;
+
+  --fw-normal:   400;
+  --fw-medium:   500;
+  --fw-semibold: 600;
+  --fw-bold:     700;
+  --fw-black:    800;
+
+  --ls-tight: -0.03em;
+  --ls-snug:  -0.02em;
+  --ls-wide:   0.08em;
+  --ls-wider:  0.10em;
+
+  /* ── Spacing — 4px base grid ───────────────────────────────
+     Replaces the ad-hoc .25/.45/.52/.62/.65/.75rem values that
+     were scattered through the old stylesheets. */
+  --sp-1:  0.25rem;   /*  4px */
+  --sp-2:  0.5rem;    /*  8px */
+  --sp-3:  0.75rem;   /* 12px */
+  --sp-4:  1rem;      /* 16px */
+  --sp-5:  1.25rem;   /* 20px */
+  --sp-6:  1.5rem;    /* 24px */
+  --sp-8:  2rem;      /* 32px */
+  --sp-10: 2.5rem;    /* 40px */
+  --sp-12: 3rem;      /* 48px */
+  --sp-16: 4rem;      /* 64px */
+
+  /* ── Radii ─────────────────────────────────────────────────── */
+  --r-xs:   6px;
+  --r-sm:   9px;
+  --r-md:  13px;
+  --r-lg:  18px;
+  --r-xl:  22px;
+  --r-full: 999px;
+
+  /* ── Motion ────────────────────────────────────────────────
+     Named durations/easings so components stop inventing their
+     own .12s / .15s / .18s values. */
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --dur-slow: 280ms;
+  --ease:      cubic-bezier(.4, 0, .2, 1);
+  --ease-out:  cubic-bezier(0, 0, .2, 1);
+  --ease-in:   cubic-bezier(.4, 0, 1, 1);
+
+  /* ── Layout metrics ───────────────────────────────────────── */
+  --nav-h:    52px;
+  --tb-h:     46px;
+  /* Height of the annotator's floating drawing toolbar. Other floating
+     surfaces (the Smart Detect bar) position themselves relative to this
+     so they cannot land on top of it. */
+  --dt-toolbar-h: 46px;
+  --sb-h:     26px;
+  --sidebar-w: 234px;
+  --left-w:   256px;
+  --right-w:  256px;
+  --rnav-w:    64px;
+  --content-max:  1280px;  /* readable cap on wide screens */
+  --content-wide: 1600px;  /* cap for grid-heavy pages     */
+
+  /* ── Focus ring ────────────────────────────────────────────
+     One definition, used by every interactive element, so the
+     keyboard-navigation indicator is consistent app-wide. */
+  --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+
+  /* ── Z-index scale ─────────────────────────────────────────
+     Named layers replace the previous magic numbers
+     (200 / 300 / 500 / 1000) that were assigned per-file. */
+  --z-base:     1;
+  --z-sticky:   100;
+  --z-nav:      200;
+  --z-dropdown: 300;
+  --z-overlay:  900;
+  --z-modal:    1000;
+  --z-toast:    1100;
+
+  /* ── Card customisation defaults ───────────────────────────
+     These 10 tokens were referenced by component CSS but never
+     defined in any stylesheet — they were only ever set at
+     runtime by theme.js when a user opened Settings and touched
+     card customisation. Until then the components rendered
+     unstyled. Defaults now resolve to the standard card look. */
+  --card-bg:      var(--card);
+  --card-tx:      var(--tx);
+  --card-border:  var(--border);
+  --card-radius:  var(--r-lg);
+  --card-shadow:  var(--sh-sm);
+  --card-padding: var(--sp-4);
+  --card-opacity: 1;
+  --card-hover-transform: translateY(-2px);
+  --card-hover-shadow:    var(--sh-md);
+  --card-hover-border:    var(--accent);
+}
+
+/* ───────────────────────────────────────────────────────────────
+   COMPACT MODE
+   Density toggle. Scales layout metrics only — never colour.
+─────────────────────────────────────────────────────────────── */
+:root.compact-mode,
+body.compact-mode {
+  --tb-h: 38px;
+  --sb-h: 22px;
+  --nav-h: 44px;
+  --sp-4: 0.75rem;
+  --sp-5: 1rem;
+  --sp-6: 1.25rem;
+  --sp-8: 1.5rem;
+  --sp-10: 2rem;
+}
+
+/* ───────────────────────────────────────────────────────────────
+   RESPONSIVE BREAKPOINT SYSTEM
+   ───────────────────────────────────────────────────────────────
+   The codebase previously used 13 uncoordinated breakpoints
+   (380/420/600/620/768/800/900/980/1100/1200/1280/1400/1600px)
+   across only 19 media queries total — and four stylesheets had
+   none at all. This is the single agreed scale. Use ONLY these:
+
+     Mobile      max-width:  639px
+     Tablet      max-width:  1023px
+     Laptop      min-width:  1024px
+     Desktop     min-width:  1440px
+     Ultra-wide  min-width:  1920px
+
+   Tokens that vary by viewport are declared below so components
+   can stay breakpoint-free and just consume the token.
+─────────────────────────────────────────────────────────────── */
+
+/* Tablet and below — tighten gutters, collapse fixed sidebars */
+@media (max-width: 1100px) {
+  /* Button captions and group labels are hidden at this width, so the
+     floating toolbar is a single icon row. */
+  :root { --dt-toolbar-h: 32px; }
+}
+
+@media (max-width: 1023px) {
+  :root {
+    --sidebar-w: 200px;
+    --sp-8:  1.5rem;
+    --sp-10: 2rem;
+    --sp-12: 2.5rem;
+    --fs-2xl: 1.375rem;
+    --fs-3xl: 1.75rem;
+  }
+}
+
+/* Mobile — single column, generous touch targets */
+@media (max-width: 639px) {
+  :root {
+    --sp-6:  1rem;
+    --sp-8:  1.25rem;
+    --sp-10: 1.5rem;
+    --sp-12: 2rem;
+    --fs-2xl: 1.25rem;
+    --fs-3xl: 1.5rem;
+    --r-lg: 14px;
+    --r-xl: 16px;
+  }
+}
+
+/* Ultra-wide — let grid-heavy pages breathe without going edge-to-edge */
+@media (min-width: 1920px) {
+  :root {
+    --content-max:  1440px;
+    --content-wide: 1800px;
+    --sp-8:  2.5rem;
+    --sp-10: 3rem;
+  }
+}
+
+/* ───────────────────────────────────────────────────────────────
+   ACCESSIBILITY — REDUCED MOTION
+   Honours the OS-level preference. Durations collapse to ~0 via
+   the token, so every component that uses --dur-* complies for
+   free rather than needing its own override.
+─────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0.01ms;
+    --dur-base: 0.01ms;
+    --dur-slow: 0.01ms;
+  }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ───────────────────────────────────────────────────────────────
+   FORCED COLORS / HIGH CONTRAST
+   Windows High Contrast Mode strips author colours; make sure
+   focus stays visible when it does.
+─────────────────────────────────────────────────────────────── */
+@media (forced-colors: active) {
+  :root { --focus-ring: 0 0 0 2px Highlight; }
+  *:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
+}

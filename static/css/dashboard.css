@@ -1,0 +1,795 @@
+/* ═══════════════════════════════════════════════════════════════
+   dashboard.css — Workspace Dashboard
+   ───────────────────────────────────────────────────────────────
+   Implements design_handoff_dashboard_redesign/Dashboard.dc.html:
+   252px rail (brand · nav · workspaces · user) + top bar + KPI row
+   + project grid/list.
+
+   THEMING — read CLAUDE.md → "Theming" before editing.
+   The handoff is a LIGHT-ONLY prototype that states its colours as
+   literal oklch() values. Hardcoding those would pin this page to
+   one theme, which the token layer exists to prevent — so the alias
+   block below maps the design's roles onto semantic tokens, exactly
+   as upload.css (--up-*) and annotate-v2.css (--v2-*) do. Dark,
+   light and custom-mode all follow for free, because custom-mode
+   works by overriding those same tokens on :root.
+
+   What IS reproduced literally is the handoff's geometry — sizes,
+   radii, spacing, weights — since that is what carries the design.
+   Edit the alias block, not the rules beneath it.
+
+   Class names for the card internals (.project-card, .pcs-chip,
+   .workspace-item, .share-panel…) are deliberately UNCHANGED: they
+   are what modes.css targets for custom-mode, and renaming them
+   would silently drop those overrides.
+
+   This sheet loads after layout.css, which defines the same
+   .dashboard-page / -sidebar / -main shell selectors; the versions
+   here win and are the ones in effect.
+═══════════════════════════════════════════════════════════════ */
+
+.dashboard-page {
+  /* ── Surfaces ─────────────────────────────────────────────── */
+  --dsh-panel:     var(--surface);   /* rail, top bar, cards      */
+  --dsh-hover:     var(--ink-a04, var(--glass-hover));
+  --dsh-line:      var(--border);
+  --dsh-line-soft: var(--ink-a03, var(--border));
+  --dsh-line-hard: var(--border2);
+
+  /* ── Brand ────────────────────────────────────────────────── */
+  --dsh-brand-grad: linear-gradient(135deg, var(--accent), var(--accent-dim));
+  --dsh-brand-wash: var(--accent-a12, var(--accent-bg));
+
+  /* ── Type scale (handoff values, kept literal for fidelity) ── */
+  --dsh-fs-h1:    26px;
+  --dsh-fs-card:  15.5px;
+  --dsh-fs-brand: 17px;
+  --dsh-fs-body:  13.5px;
+  --dsh-fs-meta:  12.5px;
+  --dsh-fs-pill:  11.5px;
+  --dsh-fs-label: 10.5px;
+
+  /* ── Radii ────────────────────────────────────────────────── */
+  --dsh-r-card: 16px;
+  --dsh-r-kpi:  14px;
+  --dsh-r-ctl:   9px;
+  --dsh-r-chip:  7px;
+
+  /* ── Elevation ────────────────────────────────────────────── */
+  --dsh-sh-rest:  var(--sh-sm);
+  --dsh-sh-hover: var(--sh-md);
+
+  --dsh-rail-w: 252px;
+  --dsh-pad-x:  40px;
+
+  display: flex;
+  min-height: 100dvh;
+  background: var(--bg);
+  /* The rail replaces the shared navbar on this page, so the shell
+     starts at the top rather than clearing var(--nav-h). */
+  padding-top: 0;
+  font-size: var(--dsh-fs-body);
+}
+
+/* ═══ Left rail ══════════════════════════════════════════════ */
+.dashboard-sidebar {
+  width: var(--dsh-rail-w);
+  flex-shrink: 0;
+  background: var(--dsh-panel);
+  border-right: 1px solid var(--dsh-line);
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  position: fixed;
+  top: 0; bottom: 0; left: 0;
+  overflow-y: auto;
+  z-index: var(--z-sticky);
+  transition: transform var(--dur-base) var(--ease),
+              background-color var(--dur-base) var(--ease);
+}
+
+/* ── Brand ── */
+.rail-brand {
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 6px; color: var(--tx); text-decoration: none;
+  flex-shrink: 0;
+}
+.rail-brand:hover { color: var(--tx); text-decoration: none; }
+.rail-brand-tile {
+  width: 30px; height: 30px; border-radius: 9px; flex-shrink: 0;
+  background: var(--dsh-brand-grad);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--on-fill); font-size: 13px;
+  box-shadow: 0 2px 6px var(--accent-a35, var(--accent-glow));
+}
+.rail-brand-text {
+  font-size: var(--dsh-fs-brand); font-weight: 700;
+  letter-spacing: -.2px; white-space: nowrap;
+}
+.rail-brand-text b { color: var(--accent); font-weight: 700; }
+
+/* ── Nav ── */
+.rail-nav { display: flex; flex-direction: column; gap: 2px; flex-shrink: 0; }
+.rail-nav-item {
+  display: flex; align-items: center; gap: 11px;
+  padding: 9px 10px; border-radius: 8px;
+  font-size: var(--dsh-fs-body); font-weight: 500;
+  color: var(--tx2); text-decoration: none;
+  transition: background-color var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
+}
+.rail-nav-item i { width: 16px; text-align: center; font-size: 13px; }
+.rail-nav-item:hover { background: var(--dsh-hover); color: var(--tx); text-decoration: none; }
+.rail-nav-item.active {
+  background: var(--dsh-brand-wash); color: var(--accent); font-weight: 600;
+}
+
+/* ── Workspace list ── */
+.sidebar-section { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.sidebar-loading { font-size: var(--dsh-fs-meta); color: var(--tx3); padding: 4px 10px; }
+
+.sidebar-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 6px;
+  font-size: var(--dsh-fs-label); font-weight: 700;
+  text-transform: uppercase; letter-spacing: 1px;
+  color: var(--tx3);
+}
+.sidebar-header .btn-icon {
+  width: 22px; height: 22px; border-radius: 6px;
+  border: 1px solid var(--dsh-line-hard); background: var(--dsh-panel);
+  color: var(--tx2); font-size: 11px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; flex-shrink: 0;
+  transition: background-color var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease);
+}
+.sidebar-header .btn-icon:hover {
+  background: var(--dsh-hover); color: var(--accent); border-color: var(--accent);
+}
+
+.workspace-list { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
+
+.workspace-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 10px; border-radius: 9px;
+  border: 1px solid transparent;
+  cursor: pointer; user-select: none;
+  font-size: var(--dsh-fs-body); font-weight: 500;
+  color: var(--tx2);
+  transition: background-color var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
+}
+.workspace-item:hover { background: var(--dsh-hover); color: var(--tx); }
+.workspace-item.active { background: var(--card2); color: var(--tx); font-weight: 600; }
+
+.workspace-item-icon {
+  width: 16px; height: 16px; border-radius: 5px; flex-shrink: 0;
+  background: var(--tx3);
+  /* The tile IS the icon — suppress any glyph the markup carries. */
+  font-size: 0; color: transparent;
+  transition: background-color var(--dur-fast) var(--ease);
+}
+.workspace-item.active .workspace-item-icon { background: var(--accent); }
+
+.workspace-item-name {
+  flex: 1; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.workspace-item-role {
+  font-size: 9.5px; font-weight: 700; text-transform: uppercase;
+  padding: 1px 6px; border-radius: 4px; flex-shrink: 0;
+}
+.workspace-delete-btn {
+  background: none; border: none; color: transparent;
+  cursor: pointer; font-size: 11px; padding: 2px 4px;
+  border-radius: 4px; flex-shrink: 0; margin-left: auto;
+  transition: color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
+}
+.workspace-item:hover .workspace-delete-btn { color: var(--tx3); }
+.workspace-delete-btn:hover { color: var(--danger); background: var(--danger-bg); }
+
+/* ── Rail footer: avatar + email, pinned ── */
+.rail-foot {
+  margin-top: auto; flex-shrink: 0;
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 6px 0;
+  border-top: 1px solid var(--dsh-line);
+}
+.rail-foot-avatar {
+  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+  background: var(--dsh-brand-grad); color: var(--on-fill);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700;
+}
+.rail-foot-email {
+  font-size: var(--dsh-fs-meta); color: var(--tx2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* ═══ Main column ════════════════════════════════════════════ */
+.dashboard-main {
+  margin-left: var(--dsh-rail-w);
+  flex: 1; min-width: 0;
+  padding: 0;
+  display: flex; flex-direction: column;
+  transition: margin-right var(--dur-slow) var(--ease);
+}
+.dashboard-main.panel-open { margin-right: 320px; }
+
+/* ── Top bar ── */
+.dash-topbar {
+  display: flex; align-items: center; gap: 20px;
+  padding: 18px var(--dsh-pad-x);
+  background: var(--dsh-panel);
+  border-bottom: 1px solid var(--dsh-line);
+  position: sticky; top: 0; z-index: var(--z-sticky);
+}
+.dash-crumbs {
+  display: flex; align-items: center; gap: 8px;
+  font-size: var(--dsh-fs-body); color: var(--tx2); min-width: 0;
+}
+.dash-crumbs .sep { color: var(--tx3); }
+.dash-crumbs .cur {
+  color: var(--tx); font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.dash-search {
+  flex: 1; max-width: 360px;
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 14px; border-radius: var(--dsh-r-ctl);
+  background: var(--panel); border: 1px solid transparent;
+  color: var(--tx2);
+  transition: border-color var(--dur-fast) var(--ease),
+              box-shadow var(--dur-fast) var(--ease);
+}
+.dash-search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg); }
+.dash-search i { font-size: 12px; flex-shrink: 0; }
+.dash-search input {
+  flex: 1; min-width: 0;
+  background: none; border: none; outline: none;
+  font: inherit; font-size: var(--dsh-fs-body); color: var(--tx);
+}
+.dash-search input::placeholder { color: var(--tx3); }
+.dash-search input::-webkit-search-cancel-button { cursor: pointer; }
+
+.dash-topbar-right {
+  display: flex; align-items: center; gap: 14px;
+  flex-shrink: 0; margin-left: auto;
+}
+.dash-icon-btn {
+  width: 32px; height: 32px; border-radius: 8px;
+  border: none; background: none; color: var(--tx2);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; font-size: 14px;
+  transition: background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.dash-icon-btn:hover { background: var(--dsh-hover); color: var(--tx); }
+
+/* Account button: the shared .account-btn is a name+chevron pill; here the
+   design calls for the avatar alone, so the pill chrome is dropped. */
+.dash-account.account-btn {
+  padding: 0; background: none; border: none; gap: 0;
+}
+.dash-account.account-btn:hover { background: none; }
+.dash-account .user-avatar { width: 32px; height: 32px; font-size: 13px; }
+
+/* ── Page body ── */
+.dash-body {
+  padding: 36px var(--dsh-pad-x) 44px;
+  flex: 1;
+}
+#workspace-content { display: flex; flex-direction: column; gap: 30px; }
+
+/* ═══ Workspace header ═══════════════════════════════════════ */
+.workspace-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 20px; flex-wrap: wrap; margin-bottom: 0;
+}
+.ws-header-left { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ws-title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.workspace-title {
+  font-size: var(--dsh-fs-h1); font-weight: 700;
+  letter-spacing: -.3px; color: var(--tx);
+  overflow-wrap: anywhere;
+}
+.workspace-role {
+  font-size: var(--dsh-fs-label); font-weight: 700;
+  letter-spacing: .5px; text-transform: uppercase;
+  padding: 4px 10px; border-radius: var(--r-full);
+  border: none;
+}
+.ws-stats-row { font-size: var(--dsh-fs-body); color: var(--tx2); display: flex; gap: 8px; }
+.ws-stat span { color: var(--tx); font-weight: 700; }
+
+.workspace-actions { display: flex; gap: 10px; flex-shrink: 0; flex-wrap: wrap; align-items: center; }
+.workspace-actions .btn {
+  padding: 10px 18px; border-radius: var(--dsh-r-ctl);
+  font-size: var(--dsh-fs-body); font-weight: 600;
+  white-space: nowrap; flex-shrink: 0; min-height: 0;
+}
+.workspace-actions .btn-primary { box-shadow: 0 2px 8px var(--accent-a30, var(--accent-glow)); }
+
+#btn-share-workspace.active {
+  background: var(--accent-bg); color: var(--accent); border-color: var(--accent-glow);
+}
+
+/* ═══ KPI row ════════════════════════════════════════════════ */
+.kpi-row {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px; max-width: 760px;
+}
+.kpi-card {
+  background: var(--dsh-panel); border: 1px solid var(--dsh-line);
+  border-radius: var(--dsh-r-kpi); padding: 18px 20px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.kpi-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.kpi-label { font-size: 12px; font-weight: 600; color: var(--tx2); }
+.kpi-chip {
+  width: 26px; height: 26px; border-radius: 8px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; font-size: 11px;
+}
+.kpi-chip.blue  { background: var(--info-bg);    color: var(--info); }
+.kpi-chip.green { background: var(--success-bg); color: var(--success); }
+.kpi-chip.amber { background: var(--warning-bg); color: var(--warning); }
+.kpi-value { display: flex; align-items: baseline; gap: 8px; }
+.kpi-value b { font-size: 26px; font-weight: 700; color: var(--tx); }
+.kpi-delta { font-size: var(--dsh-fs-pill); font-weight: 700; color: var(--success); }
+
+/* ═══ Projects section ═══════════════════════════════════════ */
+.projects-section { display: flex; flex-direction: column; gap: 14px; }
+.projects-section-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap;
+}
+.projects-section-label {
+  font-size: 13px; font-weight: 700; letter-spacing: .5px;
+  text-transform: uppercase; color: var(--tx2);
+}
+.projects-tools { display: flex; align-items: center; gap: 10px; }
+
+/* ── Sort ── */
+.sort-control { position: relative; display: flex; align-items: center; }
+.sort-btn {
+  display: flex; align-items: center; gap: 6px;
+  background: none; border: none; font: inherit;
+  font-size: var(--dsh-fs-meta); font-weight: 600; color: var(--tx2);
+  cursor: pointer; padding: 4px 2px;
+}
+.sort-btn:hover { color: var(--tx); }
+.sort-btn .caret {
+  width: 0; height: 0;
+  border-left: 4px solid transparent; border-right: 4px solid transparent;
+  border-top: 5px solid currentColor;
+}
+.sort-menu {
+  position: absolute; right: 0; top: calc(100% + 8px);
+  min-width: 150px; padding: 5px;
+  background: var(--dsh-panel); border: 1px solid var(--dsh-line-hard);
+  border-radius: 10px; box-shadow: var(--sh-md);
+  z-index: var(--z-dropdown);
+  display: flex; flex-direction: column; gap: 1px;
+}
+.sort-menu[hidden] { display: none; }
+.sort-opt {
+  padding: 8px 10px; border-radius: 7px;
+  background: none; border: none; font: inherit;
+  font-size: var(--dsh-fs-meta); color: var(--tx2);
+  cursor: pointer; text-align: left; width: 100%;
+}
+.sort-opt:hover { background: var(--dsh-hover); color: var(--tx); }
+.sort-opt.active { color: var(--accent); font-weight: 600; }
+
+/* ── Grid / list toggle ── */
+.view-seg {
+  display: flex; align-items: center; gap: 2px;
+  background: var(--panel); border-radius: 8px; padding: 2px;
+}
+.view-seg button {
+  width: 26px; height: 24px; border-radius: 6px;
+  border: none; background: none; color: var(--tx3);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; font-size: 11px;
+  transition: background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.view-seg button:hover { color: var(--tx2); }
+.view-seg button.active { background: var(--dsh-panel); color: var(--tx); box-shadow: var(--dsh-sh-rest); }
+
+/* ═══ Project cards ══════════════════════════════════════════ */
+.projects-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
+  gap: 14px;
+}
+/* List view: one column of rows. Same .project-card element, different shape —
+   so a view switch never has to re-fetch or re-render from a different source. */
+.projects-grid.list-view { display: flex; flex-direction: column; gap: 8px; }
+
+.project-card {
+  background: var(--dsh-panel);
+  border: 1px solid var(--dsh-line);
+  border-radius: var(--dsh-r-card);
+  /* NOT overflow:hidden — the ⋮ menu has to escape the card. The cover clips
+     itself instead, so the rounded top corners still read correctly. */
+  display: flex; flex-direction: column;
+  cursor: pointer; position: relative;
+  box-shadow: var(--dsh-sh-rest);
+  transition: transform var(--dur-base) var(--ease),
+              box-shadow var(--dur-base) var(--ease),
+              border-color var(--dur-base) var(--ease);
+}
+.project-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--dsh-sh-hover);
+  border-color: var(--dsh-line-hard);
+}
+.project-card:active { transform: translateY(-1px); }
+
+/* ── Cover ── */
+.project-card-cover {
+  height: 96px; flex-shrink: 0; position: relative; overflow: hidden;
+  border-radius: calc(var(--dsh-r-card) - 1px) calc(var(--dsh-r-card) - 1px) 0 0;
+  background: linear-gradient(135deg, var(--accent-a12, var(--accent-bg)), var(--info-bg));
+  display: flex; align-items: center; justify-content: center;
+}
+.project-card-cover img {
+  width: 100%; height: 100%; object-fit: cover;
+  transition: transform var(--dur-slow) var(--ease);
+}
+.project-card:hover .project-card-cover img { transform: scale(1.04); }
+
+.pc-icon {
+  font-size: 22px; color: var(--accent); opacity: .5;
+  transition: opacity var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+.project-card:hover .pc-icon { opacity: .7; transform: scale(1.06); }
+
+/* Progress stripe under the cover (the handoff's 4px bar) */
+.proj-cover-progress {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  height: 4px; background: var(--ink-a08, var(--border));
+}
+.proj-cover-progress-fill {
+  height: 100%;
+  background: var(--dsh-brand-grad);
+  transition: width var(--dur-slow) var(--ease);
+}
+
+/* ── Card ⋮ button (top-right) ─────────────────────────────────
+   Replaced the old inline delete button: one kebab holding every project
+   operation. The button chrome and the menu itself are the shared .kmenu*
+   primitive in base.css — only the card-corner placement and the reveal-on-
+   hover behaviour are dashboard-specific and live here. */
+.project-card-actions {
+  position: absolute; top: 6px; right: 6px; z-index: 3;
+}
+.pc-menu-btn {
+  opacity: 0; transform: translateY(-3px);
+  transition: opacity var(--dur-fast) var(--ease),
+              transform var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease);
+}
+/* Always visible on touch, where there is no hover to reveal it. */
+@media (hover: none) { .pc-menu-btn { opacity: 1; transform: none; } }
+.project-card:hover .pc-menu-btn,
+.project-card:focus-within .pc-menu-btn,
+.project-card.kmenu-open .pc-menu-btn,
+.pc-menu-btn[aria-expanded="true"] { opacity: 1; transform: none; }
+
+/* ── Body ── */
+.project-card-body {
+  padding: 12px 13px 13px;
+  flex: 1; display: flex; flex-direction: column;
+}
+.project-card-name {
+  font-size: var(--dsh-fs-body); font-weight: 700; color: var(--tx);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  min-width: 0;
+}
+.pc-title-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; margin-bottom: 9px;
+}
+.pc-pct { font-size: 10.5px; font-weight: 700; color: var(--accent); flex-shrink: 0; }
+
+.project-card-stats { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; }
+.pcs-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 7px; border-radius: 6px;
+  border: none; background: var(--panel); color: var(--tx2);
+  font-family: inherit; font-size: 10.5px; font-weight: 600;
+  white-space: nowrap; flex-shrink: 0;
+}
+.pcs-chip i { font-size: 8.5px; }
+.pcs-chip.blue  { background: var(--info-bg);    color: var(--info); }
+.pcs-chip.green { background: var(--success-bg); color: var(--success); }
+.pcs-chip.amber { background: var(--warning-bg); color: var(--warning); }
+
+/* ── Footer: updated + collaborator stack ── */
+.project-card-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 9px 0 0; margin-top: auto;
+  border-top: 1px solid var(--dsh-line-soft);
+}
+.project-card-date {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 10.5px; color: var(--tx3);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.project-card-date i { font-size: 8.5px; flex-shrink: 0; }
+
+.avatar-stack { display: flex; flex-shrink: 0; }
+/* The fill is a per-user hue generated in JS, not a token, so its foreground
+   can't come from --on-fill; the hues are fixed at 45% lightness precisely so
+   white reads on all of them in both themes. Same exemption as the canvas
+   resize handles — it sits on a colour the theme doesn't own. */
+.avatar-stack-item {
+  width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0;
+  border: 2px solid var(--dsh-panel); margin-left: -6px;
+  color: #fff; font-size: 8.5px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+.avatar-stack-item:first-child { margin-left: 0; }
+.avatar-stack-more { background: var(--tx3); }
+
+/* ── Ghost "New Project" card ── */
+.ghost-card {
+  border: 1.5px dashed var(--dsh-line-hard);
+  border-radius: var(--dsh-r-card);
+  min-height: 186px; background: none;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 8px;
+  color: var(--tx2); font: inherit; cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease),
+              background-color var(--dur-fast) var(--ease);
+}
+.ghost-card:hover {
+  border-color: var(--accent); color: var(--accent);
+  background: var(--accent-a04, var(--accent-deep));
+}
+.ghost-card-circle {
+  width: 36px; height: 36px; border-radius: 50%;
+  border: 2px solid currentColor;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; line-height: 1;
+}
+.ghost-card-label { font-size: 13px; font-weight: 600; }
+.projects-grid.list-view .ghost-card { min-height: 60px; flex-direction: row; }
+
+/* ═══ List-view shape ════════════════════════════════════════ */
+.list-view .project-card {
+  flex-direction: row; align-items: center;
+  gap: 16px; padding: 12px 16px; border-radius: 12px;
+}
+.list-view .project-card:hover { transform: none; border-color: var(--accent); }
+.list-view .project-card-cover {
+  width: 34px; height: 34px; border-radius: 9px;
+  flex-shrink: 0; order: -1;
+}
+.list-view .project-card-cover img { border-radius: 9px; }
+.list-view .pc-icon { font-size: 14px; }
+.list-view .proj-cover-progress { display: none; }
+/* In a row the kebab belongs at the end of the line, not floating over a 34px
+   thumbnail — so it leaves the absolute corner and becomes the last item. */
+.list-view .project-card-actions { position: static; order: 5; }
+.list-view .pc-menu-btn { opacity: 1; transform: none; }
+.list-view .project-card-body {
+  flex-direction: row; align-items: center; gap: 14px;
+  padding: 0; flex: 1; min-width: 0;
+}
+.list-view .pc-title-row { margin-bottom: 0; flex: 1 1 160px; min-width: 0; order: 1; }
+.list-view .project-card-stats { margin-bottom: 0; flex-shrink: 0; order: 2; }
+.list-view .project-card-footer {
+  border-top: none; padding: 0; margin-top: 0;
+  flex-shrink: 0; order: 4; gap: 14px;
+}
+
+/* ═══ Empty states ═══════════════════════════════════════════ */
+/* workspace.js reveals #no-workspace-state with an inline `display:flex`, so
+   the flex axis is declared here — otherwise icon, heading, copy and button
+   lay out in a ROW. */
+.empty-state {
+  text-align: center; padding: 56px 24px; color: var(--tx2);
+  flex-direction: column; align-items: center;
+}
+.empty-state.sub { padding: 48px 24px; }
+.empty-icon-wrap {
+  width: 56px; height: 56px; border-radius: 16px;
+  background: var(--dsh-brand-wash); color: var(--accent);
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 14px; font-size: 22px;
+  transition: transform var(--dur-slow) var(--ease);
+}
+.empty-state:hover .empty-icon-wrap { transform: scale(1.06); }
+.empty-icon { font-size: 2.5rem; margin-bottom: 1rem; color: var(--tx3); }
+.empty-state h2, .empty-state h3 {
+  color: var(--tx); font-size: 17px; font-weight: 700;
+  letter-spacing: -.02em; margin-bottom: 6px;
+}
+.empty-state p {
+  font-size: var(--dsh-fs-body); color: var(--tx2);
+  margin: 0 auto 18px; max-width: 380px; line-height: 1.5;
+}
+
+/* ═══ Share panel ════════════════════════════════════════════ */
+.share-panel {
+  position: fixed; top: 0; right: 0; bottom: 0;
+  width: 320px;
+  background: var(--dsh-panel);
+  border-left: 1px solid var(--dsh-line);
+  display: flex; flex-direction: column;
+  z-index: var(--z-overlay); overflow: hidden;
+  animation: slideInRight var(--dur-slow) var(--ease);
+  box-shadow: var(--sh-lg);
+}
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+.share-panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--dsh-line);
+  flex-shrink: 0;
+}
+.share-panel-header h3 { font-size: 15px; font-weight: 700; }
+.share-panel-close {
+  background: none; border: none; color: var(--tx2);
+  cursor: pointer; font-size: 14px; padding: 4px 8px;
+  border-radius: 6px;
+  transition: background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.share-panel-close:hover { background: var(--panel); color: var(--tx); }
+
+#share-invite-section { padding: 16px 20px; border-bottom: 1px solid var(--dsh-line); flex-shrink: 0; }
+.share-section-title {
+  font-size: var(--dsh-fs-label); font-weight: 700;
+  text-transform: uppercase; letter-spacing: 1px; color: var(--tx3);
+  margin-bottom: 12px;
+  display: flex; align-items: center; gap: 6px;
+  padding: 12px 20px 0;
+}
+#share-invite-section .share-section-title { padding: 0; margin-bottom: 10px; }
+.share-invite-row { display: flex; gap: 8px; margin-bottom: 10px; }
+.share-invite-row .form-input { flex: 1; font-size: var(--dsh-fs-body); padding: 8px 12px; }
+.share-invite-row .role-select { flex-shrink: 0; width: auto; }
+.share-invite-btn { width: 100%; margin-bottom: 6px; }
+#share-invite-error   { font-size: var(--dsh-fs-meta); color: var(--danger); min-height: 1rem; }
+#share-invite-success { font-size: var(--dsh-fs-meta); color: var(--success); }
+
+.share-legend {
+  padding: 12px 20px; border-bottom: 1px solid var(--dsh-line);
+  display: flex; flex-direction: column; gap: 6px; flex-shrink: 0;
+}
+.share-legend-row {
+  display: flex; align-items: center; gap: 8px;
+  font-size: var(--dsh-fs-meta); color: var(--tx2);
+}
+.share-members-list { flex: 1; overflow-y: auto; padding: 8px 12px 16px; }
+.share-member-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 8px; border-radius: 8px;
+  transition: background-color var(--dur-fast) var(--ease);
+}
+.share-member-row:hover { background: var(--panel); }
+.share-avatar {
+  width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+  background: var(--dsh-brand-grad); color: var(--on-fill);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 12px;
+}
+.share-member-info { flex: 1; min-width: 0; }
+.share-member-name {
+  font-size: var(--dsh-fs-body); font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  display: flex; align-items: center; gap: 6px;
+}
+.share-member-email { font-size: var(--dsh-fs-pill); color: var(--tx2); }
+.you-tag {
+  font-size: 9.5px; font-weight: 700; text-transform: uppercase;
+  background: var(--accent-bg); color: var(--accent);
+  border-radius: 3px; padding: 1px 5px;
+}
+.share-member-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.share-remove-btn {
+  background: none; border: none; color: var(--tx3);
+  cursor: pointer; font-size: 12px; padding: 3px 7px;
+  border-radius: 4px;
+  transition: color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
+}
+.share-remove-btn:hover { color: var(--danger); background: var(--danger-bg); }
+.share-empty { font-size: var(--dsh-fs-body); color: var(--tx2); text-align: center; padding: 24px; }
+
+/* Explanatory copy under a field in the project-operation modals. Those modals
+   live OUTSIDE .dashboard-page, so no --dsh-* aliases here. */
+.modal-hint {
+  font-size: var(--fs-xs); color: var(--tx2);
+  margin-top: .45rem; line-height: 1.5;
+}
+.modal-hint b { color: var(--tx); }
+
+/* ═══ Mini toast ═════════════════════════════════════════════
+   Appended to <body>, i.e. OUTSIDE .dashboard-page — so it must use global
+   tokens, not the --dsh-* aliases scoped to the page. */
+.dash-toast {
+  position: fixed; bottom: 24px; left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 20px; border-radius: 10px;
+  font-size: var(--fs-sm); font-weight: 600;
+  z-index: var(--z-toast);
+  animation: fadeUp var(--dur-slow) var(--ease);
+  pointer-events: none;
+}
+.dash-toast-success { background: var(--success-bg); color: var(--success); border: 1px solid var(--success-br); }
+.dash-toast-error   { background: var(--danger-bg);  color: var(--danger);  border: 1px solid var(--danger-br); }
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateX(-50%) translateY(12px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* ═══ Responsive — the project's five breakpoints only ═══════ */
+@media (max-width: 1023px) {
+  .dashboard-page { --dsh-pad-x: 20px; }
+  .dashboard-sidebar {
+    transform: translateX(-100%);
+    box-shadow: var(--sh-lg);
+    width: min(280px, 82vw);
+    z-index: var(--z-overlay);
+  }
+  .dashboard-sidebar.open { transform: translateX(0); }
+  .dashboard-main { margin-left: 0; }
+  .dash-topbar { padding: 14px var(--dsh-pad-x); gap: 12px; }
+  .dash-body { padding: 24px var(--dsh-pad-x) 36px; }
+  .kpi-row { max-width: none; }
+  .sidebar-backdrop {
+    position: fixed; inset: 0;
+    background: var(--overlay);
+    z-index: calc(var(--z-overlay) - 1);
+    opacity: 0; pointer-events: none;
+    transition: opacity var(--dur-base) var(--ease);
+  }
+  .sidebar-backdrop.open { opacity: 1; pointer-events: auto; }
+  /* layout.css already flips .sidebar-toggle to inline-flex here; only the
+     top-bar sizing differs. It also means the `hidden` attribute stops
+     working (an author `display` beats the UA rule) — restored below. */
+  .sidebar-toggle { font-size: 15px; border-radius: 8px; flex-shrink: 0; }
+  .sidebar-toggle:hover { background: var(--dsh-hover); color: var(--tx); }
+  .sidebar-toggle[hidden] { display: none; }
+  .dashboard-main.panel-open { margin-right: 0; }
+}
+
+@media (max-width: 639px) {
+  .dashboard-page { --dsh-pad-x: 16px; }
+  .dash-topbar { flex-wrap: wrap; gap: 10px; }
+  .dash-crumbs { order: 1; }
+  .dash-topbar-right { order: 2; }
+  .dash-search { order: 3; flex-basis: 100%; max-width: none; }
+  .workspace-title { font-size: 21px; }
+  .kpi-row { grid-template-columns: 1fr; gap: 10px; }
+  .kpi-card { padding: 14px 16px; }
+  .workspace-actions { width: 100%; }
+  .workspace-actions .btn { flex: 1; justify-content: center; }
+  .projects-grid { grid-template-columns: 1fr; gap: 14px; }
+  .share-panel { width: 100%; }
+  .list-view .project-card { flex-wrap: wrap; }
+  .list-view .project-card-body { flex-wrap: wrap; }
+  .list-view .project-card-footer { display: none; }
+}
+
+@media (min-width: 1440px) { .dashboard-page { --dsh-pad-x: 48px; } }
+@media (min-width: 1920px) {
+  .dashboard-page { --dsh-pad-x: 64px; }
+  .dash-body > * { max-width: var(--content-wide); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .project-card, .proj-cover-progress-fill, .dashboard-sidebar { transition: none; }
+  .project-card:hover { transform: none; }
+  .share-panel, .dash-toast { animation: none; }
+}

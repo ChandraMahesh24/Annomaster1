@@ -1,0 +1,1274 @@
+/* ══════════════════════════════════════════════════════════════
+   upload.css  —  AnnoMaster Upload Page (Stitch Redesign)
+   Design: 3-column layout | Google Stitch Style (Light / Dark)
+   ══════════════════════════════════════════════════════════════ */
+
+/* ───────────────────────────────────────────────────────────────
+   `--up-*` COMPATIBILITY ALIASES
+
+   This file previously carried its own private palette: `--up-*`
+   tokens were declared on `:root` with hardcoded LIGHT values
+   (--up-bg:#f7f9fb, --up-surface:#fff, --up-tx:#191c1e), and a
+   second `body:not(.light-mode)` block remapped them for dark.
+
+   Two problems with that:
+   1. The `:root` defaults were light, so before theme.js applied
+      a class — and on any page where it didn't — the upload
+      screen rendered light-on-light regardless of the user's
+      chosen theme.
+   2. It was a fifth parallel token system. A palette change had
+      to be made here as well as in tokens.css, and the two had
+      already drifted apart.
+
+   The `--up-*` names are kept ONLY as aliases so the ~1,100 lines
+   of rules below keep resolving unchanged. They now point at the
+   semantic tokens, so this page follows the theme automatically
+   with no per-theme block at all.
+─────────────────────────────────────────────────────────────── */
+:root {
+  --up-primary:   var(--accent);
+  --up-on-primary: var(--accent-ink);
+  --up-secondary: var(--purple);
+  --up-on-secondary: #ffffff;
+  --up-secondary-container: color-mix(in srgb, var(--purple) 20%, transparent);
+  --up-on-secondary-container: var(--purple);
+
+  --up-bg:      var(--bg);
+  --up-surface: var(--surface);
+  --up-panel:   var(--panel);
+  --up-border:  var(--border);
+  --up-card-border: var(--border2);
+
+  --up-tx:  var(--tx);
+  --up-tx2: var(--tx2);
+  --up-tx3: var(--tx3);
+
+  --up-error:      var(--danger);
+  --up-error-bg:   var(--danger-bg);
+  --up-warning:    var(--warning);
+  --up-warning-bg: var(--warning-bg);
+  --up-success:    var(--success);
+  --up-success-bg: var(--success-bg);
+
+  --up-shadow-sm: var(--sh-sm);
+  --up-shadow-md: var(--sh-md);
+  --up-shadow-lg: var(--sh-lg);
+
+  --up-radius-sm: var(--r-sm);
+  --up-radius-md: var(--r-md);
+  --up-radius-lg: var(--r-lg);
+}
+
+/* Container rules — standalone upload.html page */
+.upload-page {
+  position: fixed;
+  top: var(--nav-h, 52px);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  background: var(--up-bg);
+  overflow: hidden;
+  box-sizing: border-box;
+  font-family: 'Inter', -apple-system, sans-serif;
+}
+
+/* When used as #page-upload inside annotate SPA — hidden until .active */
+#page-upload {
+  display: none;
+  width: auto;
+  height: 100%;
+  background: var(--up-bg);
+  overflow: hidden;
+  box-sizing: border-box;
+  font-family: 'Inter', -apple-system, sans-serif;
+}
+#page-upload.active {
+  display: flex;
+}
+
+.upload-page .up-layout,
+#page-upload .up-layout {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr) 320px;
+  height: 100%;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  background: var(--up-bg);
+  overflow: hidden;
+  box-sizing: border-box;
+  padding: 14px;
+  gap: 14px;
+}
+
+/* Scrollbars */
+.upload-page .custom-scrollbar::-webkit-scrollbar,
+#page-upload .custom-scrollbar::-webkit-scrollbar,
+.upload-page .uhp-list::-webkit-scrollbar,
+#page-upload .uhp-list::-webkit-scrollbar,
+.upload-page .upds-list::-webkit-scrollbar,
+#page-upload .upds-list::-webkit-scrollbar {
+  width: 4px;
+}
+.upload-page .custom-scrollbar::-webkit-scrollbar-track,
+#page-upload .custom-scrollbar::-webkit-scrollbar-track,
+.upload-page .uhp-list::-webkit-scrollbar-track,
+#page-upload .uhp-list::-webkit-scrollbar-track,
+.upload-page .upds-list::-webkit-scrollbar-track,
+#page-upload .upds-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.upload-page .custom-scrollbar::-webkit-scrollbar-thumb,
+#page-upload .custom-scrollbar::-webkit-scrollbar-thumb,
+.upload-page .uhp-list::-webkit-scrollbar-thumb,
+#page-upload .uhp-list::-webkit-scrollbar-thumb,
+.upload-page .upds-list::-webkit-scrollbar-thumb,
+#page-upload .upds-list::-webkit-scrollbar-thumb {
+  background: var(--up-border);
+  border-radius: 10px;
+}
+
+/* ── Pane base ── */
+.upload-page .up-pane,
+#page-upload .up-pane {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 1px solid var(--up-card-border);
+  background: var(--up-bg);
+  min-width: 0; /* prevent blowout in grid */
+  height: 100%;
+}
+.upload-page .up-pane:last-child,
+#page-upload .up-pane:last-child { border-right: none; }
+
+/* ── Pane header ── */
+.upload-page .up-pane-head,
+#page-upload .up-pane-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--up-card-border);
+  flex-shrink: 0;
+  background: var(--up-bg);
+}
+.upload-page .up-pane-head-left,
+#page-upload .up-pane-head-left {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+.upload-page .up-pane-title,
+#page-upload .up-pane-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--up-tx2);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0;
+}
+.upload-page .up-pane-badge,
+#page-upload .up-pane-badge {
+  background: var(--up-secondary-container);
+  color: var(--up-on-secondary-container);
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 4px;
+  text-transform: uppercase;
+  margin-left: 8px;
+}
+.upload-page .up-pane-actions,
+#page-upload .up-pane-actions {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+.upload-page .up-icon-btn,
+#page-upload .up-icon-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--up-surface);
+  border: 1px solid var(--up-card-border);
+  border-radius: var(--up-radius-sm);
+  color: var(--up-tx2);
+  cursor: pointer;
+  font-size: .78rem;
+  transition: all .15s ease;
+}
+.upload-page .up-icon-btn:hover,
+#page-upload .up-icon-btn:hover {
+  background: var(--up-panel);
+  color: var(--up-primary);
+  border-color: var(--up-primary);
+}
+
+/* Project indicator on Center pane */
+.upload-page .up-pane-project-wrap,
+#page-upload .up-pane-project-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--up-tx2);
+  background: var(--up-panel);
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--up-card-border);
+}
+
+/* ── Active work pane body — responsive wrapping grid of cards ──────────────
+   Was a flex COLUMN, so cards stacked full-width and looked huge on the wide
+   layout. Wrap them into a row: cards sit side-by-side when there's room and
+   fall to one column only when the pane is narrow. */
+.upload-page .uhp-list,
+#page-upload .uhp-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.65rem;
+  display: flex;
+  flex-flow: row wrap;
+  align-content: flex-start;
+  gap: 0.6rem;
+}
+
+/* ── Active work batch cards — compact + width-capped ──────────────────────── */
+.upload-page .uhp-batch-card,
+#page-upload .uhp-batch-card {
+  background: var(--up-surface);
+  border: 1px solid var(--up-card-border);
+  border-radius: var(--up-radius-md);
+  padding: 0.6rem 0.65rem;
+  box-shadow: var(--up-shadow-sm);
+  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+  position: relative;
+  overflow: hidden;
+  flex: 1 1 240px;
+  min-width: 0;
+  max-width: 360px;
+}
+.upload-page .uhp-batch-card:hover,
+#page-upload .uhp-batch-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--up-shadow-md);
+  border-color: var(--up-primary);
+}
+.upload-page .uhp-batch-card.border-l-secondary-container,
+#page-upload .uhp-batch-card.border-l-secondary-container {
+  border-left: 4px solid var(--up-secondary-container);
+}
+
+.upload-page .uhp-card-head,
+#page-upload .uhp-card-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 7px;
+}
+.upload-page .uhp-card-icon,
+#page-upload .uhp-card-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--up-radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+#page-upload .uhp-card-icon.images { background: rgba(0, 108, 73, 0.1); color: var(--up-primary); }
+#page-upload .uhp-card-icon.folder { background: rgba(113, 42, 226, 0.1); color: var(--up-secondary); }
+#page-upload .uhp-card-icon.video { background: rgba(226, 145, 0, 0.1); color: var(--up-warning); }
+#page-upload .uhp-card-icon.zip { background: rgba(186, 26, 26, 0.1); color: var(--up-error); }
+
+.upload-page .uhp-card-meta,
+#page-upload .uhp-card-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0; /* allow text truncation */
+}
+.upload-page .uhp-card-daystr,
+#page-upload .uhp-card-daystr {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--up-tx);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.upload-page .uhp-card-timestr,
+#page-upload .uhp-card-timestr {
+  font-size: 11px;
+  color: var(--up-tx3);
+}
+.upload-page .uhp-card-badges,
+#page-upload .uhp-card-badges {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+.upload-page .uhp-src-badge,
+#page-upload .uhp-src-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid;
+  text-transform: uppercase;
+}
+.upload-page .uhp-ds-badge,
+#page-upload .uhp-ds-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(0, 108, 73, 0.1);
+  color: var(--up-primary);
+  border: 1px solid rgba(0, 108, 73, 0.2);
+}
+
+.upload-page .uhp-card-actions-col,
+#page-upload .uhp-card-actions-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+.upload-page .uhp-card-del,
+#page-upload .uhp-card-del {
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--up-tx3);
+  font-size: 12px;
+  padding: 4px;
+  border-radius: 4px;
+  transition: color .15s ease, background-color .15s ease;
+}
+.upload-page .uhp-card-del:hover,
+#page-upload .uhp-card-del:hover {
+  color: var(--up-error);
+  background: var(--up-error-bg);
+}
+.upload-page .uhp-card-click-hint,
+#page-upload .uhp-card-click-hint {
+  display: none;
+}
+
+.upload-page .uhp-folder-breakdown,
+#page-upload .uhp-folder-breakdown {
+  margin-bottom: 6px;
+}
+.upload-page .uhp-anno-bar-wrap,
+#page-upload .uhp-anno-bar-wrap {
+  height: 5px;
+  background: var(--up-panel);
+  border-radius: 3px;
+  display: flex;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+#page-upload .uhp-anno-bar-annotated { background: var(--up-primary); }
+#page-upload .uhp-anno-bar-null { background: var(--up-secondary); }
+#page-upload .uhp-anno-bar-raw { background: var(--up-border); flex: 1; }
+
+.upload-page .uhp-anno-legend,
+#page-upload .uhp-anno-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--up-tx2);
+}
+.upload-page .uhp-anno-leg-item,
+#page-upload .uhp-anno-leg-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.upload-page .uhp-anno-leg-dot,
+#page-upload .uhp-anno-leg-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+#page-upload .uhp-anno-leg-dot.annotated { background: var(--up-primary); }
+#page-upload .uhp-anno-leg-dot.raw { background: var(--up-border); }
+#page-upload .uhp-anno-leg-dot.null { background: var(--up-secondary); }
+
+.upload-page .uhp-source-splits,
+#page-upload .uhp-source-splits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-size: 11px;
+}
+.upload-page .uhp-splits-label,
+#page-upload .uhp-splits-label {
+  color: var(--up-tx3);
+  font-weight: 600;
+}
+.upload-page .uhp-split-tag,
+#page-upload .uhp-split-tag {
+  background: var(--up-panel);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--up-tx2);
+}
+
+.upload-page .uhp-classes-row,
+#page-upload .uhp-classes-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.upload-page .uhp-classes-label,
+#page-upload .uhp-classes-label {
+  color: var(--up-tx3);
+  font-size: 11px;
+}
+.upload-page .uhp-cls-pills,
+#page-upload .uhp-cls-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.upload-page .uhp-cls-pill,
+#page-upload .uhp-cls-pill {
+  background: var(--up-panel);
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--up-card-border);
+  color: var(--up-tx2);
+}
+
+/* Footer actions — one row that shares the width equally, but each button is
+   at least as wide as its own label (min-width: max-content) so TEXT IS NEVER
+   CLIPPED. If the pane gets too narrow for all three, the row wraps instead of
+   hiding text — the responsive-safe behaviour. */
+.upload-page .uhp-card-footer,
+#page-upload .uhp-card-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 7px;
+}
+.upload-page .uhp-footer-spacer,
+#page-upload .uhp-footer-spacer {
+  display: none;
+}
+.upload-page .uhp-btn,
+#page-upload .uhp-btn {
+  flex: 1 1 auto;
+  min-width: max-content;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--up-radius-sm);
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  gap: 5px;
+  transition: all 0.15s ease;
+}
+.upload-page .uhp-btn i,
+#page-upload .uhp-btn i { flex-shrink: 0; }
+.upload-page .uhp-btn.annotate,
+#page-upload .uhp-btn.annotate {
+  background: var(--up-primary);
+  color: var(--up-on-primary);   /* theme-correct: accent fill inverts between light/dark */
+}
+.upload-page .uhp-btn.review,
+#page-upload .uhp-btn.review {
+  background: var(--up-panel);
+  border: 1px solid var(--up-card-border);
+  color: var(--up-tx2);
+}
+.upload-page .uhp-btn.add-ds,
+#page-upload .uhp-btn.add-ds {
+  background: var(--up-secondary-container);
+  color: var(--up-on-secondary-container);   /* container is a light tint → white was invisible in light mode */
+}
+.upload-page .uhp-btn.add-ds.readd,
+#page-upload .uhp-btn.add-ds.readd {
+  opacity: 0.7;
+}
+
+/* Empty states */
+.upload-page .uhp-empty,
+#page-upload .uhp-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 3rem 1.5rem;
+  color: var(--up-tx3);
+}
+.upload-page .uhp-empty-icon,
+#page-upload .uhp-empty-icon {
+  font-size: 2rem;
+  opacity: 0.25;
+  margin-bottom: 1rem;
+}
+.upload-page .uhp-empty-title,
+#page-upload .uhp-empty-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--up-tx);
+  margin-bottom: 0.25rem;
+}
+.upload-page .uhp-empty-sub,
+#page-upload .uhp-empty-sub {
+  font-size: 0.8rem;
+  color: var(--up-tx3);
+  line-height: 1.5;
+}
+
+/* Auto-refresh dot indicator */
+.upload-page .up-autorefresh-dot,
+#page-upload .up-autorefresh-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--up-primary);
+  box-shadow: 0 0 6px rgba(0, 108, 73, 0.4);
+  animation: pulseGlow 2s ease-in-out infinite;
+}
+@keyframes pulseGlow {
+  0%, 100% { opacity: 1; box-shadow: 0 0 6px rgba(0, 108, 73, 0.4); }
+  50%       { opacity: .5; box-shadow: 0 0 2px rgba(0, 108, 73, 0.2); }
+}
+
+/* ══════════════════════════════════════════════════
+   CENTER PANE: UPLOAD DATA
+   ══════════════════════════════════════════════════ */
+.upload-page .up-upload-pane,
+#page-upload .up-upload-pane {
+  border-right: 1px solid var(--up-card-border);
+}
+.upload-page .up-upload-body,
+#page-upload .up-upload-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  box-sizing: border-box;
+}
+.upload-page .up-upload-body > *,
+#page-upload .up-upload-body > * {
+  max-width: 100%;
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ── Drop zone ── */
+.upload-page .upload-big-drop,
+#page-upload .upload-big-drop {
+  flex: none;
+  min-height: 220px;
+  border: 2px dashed var(--up-border);
+  border-radius: var(--up-radius-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 2rem;
+  cursor: pointer;
+  position: relative;
+  transition: border-color 0.25s ease, background-color 0.25s ease;
+  background: var(--up-surface);
+}
+.upload-page .upload-big-drop:hover,
+#page-upload .upload-big-drop:hover,
+.upload-page .upload-big-drop.drag-over,
+#page-upload .upload-big-drop.drag-over {
+  border-color: var(--up-primary);
+  background: rgba(0, 108, 73, 0.04);
+}
+.upload-page .ubd-icon-ring,
+#page-upload .ubd-icon-ring {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: rgba(0, 108, 73, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  color: var(--up-primary);
+  margin-bottom: 1.5rem;
+  box-shadow: 0 8px 16px rgba(0, 108, 73, 0.15);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.upload-page .upload-big-drop:hover .ubd-icon-ring,
+#page-upload .upload-big-drop:hover .ubd-icon-ring {
+  transform: scale(1.08);
+  box-shadow: 0 12px 24px rgba(0, 108, 73, 0.25);
+}
+.upload-page .ubd-title,
+#page-upload .ubd-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--up-tx);
+  margin: 0 0 8px 0;
+}
+.upload-page .ubd-desc,
+#page-upload .ubd-desc {
+  font-size: 14px;
+  color: var(--up-tx2);
+  text-align: center;
+  max-width: 420px;
+  line-height: 1.5;
+  margin: 0 0 24px 0;
+}
+.upload-page .ubd-browse-btn,
+#page-upload .ubd-browse-btn {
+  background: var(--up-primary);
+  color: var(--up-on-primary);
+  padding: 10px 24px;
+  border-radius: var(--up-radius-sm);
+  font-size: 14px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  box-shadow: var(--up-shadow-sm);
+  transition: all 0.2s ease;
+  pointer-events: none; /* Let click bubble up to #upPageDrop drop zone container */
+}
+.upload-page .upload-big-drop:hover .ubd-browse-btn,
+#page-upload .upload-big-drop:hover .ubd-browse-btn {
+  box-shadow: var(--up-shadow-md);
+  filter: brightness(1.1);
+}
+
+/* File count chip shown by JS */
+.upload-page .ubd-file-preview,
+#page-upload .ubd-file-preview {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--up-primary);
+  background: rgba(0, 108, 73, 0.1);
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(0, 108, 73, 0.2);
+  margin-top: 12px;
+}
+
+/* ── Options grid ── */
+.upload-page .up-upload-body > .up-cards-grid,
+#page-upload .up-upload-body > .up-cards-grid {
+  max-width: none;
+  width: 100%;
+}
+.upload-page .up-cards-grid,
+#page-upload .up-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  box-sizing: border-box;
+}
+.upload-page .upload-option-card,
+#page-upload .upload-option-card {
+  background: var(--up-panel);
+  border: 1px solid var(--up-card-border);
+  border-radius: var(--up-radius-md);
+  padding: 16px 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 100px;
+  overflow: hidden;
+}
+.upload-page .upload-option-card:hover,
+#page-upload .upload-option-card:hover {
+  border-color: var(--up-primary);
+  background: var(--up-surface);
+  transform: translateY(-3px);
+  box-shadow: var(--up-shadow-md);
+}
+.upload-page .uoc-icon-wrap,
+#page-upload .uoc-icon-wrap {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+.upload-page .uoc-icon-wrap.images { background: rgba(0, 108, 73, 0.1); color: var(--up-primary); }
+.upload-page .uoc-icon-wrap.folder { background: rgba(113, 42, 226, 0.1); color: var(--up-secondary); }
+.upload-page .uoc-icon-wrap.video { background: rgba(226, 145, 0, 0.1); color: var(--up-warning); }
+.upload-page .uoc-icon-wrap.zip { background: rgba(186, 26, 26, 0.1); color: var(--up-error); }
+#page-upload .uoc-icon-wrap.images { background: rgba(0, 108, 73, 0.1); color: var(--up-primary); }
+#page-upload .uoc-icon-wrap.folder { background: rgba(113, 42, 226, 0.1); color: var(--up-secondary); }
+#page-upload .uoc-icon-wrap.video { background: rgba(226, 145, 0, 0.1); color: var(--up-warning); }
+#page-upload .uoc-icon-wrap.zip { background: rgba(186, 26, 26, 0.1); color: var(--up-error); }
+
+.upload-page .uoc-title,
+#page-upload .uoc-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--up-tx);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+}
+
+/* ── Upload progress ── */
+.upload-page .up-prog-wrap,
+#page-upload .up-prog-wrap {
+  background: var(--up-surface);
+  border: 1px solid var(--up-card-border);
+  border-radius: var(--up-radius-md);
+  padding: 1.25rem;
+  box-shadow: var(--up-shadow-sm);
+}
+.upload-page .up-prog-top,
+#page-upload .up-prog-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.upload-page .up-prog-label,
+#page-upload .up-prog-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--up-tx);
+}
+.upload-page .up-prog-pct,
+#page-upload .up-prog-pct {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--up-primary);
+}
+.upload-page .up-prog-bar,
+#page-upload .up-prog-bar {
+  height: 6px;
+  background: var(--up-panel);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+.upload-page .up-prog-fill,
+#page-upload .up-prog-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--up-primary), var(--up-secondary));
+  transition: width .2s ease;
+}
+.upload-page .up-prog-text,
+#page-upload .up-prog-text {
+  font-size: 11px;
+  color: var(--up-tx3);
+}
+
+/* Import result */
+.upload-page .up-import-result,
+#page-upload .up-import-result {
+  background: rgba(0, 108, 73, 0.05);
+  border: 1px solid rgba(0, 108, 73, 0.15);
+  border-radius: var(--up-radius-md);
+  padding: 1rem;
+  font-size: 13px;
+  color: var(--up-tx2);
+  line-height: 1.4;
+}
+
+/* ══════════════════════════════════════════════════
+   RIGHT PANE: COMPLETED DATASETS
+   ══════════════════════════════════════════════════ */
+.upload-page .upds-list,
+#page-upload .upds-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Dataset Card */
+.upload-page .upds-card,
+#page-upload .upds-card {
+  background: var(--up-surface);
+  border: 1px solid var(--up-card-border);
+  border-radius: var(--up-radius-md);
+  padding: 0.6rem 0.65rem;
+  box-shadow: var(--up-shadow-sm);
+  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+  position: relative;
+}
+.upload-page .upds-card:hover,
+#page-upload .upds-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--up-shadow-md);
+  border-color: var(--up-primary);
+}
+
+.upload-page .upds-card-header,
+#page-upload .upds-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.upload-page .upds-card-icon-wrap,
+#page-upload .upds-card-icon-wrap {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--up-radius-sm);
+  background: rgba(0, 108, 73, 0.1);
+  color: var(--up-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+.upload-page .upds-card-info,
+#page-upload .upds-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.upload-page .upds-date-main,
+#page-upload .upds-date-main {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--up-tx);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.upload-page .upds-date-time,
+#page-upload .upds-date-time {
+  font-size: 11px;
+  color: var(--up-tx3);
+}
+
+.upload-page .upds-total-chip,
+#page-upload .upds-total-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  margin-right: 4px;
+}
+.upload-page .upds-total-num,
+#page-upload .upds-total-num {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--up-primary);
+}
+.upload-page .upds-total-lbl,
+#page-upload .upds-total-lbl {
+  font-size: 9px;
+  text-transform: uppercase;
+  color: var(--up-tx3);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.upload-page .upds-card-del,
+#page-upload .upds-card-del {
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--up-tx3);
+  font-size: 12px;
+  padding: 4px;
+  border-radius: 4px;
+  transition: color .15s ease, background-color .15s ease;
+}
+.upload-page .upds-card-del:hover,
+#page-upload .upds-card-del:hover {
+  color: var(--up-error);
+  background: var(--up-error-bg);
+}
+
+.upload-page .upds-split-compact,
+#page-upload .upds-split-compact {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.upload-page .upds-split-row,
+#page-upload .upds-split-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--up-tx2);
+}
+.upload-page .upds-split-tag,
+#page-upload .upds-split-tag {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.upload-page .upds-split-tag em,
+#page-upload .upds-split-tag em {
+  font-style: normal;
+  color: var(--up-tx3);
+}
+
+.upload-page .upds-split-bar-wrap,
+#page-upload .upds-split-bar-wrap {
+  height: 6px;
+  background: var(--up-panel);
+  border-radius: 3px;
+  display: flex;
+  overflow: hidden;
+}
+#page-upload .upds-split-bar-train { background: var(--up-primary); }
+#page-upload .upds-split-bar-valid { background: var(--up-secondary); }
+#page-upload .upds-split-bar-test { background: var(--up-warning); }
+
+.upload-page .upds-split-pct-row,
+#page-upload .upds-split-pct-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  font-weight: 700;
+}
+#page-upload .upds-split-pct-row .train { color: var(--up-primary); }
+#page-upload .upds-split-pct-row .valid { color: var(--up-secondary); }
+#page-upload .upds-split-pct-row .test { color: var(--up-warning); }
+
+.upload-page .upds-card-footer,
+#page-upload .upds-card-footer {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+.upload-page .upds-btn,
+#page-upload .upds-btn {
+  height: 30px;
+  border-radius: var(--up-radius-sm);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+  border: none;
+  white-space: nowrap;
+}
+.upload-page .upds-btn.move-active,
+#page-upload .upds-btn.move-active {
+  grid-column: span 2;
+  width: 100%;
+  background: var(--up-secondary-container);
+  color: var(--up-on-secondary-container);   /* was #fff on a light tint → unreadable in light mode */
+}
+.upload-page .upds-btn.move-active:hover,
+#page-upload .upds-btn.move-active:hover {
+  filter: brightness(1.1);
+}
+
+.upload-page .upds-btn-row,
+#page-upload .upds-btn-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.upload-page .upds-btn.view,
+#page-upload .upds-btn.view {
+  background: var(--up-panel);
+  border: 1px solid var(--up-card-border);
+  color: var(--up-tx2);
+}
+.upload-page .upds-btn.export,
+#page-upload .upds-btn.export {
+  background: transparent;
+  border: 1px solid var(--up-primary);
+  color: var(--up-primary);
+}
+.upload-page .upds-btn.export:hover,
+#page-upload .upds-btn.export:hover {
+  background: rgba(0, 108, 73, 0.05);
+}
+
+.upload-page .upds-del-btn,
+#page-upload .upds-del-btn {
+  display: none; /* Hidden as it's duplicate of top-right delete button */
+}
+
+/* ═══════════════════════════════════════════════════
+   RESPONSIVE RULES
+   ═══════════════════════════════════════════════════ */
+
+/* Large screens: slightly tighten side panes */
+@media (max-width: 1400px) {
+  .upload-page .up-layout,
+  #page-upload .up-layout {
+    grid-template-columns: 300px minmax(0, 1fr) 280px;
+    gap: 12px;
+    padding: 12px;
+  }
+}
+
+/* Medium screens: compress side panes further */
+@media (max-width: 1100px) {
+  .upload-page .up-layout,
+  #page-upload .up-layout {
+    grid-template-columns: 260px minmax(0, 1fr) 240px;
+    gap: 10px;
+    padding: 10px;
+  }
+  .upload-page .upload-big-drop,
+  #page-upload .upload-big-drop {
+    min-height: 180px;
+    padding: 1.5rem;
+  }
+  .upload-page .ubd-icon-ring,
+  #page-upload .ubd-icon-ring {
+    width: 64px;
+    height: 64px;
+    font-size: 1.6rem;
+  }
+  .upload-page .ubd-title,
+  #page-upload .ubd-title {
+    font-size: 18px;
+  }
+  .upload-page .ubd-desc,
+  #page-upload .ubd-desc {
+    font-size: 12px;
+  }
+}
+
+/* Tablet: 2-column — center pane spans full, side panes share row below */
+@media (max-width: 900px) {
+  .upload-page,
+  #page-upload {
+    overflow-y: auto;
+  }
+  .upload-page .up-layout,
+  #page-upload .up-layout {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
+  }
+  .upload-page .up-upload-pane,
+  #page-upload .up-upload-pane {
+    grid-column: 1 / -1;
+    min-height: 50vh;
+    border-right: none;
+    border-bottom: 1px solid var(--up-card-border);
+  }
+  .upload-page .up-activework-pane,
+  #page-upload .up-activework-pane,
+  .upload-page .up-datasets-pane,
+  #page-upload .up-datasets-pane {
+    height: 420px;
+    min-height: unset;
+    border-right: none;
+    border-bottom: 1px solid var(--up-card-border);
+  }
+  .upload-page .up-pane:last-child,
+  #page-upload .up-pane:last-child {
+    border-bottom: none;
+  }
+  /* Cards grid: 2 columns on tablet */
+  .upload-page .up-cards-grid,
+  #page-upload .up-cards-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* Mobile: single column stacked layout */
+@media (max-width: 620px) {
+  .upload-page .up-layout,
+  #page-upload .up-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+    gap: 8px;
+    padding: 8px;
+  }
+  .upload-page .up-upload-pane,
+  #page-upload .up-upload-pane {
+    min-height: 40vh;
+  }
+  .upload-page .up-activework-pane,
+  #page-upload .up-activework-pane,
+  .upload-page .up-datasets-pane,
+  #page-upload .up-datasets-pane {
+    height: 340px;
+  }
+  .upload-page .up-pane,
+  #page-upload .up-pane {
+    border-right: none;
+    border-bottom: 1px solid var(--up-card-border);
+  }
+  .upload-page .up-pane:last-child,
+  #page-upload .up-pane:last-child {
+    border-bottom: none;
+  }
+  /* Cards grid: 2 columns on mobile */
+  .upload-page .up-cards-grid,
+  #page-upload .up-cards-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  .upload-page .upload-option-card,
+  #page-upload .upload-option-card {
+    min-height: 80px;
+    padding: 12px 8px;
+  }
+  .upload-page .up-pane-head,
+  #page-upload .up-pane-head {
+    padding: 0.75rem 1rem;
+  }
+  .upload-page .up-upload-body,
+  #page-upload .up-upload-body {
+    padding: 1rem;
+    gap: 1rem;
+  }
+  .upload-page .uhp-list,
+  #page-upload .uhp-list,
+  .upload-page .upds-list,
+  #page-upload .upds-list {
+    padding: 0.75rem;
+  }
+  .upload-page .upload-big-drop,
+  #page-upload .upload-big-drop {
+    min-height: 160px;
+    padding: 1.25rem;
+  }
+  .upload-page .ubd-icon-ring,
+  #page-upload .ubd-icon-ring {
+    width: 56px;
+    height: 56px;
+    font-size: 1.4rem;
+    margin-bottom: 1rem;
+  }
+  .upload-page .ubd-title,
+  #page-upload .ubd-title {
+    font-size: 16px;
+  }
+  .upload-page .ubd-desc,
+  #page-upload .ubd-desc {
+    font-size: 12px;
+    margin-bottom: 14px;
+  }
+  .upload-page .ubd-browse-btn,
+  #page-upload .ubd-browse-btn {
+    padding: 8px 18px;
+    font-size: 12px;
+  }
+}
+
+/* Very small screens */
+@media (max-width: 380px) {
+  .upload-page .up-cards-grid,
+  #page-upload .up-cards-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .upload-page .upload-option-card,
+  #page-upload .upload-option-card {
+    padding: 10px 6px;
+    min-height: 70px;
+  }
+  .upload-page .uoc-icon-wrap,
+  #page-upload .uoc-icon-wrap {
+    width: 38px;
+    height: 38px;
+    font-size: 16px;
+  }
+  .upload-page .uoc-title,
+  #page-upload .uoc-title {
+    font-size: 10px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   COMPACT BATCH CARD (redesign) — denser than the original's 5 tall bands.
+   New elements added by BatchCard.tsx; scoped to #page-upload to win specificity.
+═══════════════════════════════════════════════════════════════════════════ */
+#page-upload .uhp-card-daystr { font-size: 12px; font-weight: 700; color: var(--up-tx); white-space: nowrap; }
+#page-upload .uhp-card-timestr { font-size: 10.5px; font-weight: 400; color: var(--up-tx3); margin-left: 4px; }
+#page-upload .uhp-head-right { display: flex; align-items: center; gap: 6px; margin-left: auto; flex-shrink: 0; }
+#page-upload .uhp-head-right .uhp-ds-badge { padding: 2px 5px; }
+
+/* Single stat line replaces the tall dotted legend */
+#page-upload .uhp-stat-line {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px;
+  font-size: 10.5px; color: var(--up-tx2);
+}
+#page-upload .uhp-stat-total { font-weight: 700; color: var(--up-tx); }
+#page-upload .uhp-stat { position: relative; }
+#page-upload .uhp-stat.done::before,
+#page-upload .uhp-stat.raw::before,
+#page-upload .uhp-stat.null::before {
+  content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  margin-right: 4px; vertical-align: middle;
+}
+#page-upload .uhp-stat.done::before { background: var(--up-primary); }
+#page-upload .uhp-stat.raw::before  { background: var(--up-border); }
+#page-upload .uhp-stat.null::before { background: var(--up-secondary); }
+#page-upload .uhp-stat-pct { margin-left: auto; font-weight: 800; color: var(--up-primary); font-size: 11px; }
+
+/* One thin assignee line */
+#page-upload .uhp-assign-row { display: flex; align-items: center; margin: 7px 0 0; min-width: 0; }
+#page-upload .uhp-assignee {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 10.5px; font-weight: 600; max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+#page-upload .uhp-assignee.unassigned { color: var(--up-tx3); font-weight: 500; }
+#page-upload .uhp-assignee-pct {
+  background: var(--up-panel); border-radius: 9px; padding: 0 6px;
+  font-size: 9.5px; font-weight: 700;
+}
+#page-upload .uhp-uploader { color: var(--up-tx3); font-weight: 400; }
+
+/* Assign button gets a neutral outline (upload.css only styled review/annotate/add-ds) */
+#page-upload .uhp-btn.assign {
+  background: transparent; border: 1px solid var(--up-card-border); color: var(--up-tx2);
+}
+#page-upload .uhp-btn.assign:hover { border-color: var(--up-primary); color: var(--up-primary); }

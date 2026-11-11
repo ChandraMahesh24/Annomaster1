@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Members – AnnoMaster</title>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Font Awesome was missing here, but navbar.html (included on
+       this page) renders <i class="fas …"> icons — so the account
+       dropdown showed blank boxes instead of glyphs. -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="/static/css/tokens.css">
+  <link rel="stylesheet" href="/static/css/base.css">
+  <link rel="stylesheet" href="/static/css/layout.css">
+  <link rel="stylesheet" href="/static/css/workspace.css">
+  <link rel="stylesheet" href="/static/css/modes.css">
+  <script src="/static/js/theme.js"></script>
+</head>
+<body>
+{% include 'layout/navbar.html' %}
+
+<div class="members-page">
+  <div class="members-container">
+
+    <div class="members-header">
+      <a href="/" class="btn btn-secondary btn-sm">← Dashboard</a>
+      <div>
+        <h1 id="ws-members-title" style="font-size:1.4rem;font-weight:800">Members</h1>
+        <p class="text-muted" id="ws-members-subtitle" style="margin-top:.2rem"></p>
+      </div>
+    </div>
+
+    <!-- Invite form (owners only) -->
+    <div class="invite-card" id="invite-card" style="display:none">
+      <h3>Invite a Member</h3>
+      <div class="invite-form">
+        <input class="form-input" id="invite-email" type="email" placeholder="colleague@example.com">
+        <select class="form-select" id="invite-role" style="width:auto">
+          <option value="editor">Editor – can annotate &amp; upload</option>
+          <option value="viewer">Viewer – read only</option>
+        </select>
+        <button class="btn btn-primary" onclick="MembersFeature.invite()">Invite</button>
+      </div>
+      <div id="invite-error"></div>
+      <div id="invite-success"></div>
+    </div>
+
+    <!-- Members list -->
+    <div class="members-card">
+      <h3>Current Members</h3>
+      <div id="members-list" class="members-list">
+        <div class="loading-state">Loading members…</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="/static/js/core/api.js"></script>
+<script src="/static/js/core/state.js"></script>
+<script src="/static/js/core/utils.js"></script>
+<script src="/static/js/features/auth.js"></script>
+<script src="/static/js/features/workspace.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', async () => {
+    const user = await AuthFeature.requireAuth();
+    if (!user) return;
+    document.getElementById('user-name').textContent = user.username;
+    document.getElementById('user-avatar').textContent = user.username[0].toUpperCase();
+    document.getElementById('user-menu').style.display = 'flex';
+
+    // Get workspace_id from URL — works for both /workspace/123/members and ?workspace_id=123
+    const parts  = location.pathname.split('/').filter(Boolean);
+    const wsId   = parts[1] || new URLSearchParams(location.search).get('workspace_id') || '';
+    if (!wsId) { document.body.innerHTML += '<p style="padding:2rem;color:red">No workspace ID in URL.</p>'; return; }
+    await MembersFeature.load(wsId, user);
+  });
+</script>
+</body>
+</html>

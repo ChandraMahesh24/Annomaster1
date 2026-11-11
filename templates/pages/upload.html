@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script>
+    (function() {
+      var token = localStorage.getItem('am_token');
+      if (!token) { window.location.href = '/login'; throw new Error('Not authenticated'); }
+      var params = new URLSearchParams(window.location.search);
+      window.AM_WORKSPACE_ID = params.get('workspace_id') || '';
+      window.AM_PROJECT      = params.get('project') || '';
+      if (!window.AM_WORKSPACE_ID || !window.AM_PROJECT) {
+        window.location.href = '/'; throw new Error('Missing workspace context');
+      }
+      window.__AM_TOKEN = token;
+    })();
+  </script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AnnoMaster — Upload Data</title>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="/static/css/tokens.css">
+  <link rel="stylesheet" href="/static/css/base.css">
+  <link rel="stylesheet" href="/static/css/layout.css">
+  <link rel="stylesheet" href="/static/css/upload.css">
+  <link rel="stylesheet" href="/static/css/modes.css">
+  <script src="/static/js/theme.js"></script>
+</head>
+<body>
+
+{% include 'layout/navbar.html' %}
+
+<div class="upload-page">
+  <div class="up-layout">
+
+    <!-- ═══ LEFT: ACTIVE WORK ═══════════════════════════════════ -->
+    <aside class="up-pane up-activework-pane">
+      <div class="up-pane-head">
+        <div class="up-pane-head-left">
+          <h2 class="up-pane-title">Active Work</h2>
+          <span class="up-pane-badge" id="upActiveCount">0</span>
+        </div>
+        <div class="up-pane-actions">
+          <span class="up-autorefresh-dot" id="upAutoRefreshDot" title="Auto-refresh active"></span>
+          <button class="up-icon-btn" id="upActiveRefreshBtn" title="Refresh">
+            <i class="fas fa-sync-alt"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="uhp-list" id="uhpList">
+        <div class="uhp-empty" id="uhpEmpty">
+          <div class="uhp-empty-icon"><i class="fas fa-inbox"></i></div>
+          <p class="uhp-empty-title">No batches yet</p>
+          <span class="uhp-empty-sub">Upload images or a YOLO dataset to get started</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ═══ CENTER: UPLOAD DATA ══════════════════════════════════ -->
+    <main class="up-pane up-upload-pane">
+      <div class="up-pane-head">
+        <div class="up-pane-head-left">
+          <h2 class="up-pane-title">Upload Data</h2>
+        </div>
+        <div class="up-pane-project-wrap">
+          <i class="fas fa-folder-open"></i>
+          <span id="upCenterProjectLabel">—</span>
+        </div>
+      </div>
+
+      <div class="up-upload-body">
+
+        <!-- ── Drop zone (now at the top of center section) ── -->
+        <div class="upload-big-drop" id="upPageDrop">
+          <div class="ubd-icon-ring">
+            <i class="fas fa-cloud-upload-alt"></i>
+          </div>
+          <h3 class="ubd-title">Drop your dataset here</h3>
+          <p class="ubd-desc">
+            Drag and drop images, videos, or archives to start your next annotation project. Support for JPEG, PNG, MP4, and ZIP.
+          </p>
+          <button class="ubd-browse-btn" type="button">Browse Files</button>
+
+          <!-- File count chip shown by JS -->
+          <div class="ubd-file-preview" id="upFilePreview" style="display:none">
+            <i class="fas fa-check-circle"></i>
+            <span id="upFilePreviewText">0 files ready</span>
+          </div>
+        </div>
+
+        <!-- ── Upload type cards (now at the bottom of center section) ── -->
+        <div class="up-cards-grid">
+          <div class="upload-option-card" id="uocImages">
+            <div class="uoc-icon-wrap images"><i class="fas fa-images"></i></div>
+            <span class="uoc-title">Raw Images</span>
+          </div>
+          <div class="upload-option-card" id="uocFolder">
+            <div class="uoc-icon-wrap folder"><i class="fas fa-folder-open"></i></div>
+            <span class="uoc-title">YOLO Folder</span>
+          </div>
+          <div class="upload-option-card" id="uocVideo">
+            <div class="uoc-icon-wrap video"><i class="fas fa-film"></i></div>
+            <span class="uoc-title">Video Frames</span>
+          </div>
+          <div class="upload-option-card" id="uocImport">
+            <div class="uoc-icon-wrap zip"><i class="fas fa-file-archive"></i></div>
+            <span class="uoc-title">ZIP Dataset</span>
+          </div>
+        </div>
+
+        <!-- Upload progress (hidden by default) -->
+        <div id="upPageProgress" class="up-prog-wrap" style="display:none">
+          <div class="up-prog-top">
+            <div class="up-prog-label">
+              <i class="fas fa-circle-notch fa-spin"></i>
+              <span id="upPageProgText">Uploading…</span>
+            </div>
+            <div class="up-prog-pct" id="upPageProgPct">0%</div>
+          </div>
+          <div class="up-prog-bar">
+            <div class="up-prog-fill" id="upPageProgFill" style="width:0%"></div>
+          </div>
+          <div class="up-prog-text" id="upPageProgSub"></div>
+        </div>
+
+        <!-- Import result -->
+        <div class="up-import-result" id="upYoloResult" style="display:none"></div>
+
+      </div>
+    </main>
+
+    <!-- ═══ RIGHT: COMPLETED DATASETS ════════════════════════════ -->
+    <aside class="up-pane up-datasets-pane">
+      <div class="up-pane-head">
+        <div class="up-pane-head-left">
+          <h2 class="up-pane-title">Completed Datasets</h2>
+          <span class="up-pane-badge" id="upDsCount">0</span>
+        </div>
+        <div class="up-pane-actions">
+          <button class="up-icon-btn" id="upDsRefreshBtn" title="Refresh">
+            <i class="fas fa-sync-alt"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="upds-list" id="upDsList">
+        <div class="uhp-empty" id="upDsEmpty">
+          <div class="uhp-empty-icon"><i class="fas fa-database"></i></div>
+          <p class="uhp-empty-title">No datasets yet</p>
+          <span class="uhp-empty-sub">Annotate a batch then click<br>"Add to Dataset" to build one</span>
+        </div>
+      </div>
+    </aside>
+
+  </div><!-- .up-layout -->
+</div><!-- .upload-page -->
+
+<!-- Add to Dataset Modal (shared from annotate page logic) -->
+<div class="usp-overlay" id="uspModal" style="display:none">
+  <div class="usp-modal">
+    <div class="usp-head">
+      <div class="usp-head-icon"><i class="fas fa-database"></i></div>
+      <div class="usp-head-text">
+        <div class="usp-head-title">Add to Completed Dataset</div>
+        <div class="usp-head-sub" id="uspBatchLabel">Set split ratios for annotated images</div>
+      </div>
+      <button class="usp-close" id="uspCloseBtn"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="usp-info-strip" id="uspInfoStrip">
+      <div class="usp-info-cell annotated">
+        <div class="usp-info-num" id="uspAnnotatedCount">—</div>
+        <div class="usp-info-lbl">Annotated → Dataset</div>
+      </div>
+      <div class="usp-info-cell raw">
+        <div class="usp-info-num" id="uspRawCount">—</div>
+        <div class="usp-info-lbl">Raw → Stay in Batch</div>
+      </div>
+      <div class="usp-info-cell null">
+        <div class="usp-info-num" id="uspNullCount">—</div>
+        <div class="usp-info-lbl">Null refs → Dataset</div>
+      </div>
+    </div>
+    <div class="usp-split-section">
+      <div class="usp-split-label-row">
+        <span>Split Ratios</span>
+        <span class="usp-ratio-err" id="uspRatioErr" style="display:none">
+          <i class="fas fa-exclamation-circle"></i> Must sum to 100%
+        </span>
+      </div>
+      <div class="usp-preview-bar">
+        <div class="usp-preview-train" id="uspPreviewTrain" style="width:70%">Train</div>
+        <div class="usp-preview-val"   id="uspPreviewVal"   style="width:15%">Val</div>
+        <div class="usp-preview-test"  id="uspPreviewTest"  style="width:15%">Test</div>
+      </div>
+      <div class="usp-sliders">
+        <div class="usp-slider-row">
+          <div class="usp-slider-lbl train"><i class="fas fa-dumbbell"></i> Train</div>
+          <input type="range" id="batchTrainSlider" min="0" max="100" value="70" step="5" class="usp-range train">
+          <div class="usp-slider-pct" id="batchTrainPct">70%</div>
+        </div>
+        <div class="usp-slider-row">
+          <div class="usp-slider-lbl val"><i class="fas fa-check-circle"></i> Val</div>
+          <input type="range" id="batchValSlider" min="0" max="100" value="15" step="5" class="usp-range val">
+          <div class="usp-slider-pct" id="batchValPct">15%</div>
+        </div>
+        <div class="usp-slider-row">
+          <div class="usp-slider-lbl test"><i class="fas fa-flask"></i> Test</div>
+          <input type="range" id="batchTestSlider" min="0" max="100" value="15" step="5" class="usp-range test">
+          <div class="usp-slider-pct" id="batchTestPct">15%</div>
+        </div>
+      </div>
+    </div>
+    <div class="usp-note">
+      <i class="fas fa-info-circle"></i>
+      Annotated images will be <strong>moved to the new dataset</strong> and removed from Active Work.
+    </div>
+    <div class="usp-footer">
+      <button class="usp-cancel-btn" id="uspCancelBtn"><i class="fas fa-times"></i> Cancel</button>
+      <button class="usp-confirm-btn" id="uspConfirmBtn"><i class="fas fa-check"></i> Create Dataset</button>
+    </div>
+  </div>
+</div>
+
+<!-- Hidden file inputs -->
+<input type="file" id="upPageImagesInput" accept=".jpg,.jpeg,.png,.bmp,.tiff,.webp" multiple style="display:none">
+<input type="file" id="upPageFolderInput" accept=".jpg,.jpeg,.png,.bmp,.tiff,.webp,.txt,.yaml,.yml" multiple webkitdirectory style="display:none">
+<input type="file" id="upPageVideoInput" accept=".mp4,.avi,.mov,.mkv,.webm" multiple style="display:none">
+<input type="file" id="upPageImportInput" accept=".zip" style="display:none">
+<input type="hidden" id="upPageProjectName">
+<button id="upPageCreateBtn" style="display:none"></button>
+
+<script src="/static/js/core/api.js"></script>
+<script src="/static/js/core/state.js"></script>
+<script src="/static/js/core/utils.js"></script>
+<script src="/static/js/features/auth.js"></script>
+<script src="/static/js/main.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+  const token = localStorage.getItem('am_token');
+  if (!token) { window.location.href = '/login'; return; }
+
+  // Sync state with URL params
+  const params = new URLSearchParams(window.location.search);
+  const wsId   = params.get('workspace_id') || window.AM_WORKSPACE_ID || '';
+  const proj   = params.get('project')      || window.AM_PROJECT || '';
+  window.AM_WORKSPACE_ID = wsId;
+  window.AM_PROJECT      = proj;
+  if (typeof state !== 'undefined') {
+    state.workspaceId = wsId;
+    state.project     = proj;
+  }
+
+  // Auth + navbar
+  try {
+    const user = await AuthFeature.requireAuth();
+    if (!user) return;
+    const els = {
+      'user-name': user.username, 'dd-name': user.username,
+      'dd-email': user.email
+    };
+    Object.entries(els).forEach(([id, v]) => {
+      const el = document.getElementById(id); if (el) el.textContent = v;
+    });
+    ['user-avatar','dd-avatar'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = user.username[0].toUpperCase();
+    });
+    const menuEl = document.getElementById('user-menu');
+    if (menuEl) menuEl.style.display = 'flex';
+  } catch(e) {}
+
+  // Project label
+  const projLabel = document.getElementById('upCenterProjectLabel');
+  if (projLabel) projLabel.textContent = proj || '—';
+  const projInp = document.getElementById('upPageProjectName');
+  if (projInp) projInp.value = proj;
+
+  // Init upload logic from main.js
+  if (typeof app !== 'undefined' && typeof app._initUploadPage === 'function') {
+    setTimeout(() => app._initUploadPage(), 120);
+  }
+
+  // Wire upload type cards → hidden inputs
+  const cardMap = {
+    uocImages: 'upPageImagesInput',
+    uocFolder: 'upPageFolderInput',
+    uocVideo:  'upPageVideoInput',
+    uocImport: 'upPageImportInput',
+  };
+  Object.entries(cardMap).forEach(([cardId, inputId]) => {
+    const card  = document.getElementById(cardId);
+    const input = document.getElementById(inputId);
+    if (card && input) card.addEventListener('click', () => input.click());
+  });
+
+  // Drag-over drop zone highlight
+  const drop = document.getElementById('upPageDrop');
+  if (drop) {
+    drop.addEventListener('dragover',  e => { e.preventDefault(); drop.classList.add('drag-over'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('drag-over'));
+    drop.addEventListener('drop',      e => { e.preventDefault(); drop.classList.remove('drag-over'); });
+  }
+
+  // USP Modal close
+  ['uspCloseBtn','uspCancelBtn'].forEach(id => {
+    document.getElementById(id)?.addEventListener('click', () => {
+      const m = document.getElementById('uspModal'); if (m) m.style.display = 'none';
+    });
+  });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+/* ── Bridge CSS ───────────────────────────────────────────────────────────────
+   Now nearly empty: Login/Register have their own ported CSS (login.css /
+   register.css), and Dashboard/Members/Settings/shell use the ported original
+   sheets. Only a single utility remains, used by the placeholder section stubs
+   until U4–U6 replace them with the original markup. */
+.muted { color: var(--tx2); }

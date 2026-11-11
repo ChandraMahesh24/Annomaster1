@@ -1,0 +1,129 @@
+EXTRACT_FRAMES_ROUTE = '''
+
+@uploads_bp.route(\'/api/workspaces/<int:workspace_id>/projects/<project>/extract_frames\',
+                   methods=[\'POST\'])
+@login_required
+@workspace_role_required(\'owner\', \'editor\')
+def api_extract_frames(workspace_id, project):
+    """
+    Extract frames from video using ffmpeg.
+    Supports: mp4, avi, mov, mkv, wmv, flv, ts, m4v, dav, h264, h265,
+              and all CCTV/DVR formats that ffmpeg can decode.
+    """
+    import subprocess, tempfile
+    from pathlib import Path as _Path
+
+    wsf  = _wsf(workspace_id)
+    file = request.files.get(\'file\')
+    fps  = min(int(request.form.get(\'fps\', 5)), 30)   # cap at 30 fps
+
+    if not file:
+        return jsonify({\'error\': \'No file\'}), 400
+
+    # Check ffmpeg is available
+    try:
+        subprocess.run([\'ffmpeg\', \'-version\'], capture_output=True, check=True, timeout=5)
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+        # Fallback to OpenCV if ffmpeg not available
+        return _extract_frames_opencv(workspace_id, project, wsf, file, fps)
+
+    get_or_create_project(wsf, project)
+    batch   = _create_batch(wsf, project, \'video\')
+    img_dir = batch_img_dir(wsf, project, batch[\'job_name\'])
+    lbl_dir = batch_lbl_dir(wsf, project, batch[\'job_name\'])
+    img_dir.mkdir(parents=True, exist_ok=True)
+    lbl_dir.mkdir(parents=True, exist_ok=True)
+
+    stem = _Path(file.filename).stem
+
+    # Save uploaded video to temp file
+    suffix = _Path(file.filename).suffix.lower() or \'.tmp\'
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        tmp_path = _Path(tmp.name)
+        file.save(tmp_path)
+
+    try:
+        # ffmpeg command: extract 1 frame every (1/fps) seconds
+        # -vsync vfr: variable frame rate output (only when frame needed)
+        # -q:v 2: high quality JPEG
+        out_pattern = str(img_dir / f\'{stem}_frame%06d.jpg\')
+        cmd = [
+            \'ffmpeg\', \'-y\',
+            \'-i\', str(tmp_path),
+            \'-vf\', f\'fps={fps}\',
+            \'-vsync\', \'vfr\',
+            \'-q:v\', \'2\',
+            \'-threads\', \'0\',   # use all CPU cores
+            out_pattern
+        ]
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            timeout=600   # 10 min max
+        )
+
+        # Count saved frames
+        saved = sum(1 for f in img_dir.iterdir()
+                    if f.suffix.lower() == \'.jpg\' and f.stem.startswith(stem))
+
+        if saved == 0 and result.returncode != 0:
+            err = result.stderr.decode(errors=\'ignore\')[-300:]
+            return jsonify({\'error\': f\'ffmpeg failed: {err}\'}), 400
+
+        return jsonify({
+            \'success\':          True,
+            \'frames_extracted\': saved,
+            \'upload_id\':        batch[\'upload_id\'],
+            \'job_name\':         batch[\'job_name\'],
+        })
+
+    except subprocess.TimeoutExpired:
+        return jsonify({\'error\': \'Frame extraction timed out (>10 min)\'}), 408
+    except Exception as e:
+        return jsonify({\'error\': str(e)}), 500
+    finally:
+        try: tmp_path.unlink(missing_ok=True)
+        except Exception: pass
+
+
+def _extract_frames_opencv(workspace_id, project, wsf, file, fps):
+    """Fallback: OpenCV frame extraction when ffmpeg is not available."""
+    try:
+        import cv2
+    except ImportError:
+        return jsonify({\'error\':
+            \'Neither ffmpeg nor OpenCV found. Install ffmpeg: https://ffmpeg.org/download.html\'}), 400
+
+    from pathlib import Path as _Path
+    import tempfile
+
+    get_or_create_project(wsf, project)
+    batch   = _create_batch(wsf, project, \'video\')
+    img_dir = batch_img_dir(wsf, project, batch[\'job_name\'])
+    img_dir.mkdir(parents=True, exist_ok=True)
+
+    suffix = _Path(file.filename).suffix.lower() or \'.tmp\'
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        tmp_path = _Path(tmp.name)
+        file.save(tmp_path)
+
+    try:
+        cap     = cv2.VideoCapture(str(tmp_path))
+        vid_fps = cap.get(cv2.CAP_PROP_FPS) or 30
+        interval = max(1, int(vid_fps / fps))
+        frame_n = saved = 0
+        stem    = _Path(file.filename).stem
+        while True:
+            ok, frame = cap.read()
+            if not ok: break
+            if frame_n % interval == 0:
+                cv2.imwrite(str(img_dir / f\'{stem}_frame{frame_n:06d}.jpg\'), frame)
+                saved += 1
+            frame_n += 1
+        cap.release()
+        return jsonify({\'success\': True, \'frames_extracted\': saved,
+                        \'upload_id\': batch[\'upload_id\']})
+    finally:
+        try: tmp_path.unlink(missing_ok=True)
+        except Exception: pass
+'''

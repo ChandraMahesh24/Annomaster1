@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Account Settings – AnnoMaster</title>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="/static/css/tokens.css">
+  <link rel="stylesheet" href="/static/css/base.css">
+  <link rel="stylesheet" href="/static/css/layout.css">
+  <link rel="stylesheet" href="/static/css/settings.css">
+  <link rel="stylesheet" href="/static/css/modes.css">
+  <script src="/static/js/theme.js"></script>
+</head>
+<body>
+
+{% include 'layout/navbar.html' %}
+
+<div class="settings-page">
+  <div class="settings-wrapper">
+
+    <!-- ── Sidebar Navigation ── -->
+    <aside class="settings-sidebar">
+      <div class="settings-sidebar-header">
+        <h2>Settings</h2>
+        <p>Manage your account preferences</p>
+      </div>
+      <nav class="settings-nav">
+        <button class="settings-nav-btn active" id="nav-btn-profile" onclick="SettingsPage.switchTab('profile', this)">
+          <i class="fas fa-user-circle"></i> Profile Management
+        </button>
+        <button class="settings-nav-btn" id="nav-btn-theme" onclick="SettingsPage.switchTab('theme', this)">
+          <i class="fas fa-palette"></i> Theme &amp; Colors
+        </button>
+        <button class="settings-nav-btn" id="nav-btn-workspace" onclick="SettingsPage.switchTab('workspace', this)">
+          <i class="fas fa-layer-group"></i> Workspace Settings
+        </button>
+        <button class="settings-nav-btn" id="nav-btn-security" onclick="SettingsPage.switchTab('security', this)">
+          <i class="fas fa-lock"></i> Security &amp; Sessions
+        </button>
+        <button class="settings-nav-btn" id="nav-btn-notifications" onclick="SettingsPage.switchTab('notifications', this)">
+          <i class="fas fa-bell"></i> Notifications
+        </button>
+        <button class="settings-nav-btn" id="nav-btn-language" onclick="SettingsPage.switchTab('language', this)">
+          <i class="fas fa-globe"></i> Language &amp; Region
+        </button>
+        <button class="settings-nav-btn" id="nav-btn-layout" onclick="SettingsPage.switchTab('layout', this)">
+          <i class="fas fa-columns"></i> Layout Preferences
+        </button>
+        <button class="settings-nav-btn danger-nav" id="nav-btn-danger" onclick="SettingsPage.switchTab('danger', this)">
+          <i class="fas fa-trash-alt"></i> Reset &amp; Danger
+        </button>
+      </nav>
+    </aside>
+
+    <!-- ── Settings Main Panels ── -->
+    <main class="settings-main">
+
+      <!-- Panel: Profile Management -->
+      <section class="settings-panel active" id="panel-profile">
+        <div class="panel-header">
+          <h2 id="txt-profile-title">Profile Management</h2>
+          <p>Update your personal information and public profile presence.</p>
+        </div>
+
+        <div class="profile-avatar-section">
+          <div class="avatar-large" id="profile-avatar-display">U</div>
+          <div class="avatar-upload-info">
+            <h4>Profile Picture</h4>
+            <p>Select a modern avatar design or reset to initials.</p>
+            <div class="avatar-select-grid">
+              <button class="avatar-preset" onclick="SettingsPage.setPresetAvatar('astronaut')" title="Astronaut">👨‍🚀</button>
+              <button class="avatar-preset" onclick="SettingsPage.setPresetAvatar('detective')" title="Detective">🕵️‍♂️</button>
+              <button class="avatar-preset" onclick="SettingsPage.setPresetAvatar('coder')" title="Coder">👨‍💻</button>
+              <button class="avatar-preset" onclick="SettingsPage.setPresetAvatar('robot')" title="Robot">🤖</button>
+              <button class="avatar-preset" onclick="SettingsPage.setPresetAvatar('cat')" title="Cat">🐱</button>
+              <button class="avatar-preset reset-btn" onclick="SettingsPage.resetAvatarInitials()" title="Reset to initials"><i class="fas fa-undo"></i></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label" for="profile-username">Username</label>
+            <input class="form-input" id="profile-username" placeholder="Your username">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="profile-email">Email Address</label>
+            <input class="form-input" id="profile-email" type="email" placeholder="you@example.com">
+          </div>
+          <div class="form-group full-width">
+            <label class="form-label" for="profile-bio">Bio / Role Description</label>
+            <textarea class="form-textarea" id="profile-bio" rows="3" placeholder="Tell us about your annotation work..."></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="profile-phone">Phone Number</label>
+            <input class="form-input" id="profile-phone" placeholder="+1 (555) 000-0000">
+          </div>
+        </div>
+
+        <div class="form-feedback-bar">
+          <div class="form-error" id="profile-error"></div>
+          <div class="form-success" id="profile-success"></div>
+        </div>
+
+        <button class="btn btn-primary" id="btn-save-profile" onclick="SettingsPage.saveProfile()">
+          <i class="fas fa-save"></i> Save Profile Changes
+        </button>
+      </section>
+
+      <!-- Panel: Theme Settings -->
+      <section class="settings-panel" id="panel-theme">
+        <div class="panel-header">
+          <h2 id="txt-theme-title">Theme Settings</h2>
+          <p>Customize the visual style and accents of your workspace.</p>
+        </div>
+
+        <!-- Interface Style Cards -->
+        <h3 class="section-subtitle">Interface Mode</h3>
+        <div class="theme-mode-grid">
+          <div class="theme-mode-card active" id="theme-mode-dark" onclick="SettingsPage.setThemeMode('dark')">
+            <div class="theme-preview dark-preview">
+              <span class="preview-accent"></span>
+            </div>
+            <div class="theme-mode-info">
+              <i class="fas fa-moon"></i>
+              <h4>Dark Mode</h4>
+              <p>Premium dark dashboard style (default)</p>
+            </div>
+          </div>
+
+          <div class="theme-mode-card" id="theme-mode-light" onclick="SettingsPage.setThemeMode('light')">
+            <div class="theme-preview light-preview">
+              <span class="preview-accent"></span>
+            </div>
+            <div class="theme-mode-info">
+              <i class="fas fa-sun"></i>
+              <h4>Light Mode</h4>
+              <p>Clean, crisp, high-contrast light style</p>
+            </div>
+          </div>
+
+          <div class="theme-mode-card" id="theme-mode-custom" onclick="SettingsPage.setThemeMode('custom')">
+            <div class="theme-preview custom-preview" style="background: linear-gradient(135deg, #2d2d38 0%, #1e1e24 100%)">
+              <span class="preview-accent" style="background: var(--accent);"></span>
+            </div>
+            <div class="theme-mode-info">
+              <i class="fas fa-palette"></i>
+              <h4>Custom Mode</h4>
+              <p>Choose your custom background and text color</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Custom Background & Text Color Picker row -->
+        <div id="custom-theme-colors-row" style="display: none; margin-top: 15px; margin-bottom: 25px; padding: 18px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border); border-radius: 14px; gap: 20px; flex-wrap: wrap; align-items: center;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <label style="font-size: 13px; font-weight: 700; color: var(--tx2); font-family: 'Sora', sans-serif;" for="custom-theme-bg">Background:</label>
+            <input type="color" id="custom-theme-bg" value="#1e1e24" onchange="SettingsPage.onCustomThemeChange()" style="cursor: pointer; width: 44px; height: 32px; border: none; border-radius: 8px; background: none; padding: 0;">
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <label style="font-size: 13px; font-weight: 700; color: var(--tx2); font-family: 'Sora', sans-serif;" for="custom-theme-text">Text Color:</label>
+            <input type="color" id="custom-theme-text" value="#e4e4e7" onchange="SettingsPage.onCustomThemeChange()" style="cursor: pointer; width: 44px; height: 32px; border: none; border-radius: 8px; background: none; padding: 0;">
+          </div>
+          <span style="font-size: 11px; color: var(--tx3); font-style: italic;">Changes apply instantly. Card surface colors are calculated automatically.</span>
+        </div>
+
+        <!-- Custom Theme Color Customization -->
+        <h3 class="section-subtitle">Accent Theme Color</h3>
+        <p class="section-desc">Choose a primary accent color used for progress bars, selections, and buttons.</p>
+        <div class="color-picker-container">
+          <div class="accent-color-grid">
+            <button class="color-circle active" style="background:#00e5b0" onclick="SettingsPage.setAccentColor('#00e5b0', this)" title="Classic Teal"></button>
+            <button class="color-circle" style="background:#9b51e0" onclick="SettingsPage.setAccentColor('#9b51e0', this)" title="Electric Violet"></button>
+            <button class="color-circle" style="background:#ff4081" onclick="SettingsPage.setAccentColor('#ff4081', this)" title="Neon Pink"></button>
+            <button class="color-circle" style="background:#ffb020" onclick="SettingsPage.setAccentColor('#ffb020', this)" title="Amber Gold"></button>
+            <button class="color-circle" style="background:#2d9cdb" onclick="SettingsPage.setAccentColor('#2d9cdb', this)" title="Sapphire Blue"></button>
+            <button class="color-circle" style="background:#eb5757" onclick="SettingsPage.setAccentColor('#eb5757', this)" title="Sunset Crimson"></button>
+          </div>
+          <div class="custom-color-row">
+            <span>Or custom accent:</span>
+            <input type="color" id="custom-accent-picker" onchange="SettingsPage.onCustomColorPick(this.value)">
+        </div>
+
+        <!-- Card Customization Section -->
+        <h3 class="section-subtitle" style="margin-top: 30px;">Card Appearance Customization</h3>
+        <p class="section-desc">Design the style, dimensions, border corners, opacity and hover effects for cards used globally.</p>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 25px; margin-top: 15px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border); border-radius: 14px; padding: 20px; align-items: start; flex-wrap: wrap;">
+          
+          <!-- Controls Panel -->
+          <div style="display: flex; flex-direction: column; gap: 15px;">
+            <!-- Background & Text & Border Picker row -->
+            <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+              <div style="display: flex; flex-direction: column; gap: 6px;">
+                <label style="font-size: 11px; font-weight: 700; color: var(--tx2); font-family: 'Sora', sans-serif;">Card Background:</label>
+                <input type="color" id="card-custom-bg" value="#16161f" onchange="SettingsPage.onCardCustomChange()" style="cursor: pointer; width: 44px; height: 32px; border: none; border-radius: 6px; background: none; padding: 0;">
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 6px;">
+                <label style="font-size: 11px; font-weight: 700; color: var(--tx2); font-family: 'Sora', sans-serif;">Card Text:</label>
+                <input type="color" id="card-custom-tx" value="#e4e4e7" onchange="SettingsPage.onCardCustomChange()" style="cursor: pointer; width: 44px; height: 32px; border: none; border-radius: 6px; background: none; padding: 0;">
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 6px;">
+                <label style="font-size: 11px; font-weight: 700; color: var(--tx2); font-family: 'Sora', sans-serif;">Card Border:</label>
+                <input type="color" id="card-custom-border" value="#2d2d3d" onchange="SettingsPage.onCardCustomChange()" style="cursor: pointer; width: 44px; height: 32px; border: none; border-radius: 6px; background: none; padding: 0;">
+              </div>
+            </div>
+
+            <!-- Corner Radius Dropdown -->
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <label style="font-size: 11px; font-weight: 700; color: var(--tx2); font-family: 'Sora', sans-serif;" for="card-custom-radius">Border Radius (Rounded Corners):</label>
+              <select id="card-custom-radius" class="form-select" onchange="SettingsPage.onCardCustomChange()" style="padding: 6px 12px; font-size: 12px;">
+                <option value="0px">Sharp Corners (0px)</option>
+                <option value="6px">Subtle Rounded (6px)</option>
+                <option value="12px" selected>Default Elegant (12px)</option>
+                <option value="20px">Smooth Pill (20px)</option>
+                <option value="30px">Maximum Curved (30px)</option>
+              </select>
+            </div>
+
+            <!-- Shadow Intensity Dropdown -->
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <label style="font-size: 11px; font-weight: 700; color: var(--tx2); font-family: 'Sora', sans-serif;" for="card-custom-shadow">Box Shadow Intensity:</label>
+              <select id="card-custom-shadow" class="form-select" onchange="SettingsPage.onCardCustomChange()" style="padding: 6px 12px; font-size: 12px;">
+                <option value="none">Flat (No Shadow)</option>
+                <option value="subtle">Subtle Glow</option>
+                <option value="medium" selected>Standard Elegant</option>
+                <option value="intense">Intense Depth & Glow</option>
+              </select>
+            </div>
+
+            <!-- Card Padding Selector -->
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <label style="font-size: 11px; font-weight: 700; color: var(--tx2); font-family: 'Sora', sans-serif;" for="card-custom-padding">Card Padding & Spacing:</label>
+              <select id="card-custom-padding" class="form-select" onchange="SettingsPage.onCardCustomChange()" style="padding: 6px 12px; font-size: 12px;">
+                <option value="0.75rem">Compact Spacing (0.75rem)</option>
+                <option value="1.5rem" selected>Default Comfortable (1.5rem)</option>
+                <option value="2.25rem">Spacious / Cinematic (2.25rem)</option>
+              </select>
+            </div>
+
+            <!-- Hover Effect Option -->
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <label style="font-size: 11px; font-weight: 700; color: var(--tx2); font-family: 'Sora', sans-serif;" for="card-custom-hover">Hover Effects style:</label>
+              <select id="card-custom-hover" class="form-select" onchange="SettingsPage.onCardCustomChange()" style="padding: 6px 12px; font-size: 12px;">
+                <option value="none">None (Static)</option>
+                <option value="scale">Subtle Scale Uplift</option>
+                <option value="glow">Accent Glow Highlight</option>
+                <option value="both" selected>Scale Uplift & Accent Glow</option>
+              </select>
+            </div>
+
+            <!-- Transparency Opacity Slider -->
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <label style="font-size: 11px; font-weight: 700; color: var(--tx2); font-family: 'Sora', sans-serif;" for="card-custom-opacity">Card Opacity (Transparency):</label>
+                <span id="card-custom-opacity-val" style="font-size: 11px; font-weight: 800; color: var(--accent);">100%</span>
+              </div>
+              <input type="range" id="card-custom-opacity" min="0.2" max="1.0" step="0.05" value="1.0" oninput="SettingsPage.onCardCustomChange()" style="cursor: pointer; height: 6px; background: var(--border2); border-radius: 4px; border: none; outline: none; width: 100%;">
+            </div>
+          </div>
+
+          <!-- Live Preview Panel -->
+          <div style="display: flex; flex-direction: column; gap: 12px; height: 100%; justify-content: center; align-items: stretch;">
+            <span style="font-size: 11px; font-weight: 700; color: var(--tx3); text-transform: uppercase; letter-spacing: 0.05em; font-family: 'Sora', sans-serif;">Live Style Preview:</span>
+            
+            <!-- Real-time dynamic preview card -->
+            <div id="live-preview-card" class="settings-card" style="margin: 0; pointer-events: auto;">
+              <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                <span style="width: 32px; height: 32px; border-radius: 50%; background: var(--accent-bg); color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 14px;"><i class="fas fa-magic"></i></span>
+                <div>
+                  <h4 style="margin: 0; font-size: 13px; font-weight: 700;">Interactive Card</h4>
+                  <p style="margin: 0; font-size: 10px; opacity: 0.72;">Changes reflect instantly below</p>
+                </div>
+              </div>
+              <p style="font-size: 11px; line-height: 1.6; margin-top: 10px;">Hover over this card to preview dynamic animations, border curves, transparency level and shadow scales globally.</p>
+              <div style="display: flex; gap: 8px; margin-top: 12px;">
+                <span style="font-size: 8px; font-weight: 800; text-transform: uppercase; padding: 3px 8px; border-radius: 12px; background: rgba(0,229,176,0.08); color: var(--accent);">Preview Pill</span>
+                <span style="font-size: 8px; font-weight: 800; text-transform: uppercase; padding: 3px 8px; border-radius: 12px; background: rgba(255,255,255,0.04); color: var(--tx2);">Dynamic</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Theme Save Action Bar -->
+        <div id="theme-save-bar" style="display: flex; align-items: center; justify-content: space-between; margin-top: 24px; padding: 14px 18px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border); border-radius: 14px; gap: 14px; flex-wrap: wrap;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span id="theme-unsaved-dot" style="display: none; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent-glow); flex-shrink: 0; animation: pulse-dot 1.4s ease infinite;"></span>
+            <span id="theme-save-status" style="font-size: 12px; color: var(--tx2); font-family: 'Sora', sans-serif;">Theme changes save automatically and apply globally across all pages.</span>
+          </div>
+          <div style="display: flex; gap: 10px; flex-shrink: 0;">
+            <button class="btn btn-secondary" onclick="SettingsPage.restoreThemeDefaults()" style="font-size: 12px; padding: 8px 16px;">
+              <i class="fas fa-undo"></i> Reset Theme
+            </button>
+            <button class="btn btn-primary" id="btn-save-theme" onclick="SettingsPage.saveThemeChanges()" style="font-size: 12px; padding: 8px 20px; display: flex; align-items: center; gap: 8px;">
+              <i class="fas fa-save"></i> Save Theme Changes
+            </button>
+          </div>
+        </div>
+
+        <style>
+          @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.8); }
+          }
+        </style>
+      </section>
+
+      <!-- Panel: Workspace Settings ─────────────────────────────────────────
+           Everything workspace-scoped in one place. These actions already
+           existed but were scattered across the dashboard header, the share
+           panel and the members page; this panel is the single home for them.
+           Every control is gated by your role in the SELECTED workspace, which
+           is why the panel re-renders whenever the picker changes. -->
+      <section class="settings-panel" id="panel-workspace">
+        <div class="panel-header">
+          <h2>Workspace Settings</h2>
+          <p>Manage the workspaces you belong to — details, members and access.</p>
+        </div>
+
+        <div class="settings-card">
+          <div class="card-title"><i class="fas fa-layer-group"></i> Select workspace</div>
+          <div class="form-group">
+            <select class="form-select" id="ws-picker" onchange="SettingsPage.selectWorkspace(this.value)"></select>
+          </div>
+          <div class="ws-overview" id="ws-overview"></div>
+        </div>
+
+        <!-- Rename (owner only) -->
+        <div class="settings-card" id="ws-rename-card" style="display:none">
+          <div class="card-title"><i class="fas fa-pen"></i> Workspace name</div>
+          <div class="ws-inline-form">
+            <input class="form-input" id="ws-rename-input" placeholder="Workspace name"
+                   onkeydown="if(event.key==='Enter')SettingsPage.renameWorkspace()">
+            <button class="btn btn-primary" onclick="SettingsPage.renameWorkspace()">
+              <i class="fas fa-save"></i> Save
+            </button>
+          </div>
+          <div class="form-error"   id="ws-rename-error"></div>
+          <div class="form-success" id="ws-rename-success"></div>
+        </div>
+
+        <!-- Members -->
+        <div class="settings-card">
+          <div class="card-title"><i class="fas fa-users"></i> Members</div>
+
+          <div id="ws-invite-block" style="display:none">
+            <div class="ws-inline-form">
+              <input class="form-input" id="ws-invite-email" type="email"
+                     placeholder="colleague@example.com"
+                     onkeydown="if(event.key==='Enter')SettingsPage.inviteMember()">
+              <select class="form-select ws-role-select" id="ws-invite-role">
+                <option value="editor">Editor</option>
+                <option value="viewer">Viewer</option>
+              </select>
+              <button class="btn btn-primary" onclick="SettingsPage.inviteMember()">
+                <i class="fas fa-paper-plane"></i> Invite
+              </button>
+            </div>
+            <div class="form-error"   id="ws-invite-error"></div>
+            <div class="form-success" id="ws-invite-success"></div>
+          </div>
+
+          <div class="ws-member-list" id="ws-member-list">
+            <div class="ws-loading">Loading…</div>
+          </div>
+
+          <div class="ws-role-legend">
+            <span><b>Owner</b> — full control, can delete &amp; share</span>
+            <span><b>Editor</b> — upload, annotate, manage classes</span>
+            <span><b>Viewer</b> — read-only</span>
+          </div>
+        </div>
+
+        <!-- Danger (owner only) -->
+        <div class="settings-card danger-zone-box" id="ws-danger-card" style="display:none">
+          <div class="card-title"><i class="fas fa-triangle-exclamation"></i> Delete workspace</div>
+          <p class="ws-danger-text">
+            Permanently deletes <b id="ws-danger-name">this workspace</b> and
+            <b>every project, image, annotation and dataset inside it</b>. This cannot be undone.
+          </p>
+          <button class="btn btn-danger" onclick="SettingsPage.deleteWorkspace()">
+            <i class="fas fa-trash-alt"></i> Delete this workspace
+          </button>
+        </div>
+      </section>
+
+      <!-- Panel: Security Settings & Session Management -->
+      <section class="settings-panel" id="panel-security">
+        <div class="panel-header">
+          <h2 id="txt-security-title">Security &amp; Sessions</h2>
+          <p>Update credentials, enable double authentication, and view active workspaces.</p>
+        </div>
+
+        <!-- Password Change Card -->
+        <div class="settings-card">
+          <h3 class="card-title"><i class="fas fa-key"></i> Change Password</h3>
+          <div class="form-grid">
+            <div class="form-group">
+              <label class="form-label" for="security-current-pw">Current Password</label>
+              <input class="form-input" type="password" id="security-current-pw" placeholder="••••••••">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="security-new-pw">New Password</label>
+              <input class="form-input" type="password" id="security-new-pw" placeholder="Min. 6 characters">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="security-confirm-pw">Confirm New Password</label>
+              <input class="form-input" type="password" id="security-confirm-pw" placeholder="Repeat new password">
+            </div>
+          </div>
+          <div class="form-feedback-bar">
+            <div class="form-error" id="security-pw-error"></div>
+            <div class="form-success" id="security-pw-ok"></div>
+          </div>
+          <button class="btn btn-primary" onclick="SettingsPage.changePassword()">
+            <i class="fas fa-lock"></i> Change Password
+          </button>
+        </div>
+
+        <!-- Two-Factor Authentication (2FA) -->
+        <div class="settings-card">
+          <div class="twofa-header-row">
+            <div>
+              <h3 class="card-title"><i class="fas fa-shield-alt"></i> Two-Factor Authentication (2FA)</h3>
+              <p class="card-desc">Add an extra layer of protection to your account with a secondary dynamic mobile code.</p>
+            </div>
+            <span class="badge badge-inactive" id="twofa-status-badge">Inactive</span>
+          </div>
+
+          <div class="toggle-control-row">
+            <div class="toggle-text">
+              <h4>Secure with Authenticator</h4>
+              <p>Use applications like Google Authenticator or 1Password</p>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="twofa-switch" onchange="SettingsPage.toggleTwoFactor(this.checked)">
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <!-- Simulated 2FA Modal / Setup Grid -->
+          <div class="twofa-setup-box" id="twofa-setup-box" style="display:none">
+            <div class="twofa-setup-grid">
+              <div class="twofa-qr-wrap">
+                <!-- Gorgeous mock QR code in CSS -->
+                <div class="mock-qr-code">
+                  <div class="qr-block top-left"></div>
+                  <div class="qr-block top-right"></div>
+                  <div class="qr-block bottom-left"></div>
+                  <div class="qr-center-pixels"></div>
+                </div>
+                <span class="qr-label">AM-SEC-8F92-9K11</span>
+              </div>
+              <div class="twofa-setup-instructions">
+                <p>1. Scan the QR code with your mobile authenticator app.</p>
+                <p>2. Enter the 6-digit confirmation code below to verify initialization.</p>
+                <div class="code-verify-row">
+                  <input class="form-input code-input" id="twofa-code-input" placeholder="000 000" maxlength="6">
+                  <button class="btn btn-primary" onclick="SettingsPage.verifyTwoFactor()">Verify &amp; Enable</button>
+                </div>
+                <div class="form-error" id="twofa-verify-error"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Active Sessions Management -->
+        <div class="settings-card">
+          <h3 class="card-title"><i class="fas fa-server"></i> Active Sessions</h3>
+          <p class="card-desc">Review and revoke active login tokens for security.</p>
+          <div class="sessions-list" id="sessions-list">
+            <!-- Sessions loaded/revoked by JS -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Panel: Notification Settings -->
+      <section class="settings-panel" id="panel-notifications">
+        <div class="panel-header">
+          <h2 id="txt-notifications-title">Notification Settings</h2>
+          <p>Control exactly when and how you receive alerts from AnnoMaster.</p>
+        </div>
+
+        <div class="settings-card">
+          <h3 class="card-title"><i class="fas fa-envelope"></i> Email Digest Alerts</h3>
+          <div class="notification-group">
+            <label class="notification-checkbox-row">
+              <input type="checkbox" id="notif-email-digest" checked onchange="SettingsPage.saveNotifPref()">
+              <span class="checkbox-box"></span>
+              <div class="notif-label-text">
+                <h4>Weekly Annotation Summary</h4>
+                <p>Get a comprehensive digest of all labeled bounding boxes and classes each Monday.</p>
+              </div>
+            </label>
+            <label class="notification-checkbox-row">
+              <input type="checkbox" id="notif-email-shared" checked onchange="SettingsPage.saveNotifPref()">
+              <span class="checkbox-box"></span>
+              <div class="notif-label-text">
+                <h4>Project Sharing Alerts</h4>
+                <p>Email me immediately when I am added to a new team workspace or edit pool.</p>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <h3 class="card-title"><i class="fas fa-desktop"></i> Real-time System Alerts</h3>
+          <div class="notification-group">
+            <label class="notification-checkbox-row">
+              <input type="checkbox" id="notif-push-export" checked onchange="SettingsPage.saveNotifPref()">
+              <span class="checkbox-box"></span>
+              <div class="notif-label-text">
+                <h4>Dataset Export Competions</h4>
+                <p>Trigger audio and workspace notifications when a full dataset has finished rendering zip bundles.</p>
+              </div>
+            </label>
+            <label class="notification-checkbox-row">
+              <input type="checkbox" id="notif-push-server" onchange="SettingsPage.saveNotifPref()">
+              <span class="checkbox-box"></span>
+              <div class="notif-label-text">
+                <h4>Vision Server Status Updates</h4>
+                <p>Receive live desktop alerts if smart annotation vision networks undergo maintenance or downtime.</p>
+              </div>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <!-- Panel: Language Selection -->
+      <section class="settings-panel" id="panel-language">
+        <div class="panel-header">
+          <h2 id="txt-language-title">Language &amp; Region</h2>
+          <p>Choose your display language and target number formats.</p>
+        </div>
+
+        <div class="settings-card">
+          <h3 class="card-title"><i class="fas fa-language"></i> Display Language</h3>
+          <p class="card-desc">Select the primary localization language for AnnoMaster's dashboard, sidebar actions, and workspace parameters.</p>
+          <div class="form-group" style="max-width:320px; margin-top:1.25rem;">
+            <select class="form-select" id="language-select" onchange="SettingsPage.onLanguageChange(this.value)">
+              <option value="en">English (US)</option>
+              <option value="es">Español (ES)</option>
+              <option value="fr">Français (FR)</option>
+              <option value="de">Deutsch (DE)</option>
+              <option value="jp">日本語 (JP)</option>
+              <option value="cn">简体中文 (CN)</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <!-- Panel: Layout Preferences -->
+      <section class="settings-panel" id="panel-layout">
+        <div class="panel-header">
+          <h2 id="txt-layout-title">Layout Preferences</h2>
+          <p>Fine-tune how dashboard items are padded and sized on your display.</p>
+        </div>
+
+        <div class="settings-card">
+          <h3 class="card-title"><i class="fas fa-sliders-h"></i> Spacing density</h3>
+          <p class="card-desc">Customize UI line-heights, sidebar paddings, and font densities to match your desk workflow.</p>
+          <div class="layout-preference-grid">
+            <div class="layout-card active" id="layout-mode-expanded" onclick="SettingsPage.setLayoutMode('expanded')">
+              <div class="layout-preview-lines expanded-lines">
+                <span></span>
+                <span></span>
+              </div>
+              <div class="layout-info">
+                <h4>Expanded Mode</h4>
+                <p>Generous space, sora focus (default)</p>
+              </div>
+            </div>
+            <div class="layout-card" id="layout-mode-compact" onclick="SettingsPage.setLayoutMode('compact')">
+              <div class="layout-preview-lines compact-lines">
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+              <div class="layout-info">
+                <h4>Compact Mode</h4>
+                <p>Maximized grid views for deep labeling</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Panel: Danger Zone & Reset -->
+      <section class="settings-panel" id="panel-danger">
+        <div class="panel-header">
+          <h2 id="txt-danger-title">Reset &amp; Danger</h2>
+          <p>Restore base configurations or delete AnnoMaster credentials.</p>
+        </div>
+
+        <!-- Restore Defaults -->
+        <div class="settings-card">
+          <h3 class="card-title"><i class="fas fa-undo"></i> Restore System Defaults</h3>
+          <p class="card-desc">Wipe all localized colors, layout sizes, density preferences, and notification presets to return to factory default.</p>
+          <button class="btn btn-secondary" style="margin-top:1.25rem" onclick="SettingsPage.restoreSystemDefaults()">
+            <i class="fas fa-history"></i> Reset Settings to Base
+          </button>
+        </div>
+
+        <!-- Permanent Delete -->
+        <div class="settings-card danger-zone-box">
+          <h3 class="card-title"><i class="fas fa-exclamation-triangle"></i> Permanent Account Destruction</h3>
+          <p class="card-desc">Permanently delete your profile credentials, completely owned workspaces, projects, and target annotation coordinates. This action is irreversible.</p>
+          <button class="btn btn-danger-solid" style="margin-top:1.25rem" onclick="SettingsPage.deleteAccount()">
+            <i class="fas fa-trash-alt"></i> Destroy Account &amp; Workspaces
+          </button>
+        </div>
+      </section>
+
+    </main>
+
+  </div>
+</div>
+
+<div class="toast-container" id="toast-stack"></div>
+
+<!-- ══ SCRIPTS ══════════════════════════════════════════════════════ -->
+<script src="/static/js/core/api.js"></script>
+<script src="/static/js/core/state.js"></script>
+<script src="/static/js/core/utils.js"></script>
+<script src="/static/js/features/auth.js"></script>
+<script src="/static/js/features/settings.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', async () => {
+    const user = await AuthFeature.requireAuth();
+    if (!user) return;
+
+    // Synchronize navbar headers
+    const nameEl   = document.getElementById('user-name');
+    const avatarEl = document.getElementById('user-avatar');
+    const menuEl   = document.getElementById('user-menu');
+    if (nameEl)   nameEl.textContent   = user.username;
+    if (avatarEl) avatarEl.textContent = user.username[0].toUpperCase();
+    if (menuEl)   menuEl.style.display = 'flex';
+
+    const ddName   = document.getElementById('dd-name');
+    const ddEmail  = document.getElementById('dd-email');
+    const ddAvatar = document.getElementById('dd-avatar');
+    if (ddName)   ddName.textContent   = user.username;
+    if (ddEmail)  ddEmail.textContent  = user.email;
+    if (ddAvatar) ddAvatar.textContent = user.username[0].toUpperCase();
+
+    // Init the premium settings page engine
+    SettingsPage.init(user);
+  });
+</script>
+</body>
+</html>

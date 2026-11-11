@@ -1,0 +1,152 @@
+/* React-only additions on top of the ported original CSS.
+   Kept tiny — everything visual comes from the ported sheets. This only covers
+   what the original handled in JS/inline. */
+
+/* Canvas fills its section. */
+.anno-canvas { background: var(--panel); }
+
+/* ── Workspace shell geometry ──────────────────────────────────────────────
+   main.css positions .workspace as a 3-column grid (left-panel / canvas /
+   right-panel) for the original annotate DOM. The React sections fill the whole
+   area instead, so override the grid to a block and pin the box to match the
+   real toolbar (52px, forced by annotate-v2) / statusbar (--sb-h) / rail
+   (--rnav-w). */
+.workspace {
+  position: fixed;
+  top: 52px;
+  bottom: var(--sb-h, 26px);
+  left: var(--rnav-w, 64px);
+  right: 0;
+  display: block !important;
+  overflow: hidden;
+}
+/* Rail starts below the 52px toolbar too (main.css uses --tb-h=46). */
+.right-nav { top: 52px !important; }
+@media (max-width: 639px) { .workspace { left: 0; } .right-nav { width: 52px; } }
+
+/* Each section fills the workspace; content sections scroll, upload/canvas don't.
+   IMPORTANT: main.css sets `.page { display:none }` (the original shows one via a
+   JS-added `.active` class). React only mounts the active section, so we make the
+   mounted page visible here directly — higher specificity than the base `.page`
+   rule — instead of toggling `.active`. Without this, EVERY section renders but
+   is display:none, which looked like empty pages. */
+.workspace .page {
+  position: absolute; inset: 0; overflow-y: auto;
+  display: flex !important; flex-direction: column;
+}
+.workspace #page-upload { overflow: hidden; }
+
+/* Annotate: left image-list sidebar + canvas (ports the .workspace 3-col idea
+   as a flex row, since we drive column count from React not the grid). */
+.workspace .anno-layout { position: absolute; inset: 0; display: flex; }
+.anno-layout .left-sidebar {
+  width: var(--left-w, 256px); flex-shrink: 0;
+  display: flex; flex-direction: column; overflow: hidden;
+  border-right: 1px solid var(--border); background: var(--surface);
+}
+.anno-layout .canvas-area { flex: 1; position: relative; min-width: 0; }
+.anno-layout .right-sidebar {
+  width: var(--right-w, 256px); flex-shrink: 0;
+  display: flex; flex-direction: column; overflow: hidden;
+  border-left: 1px solid var(--border); background: var(--surface);
+}
+@media (max-width: 1023px) { .anno-layout .left-sidebar { width: 160px; } .anno-layout .right-sidebar { width: 200px; } }
+@media (max-width: 639px)  { .anno-layout .left-sidebar, .anno-layout .right-sidebar { display: none; } }
+.rp-panel { flex: 1; overflow-y: auto; }
+
+.img-list-wrap { flex: 1; overflow-y: auto; }
+.img-list-item {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 6px 10px; border: none; background: none; color: var(--tx2);
+  cursor: pointer; border-left: 2px solid transparent; text-align: left;
+}
+.img-list-item:hover { background: var(--glass-hover); color: var(--tx); }
+.img-list-item.active { background: var(--accent-bg); color: var(--accent); border-left-color: var(--accent); }
+.img-list-thumb { width: 40px; height: 30px; object-fit: cover; border-radius: 4px; flex-shrink: 0; background: var(--panel); }
+.img-list-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.img-list-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.img-list-dot.done { background: var(--success); }
+.img-list-dot.pending { background: var(--tx3); }
+.list-empty { padding: 24px 12px; text-align: center; color: var(--tx3); font-size: 12px; }
+
+/* ── Video → Frame Extraction modal: the selected-files list ──────────────── */
+/* The original built these rows in JS; ported here so the picked videos show
+   with name + size + remove, matching #videoList. */
+.video-file-list { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 2px; }
+.video-file-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: var(--radius-2, 8px);
+  background: var(--panel2, var(--card)); border: 1px solid var(--border);
+}
+.video-file-row > i { color: var(--accent); flex-shrink: 0; }
+.vfr-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.vfr-size { font-size: 11px; color: var(--tx3); flex-shrink: 0; }
+.vfr-x {
+  background: none; border: none; color: var(--tx3); cursor: pointer;
+  padding: 2px 6px; border-radius: 6px; flex-shrink: 0;
+}
+.vfr-x:hover { color: var(--danger); background: var(--ink-a08, rgba(255,255,255,.06)); }
+.vfr-x:disabled { opacity: .4; cursor: default; }
+
+/* ── Annotate: batch-filter banner + image-list pagination ────────────────── */
+.batch-filter-banner {
+  display: flex; align-items: center; gap: 8px; justify-content: space-between;
+  padding: 6px 10px; margin: 6px 8px 0;
+  background: var(--accent-a08, rgba(34,197,225,.08));
+  border: 1px solid var(--accent-a20, rgba(34,197,225,.2));
+  border-radius: 8px; font-size: 12px;
+}
+.bfb-text { display: flex; align-items: center; gap: 6px; color: var(--accent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bfb-clear {
+  background: none; border: none; color: var(--tx3); cursor: pointer;
+  font-size: 11px; padding: 2px 6px; border-radius: 6px; flex-shrink: 0;
+}
+.bfb-clear:hover { color: var(--danger); background: var(--ink-a08, rgba(255,255,255,.06)); }
+
+.img-list-pager {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 8px 10px; border-top: 1px solid var(--border);
+}
+.ilp-perpage { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--tx3); }
+.ilp-perpage select {
+  background: var(--panel2, var(--card)); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--tx); font: inherit; font-size: 11px;
+  padding: 3px 6px; cursor: pointer;
+}
+.ilp-nav { display: flex; align-items: center; gap: 6px; }
+.ilp-info { font-size: 12px; color: var(--tx2); min-width: 44px; text-align: center; }
+.ilp-btn {
+  width: 30px; height: 28px; display: grid; place-items: center;
+  background: var(--panel2, var(--card)); border: 1px solid var(--border);
+  border-radius: 7px; color: var(--tx2); cursor: pointer;
+}
+.ilp-btn:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+.ilp-btn:disabled { opacity: .4; cursor: default; }
+
+/* ── Media Library filter tabs (All / Annotated / Unannotated) ──────────────── */
+.media-filters {
+  display: flex; gap: 4px; padding: 6px 8px 2px;
+}
+.media-filter-tab {
+  flex: 1 1 0; min-width: 0;
+  padding: 5px 6px; border-radius: 7px;
+  background: transparent; border: 1px solid var(--border);
+  color: var(--tx3); font: inherit; font-size: 11px; font-weight: 600;
+  cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  transition: all .15s ease;
+}
+.media-filter-tab:hover { color: var(--tx); border-color: var(--tx3); }
+.media-filter-tab.active {
+  background: var(--accent-a12, rgba(34,197,225,.12)); color: var(--accent);
+  border-color: var(--accent-a30, rgba(34,197,225,.3));
+}
+
+/* ── Active Work batch cards ──────────────────────────────────────────────────
+   NOTE: the batch card on the upload page is styled by upload.css under the
+   `#page-upload .uhp-*` ID selectors (higher specificity than anything here), so
+   the sizing/layout fixes (responsive wrap, compact padding, footer) live THERE,
+   not in this file. Only the meta row (uploader/assignee chips) is un-styled by
+   upload.css — main.css handles it — so that one tweak is safe to keep here. */
+.uhp-batch-card .uhp-meta-chip {
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+}

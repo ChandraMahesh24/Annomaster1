@@ -1,0 +1,139 @@
+/* ═══════════════════════════════════════════════════════════════
+   Design tokens — ported from the original app's tokens.css.
+
+   Same contract as the Flask app:
+     • Dark is the DEFAULT (:root, no attribute).
+     • Light is a DERIVED theme (:root[data-theme="light"]).
+     • Tokens are the ONLY source of colour — components never hardcode.
+     • Same breakpoints: 639 / 1023 / 1024 / 1440 / 1920.
+   Values match the original so the React app looks identical to the
+   Flask one in both themes.
+═══════════════════════════════════════════════════════════════ */
+
+:root {
+  color-scheme: dark;
+
+  /* Surfaces (dark) */
+  --bg:      #07070d;
+  --surface: #0d0d16;
+  --panel:   #111119;
+  --card:    #16161f;
+  --card2:   #1c1c28;
+  --card3:   #242432;
+
+  --border:  rgba(255,255,255,.06);
+  --border2: rgba(255,255,255,.10);
+  --border3: rgba(255,255,255,.15);
+
+  --tx:  #f0f0f8;
+  --tx2: #70708a;
+  --tx3: #36364a;
+
+  /* Brand accent (electric teal on dark) */
+  --accent:      #00e5b0;
+  --accent-dim:  #00b88a;
+  --accent-bg:   rgba(0,229,176,.07);
+  --accent-glow: rgba(0,229,176,.22);
+  /* Foreground on a saturated fill — near-black on dark, white on light. */
+  --on-fill:     #00120c;
+
+  --success: #1de97a;
+  --danger:  #ff4060;
+  --warning: #ffb020;
+  --info:    #4da6ff;
+  --purple:  #a07aff;
+
+  --success-bg: rgba(29,233,122,.10);
+  --danger-bg:  rgba(255,64,96,.10);
+  --warning-bg: rgba(255,176,32,.10);
+  --danger-br:  rgba(255,64,96,.28);
+
+  --sh-sm: 0 2px 8px rgba(0,0,0,.5);
+  --sh-md: 0 8px 32px rgba(0,0,0,.7);
+  --sh-lg: 0 24px 64px rgba(0,0,0,.9);
+
+  --scroll-thumb:       rgba(255,255,255,.08);
+  --scroll-thumb-hover: rgba(255,255,255,.15);
+  --overlay: rgba(0,0,0,.75);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg:      #f7f9fb;
+  --surface: #ffffff;
+  --panel:   #f2f4f6;
+  --card:    #ffffff;
+  --card2:   #eceef0;
+  --card3:   #e6e8ea;
+
+  --border:  rgba(25,28,30,.10);
+  --border2: rgba(25,28,30,.16);
+  --border3: rgba(25,28,30,.26);
+
+  --tx:  #191c1e;
+  --tx2: #3c4a42;
+  --tx3: #6c7a71;
+
+  /* Brand accent (deep green on light) — darkened for AA on white. */
+  --accent:      #006c49;
+  --accent-dim:  #005236;
+  --accent-bg:   rgba(0,108,73,.08);
+  --accent-glow: rgba(0,108,73,.18);
+  /* Flips to white: black-on-green was 1.9:1 (below AA); white is 5.9:1. */
+  --on-fill:     #ffffff;
+
+  --success: #04724d;
+  --danger:  #ba1a1a;
+  --warning: #96600a;
+  --info:    #1d4ed8;
+  --purple:  #6d28d9;
+
+  --success-bg: rgba(4,114,77,.08);
+  --danger-bg:  rgba(186,26,26,.07);
+  --warning-bg: rgba(150,96,10,.09);
+  --danger-br:  rgba(186,26,26,.22);
+
+  --sh-sm: 0 1px 4px rgba(16,24,40,.04), 0 0 0 1px rgba(16,24,40,.02);
+  --sh-md: 0 4px 16px rgba(16,24,40,.06), 0 1px 4px rgba(16,24,40,.03);
+  --sh-lg: 0 16px 48px rgba(16,24,40,.10), 0 4px 12px rgba(16,24,40,.05);
+
+  --scroll-thumb:       rgba(25,28,30,.16);
+  --scroll-thumb-hover: rgba(25,28,30,.28);
+  --overlay: rgba(16,24,40,.45);
+}
+
+/* Theme-independent: type, space, radius, motion, layout. */
+:root {
+  --font-sans: 'Sora', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+
+  --fs-2xs: 0.6875rem; --fs-xs: 0.75rem; --fs-sm: 0.8125rem;
+  --fs-md: 0.875rem; --fs-lg: 1rem; --fs-xl: 1.25rem;
+  --fs-2xl: 1.5rem; --fs-3xl: 2rem;
+
+  --fw-medium: 500; --fw-semibold: 600; --fw-bold: 700; --fw-black: 800;
+
+  --sp-1: 0.25rem; --sp-2: 0.5rem; --sp-3: 0.75rem; --sp-4: 1rem;
+  --sp-5: 1.25rem; --sp-6: 1.5rem; --sp-8: 2rem; --sp-10: 2.5rem; --sp-16: 4rem;
+
+  --r-xs: 6px; --r-sm: 9px; --r-md: 13px; --r-lg: 18px; --r-xl: 22px; --r-full: 999px;
+
+  --dur-fast: 120ms; --dur-base: 180ms;
+  --ease: cubic-bezier(.4, 0, .2, 1);
+
+  --nav-h: 52px;
+  --content-max: 1280px;
+
+  --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+  --z-nav: 200; --z-dropdown: 300; --z-modal: 1000;
+}
+
+/* Breakpoint scale (same as the Flask app): 639 / 1023 / 1024 / 1440 / 1920. */
+@media (max-width: 639px)  { :root { --fs-2xl: 1.25rem; --fs-3xl: 1.5rem; } }
+@media (min-width: 1920px) { :root { --content-max: 1440px; } }
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-fast: 0.01ms; --dur-base: 0.01ms; }
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}

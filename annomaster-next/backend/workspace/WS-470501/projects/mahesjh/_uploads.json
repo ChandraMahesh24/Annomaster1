@@ -1,0 +1,52 @@
+[
+  {
+    "upload_id": 1,
+    "job_name": "job_2026-07-25_21-37-44_602",
+    "source": "video",
+    "batch_db_id": 2,
+    "cls_names": [],
+    "in_dataset": false,
+    "uploaded_at": "2026-07-25T16:07:44.611176+00:00",
+    "uploaded_by": 2
+  },
+  {
+    "upload_id": 2,
+    "job_name": "job_2026-07-25_21-47-41_881",
+    "source": "video",
+    "batch_db_id": 2,
+    "cls_names": [],
+    "in_dataset": false,
+    "uploaded_at": "2026-07-25T16:17:41.891598+00:00",
+    "uploaded_by": 2
+  },
+  {
+    "upload_id": 3,
+    "job_name": "job_2026-07-25_21-50-00_652",
+    "source": "video",
+    "batch_db_id": 2,
+    "cls_names": [],
+    "in_dataset": false,
+    "uploaded_at": "2026-07-25T16:20:00.657648+00:00",
+    "uploaded_by": 2
+  },
+  {
+    "upload_id": 4,
+    "job_name": "job_2026-07-25_21-59-08_933",
+    "source": "video",
+    "batch_db_id": 2,
+    "cls_names": [],
+    "in_dataset": false,
+    "uploaded_at": "2026-07-25T16:29:08.940842+00:00",
+    "uploaded_by": 2
+  },
+  {
+    "upload_id": 5,
+    "job_name": "job_2026-07-25_22-26-44_203",
+    "source": "video",
+    "batch_db_id": 3,
+    "cls_names": [],
+    "in_dataset": false,
+    "uploaded_at": "2026-07-25T16:56:44.212286+00:00",
+    "uploaded_by": 2
+  }
+]

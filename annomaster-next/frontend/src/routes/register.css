@@ -1,0 +1,104 @@
+    /* The `:root` block that used to sit here was a FOURTH copy of
+       the design tokens — hardcoded dark, and already drifted from
+       the others (--border was .07 here vs .06 in main.css,
+       --border2 .12 vs .10, --accent-glow .25 vs .22). Because it
+       was inline it beat every linked stylesheet, so this page
+       ignored the light theme entirely no matter what theme.css
+       said. Tokens now come from tokens.css. Only `--r`, which is
+       genuinely local to this page, is kept. */
+    :root { --r: 10px; }
+    /* reset handled by app base.css */
+    .register-page { font-family: var(--font-sans); background: var(--bg); color: var(--tx); min-height: 100dvh; display: flex; }
+    .auth-left {
+      width: 380px; flex-shrink: 0;
+      /* Was a fixed near-black gradient, which stayed black in
+         light mode next to a white form panel. */
+      background: linear-gradient(160deg, var(--surface) 0%, var(--panel) 100%);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 3rem 2rem; position: relative; overflow: hidden;
+    }
+    .auth-left::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse 80% 60% at 50% 30%, var(--accent-bg) 0%, transparent 70%);
+    }
+    /* The split layout is unusable below ~820px: a fixed 380px
+       promo panel left only ~-20px for the form on a 360px phone.
+       Collapse to a single column and drop the promo rail. */
+    @media (max-width: 820px) {
+      .register-page { display: block; }
+      .auth-left { display: none; }
+      .auth-right { min-height: 100dvh; }
+    }
+    .auth-left-logo { font-size: 2.8rem; color: var(--accent); margin-bottom: .75rem; position: relative; filter: drop-shadow(0 0 24px var(--accent-glow)); }
+    .auth-left-brand { font-size: 1.8rem; font-weight: 800; letter-spacing: -.04em; margin-bottom: .4rem; position: relative; }
+    .auth-left-brand span { color: var(--accent); }
+    .auth-left-tagline { font-size: .85rem; color: var(--tx2); text-align: center; line-height: 1.6; position: relative; }
+    .steps { margin-top: 2rem; display: flex; flex-direction: column; gap: .75rem; position: relative; width: 100%; }
+    .step { display: flex; align-items: flex-start; gap: .75rem; }
+    .step-num { width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); display: flex; align-items: center; justify-content: center; font-size: .7rem; font-weight: 800; flex-shrink: 0; margin-top: 1px; }
+    .step-text { font-size: .8rem; color: var(--tx2); line-height: 1.4; }
+    .step-text strong { color: var(--tx); display: block; }
+
+    .auth-right { flex: 1; display: flex; align-items: center; justify-content: center; padding: 2rem; overflow-y: auto; }
+    .auth-form-wrap { width: 100%; max-width: 400px; }
+    .auth-form-title { font-size: 1.5rem; font-weight: 800; letter-spacing: -.03em; margin-bottom: .3rem; }
+    .auth-form-subtitle { font-size: .875rem; color: var(--tx2); margin-bottom: 1.75rem; }
+
+    .social-row { display: flex; gap: .6rem; margin-bottom: 1.25rem; }
+    .social-btn {
+      flex: 1; display: flex; align-items: center; justify-content: center; gap: .4rem;
+      padding: .58rem; border-radius: var(--r); font-size: .8rem; font-weight: 600;
+      cursor: pointer; border: 1px solid var(--border2); background: var(--panel);
+      color: var(--tx); text-decoration: none; transition: all .15s; font-family: inherit;
+    }
+    .social-btn:hover { background: var(--card); border-color: var(--accent); color: var(--accent); }
+    .social-btn i { font-size: .95rem; }
+    .social-btn.google i { color: #ea4335; }
+    .social-btn.github i { color: var(--tx); }
+    .social-btn.fb i     { color: #1877f2; }
+
+    .divider { display: flex; align-items: center; gap: .75rem; margin-bottom: 1.25rem; }
+    .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+    .divider span { font-size: .72rem; color: var(--tx3); }
+
+    .form-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+    .form-group { margin-bottom: .85rem; }
+    .form-label { display: block; font-size: .68rem; font-weight: 700; margin-bottom: .35rem; color: var(--tx2); text-transform: uppercase; letter-spacing: .08em; }
+    .input-wrap { position: relative; }
+    .input-icon { position: absolute; left: .9rem; top: 50%; transform: translateY(-50%); color: var(--tx3); font-size: .82rem; pointer-events: none; }
+    .form-input { width: 100%; padding: .65rem .9rem .65rem 2.4rem; background: var(--panel); border: 1px solid var(--border2); border-radius: var(--r); color: var(--tx); font-size: .855rem; outline: none; transition: border-color .15s, box-shadow .15s; font-family: inherit; }
+    .form-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg); }
+    .form-input::placeholder { color: var(--tx3); }
+    .input-toggle { position: absolute; right: .8rem; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--tx2); cursor: pointer; font-size: .8rem; }
+    .input-toggle:hover { color: var(--accent); }
+
+    /* Password strength */
+    .pw-strength { display: flex; gap: 3px; margin-top: .35rem; }
+    .pw-bar { height: 3px; flex: 1; border-radius: 2px; background: var(--panel); transition: background .2s; }
+    .pw-bar.weak   { background: var(--danger); }
+    .pw-bar.medium { background: var(--warning); }
+    .pw-bar.strong { background: var(--success); }
+    .pw-hint { font-size: .7rem; color: var(--tx3); margin-top: .25rem; }
+
+    .terms { font-size: .76rem; color: var(--tx2); margin-bottom: 1rem; }
+    .terms a { color: var(--accent); text-decoration: none; }
+
+    .form-error { color: var(--danger); font-size: .78rem; min-height: 1rem; margin-bottom: .5rem; }
+    .btn-submit {
+      width: 100%; padding: .75rem; border-radius: var(--r);
+      background: var(--accent); color: var(--accent-ink); font-size: .88rem; font-weight: 800;
+      border: none; cursor: pointer; font-family: inherit;
+      box-shadow: 0 4px 20px var(--accent-glow);
+      transition: background .15s, transform .1s;
+      display: flex; align-items: center; justify-content: center; gap: .5rem;
+      margin-bottom: 1.25rem;
+    }
+    .btn-submit:hover { background: var(--accent-dim); }
+    .btn-submit:active { transform: scale(.98); }
+    .btn-submit:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-spinner { animation: spin .65s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .auth-switch { text-align: center; font-size: .84rem; color: var(--tx2); }
+    .auth-switch a { color: var(--accent); font-weight: 700; text-decoration: none; }
+    @media (max-width: 768px) { .auth-left { display: none; } }

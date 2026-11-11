@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard – AnnoMaster</title>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Cascade order is a contract: tokens → base → shell → page.
+       tokens.css must be first so every later sheet resolves
+       against a single, theme-aware source of truth. -->
+  <link rel="stylesheet" href="/static/css/tokens.css">
+  <link rel="stylesheet" href="/static/css/base.css">
+  <link rel="stylesheet" href="/static/css/layout.css">
+  <link rel="stylesheet" href="/static/css/workspace.css">
+  <link rel="stylesheet" href="/static/css/dashboard.css">
+  <link rel="stylesheet" href="/static/css/modes.css">
+  <script src="/static/js/theme.js"></script>
+</head>
+<body>
+
+{# The dashboard supplies its own chrome (rail + top bar), so the shared
+   navbar is suppressed — but the include still runs, because AccountSettings
+   (logout, drawer wiring, dropdown toggle) is defined inside it. #}
+{% set hide_navbar = true %}
+{% include 'layout/navbar.html' %}
+
+<div class="dashboard-page">
+
+  <!-- Dismisses the mobile drawer on tap-outside. Inert above
+       1023px, where the sidebar is a normal fixed column. -->
+  <div class="sidebar-backdrop" id="sidebar-backdrop" hidden></div>
+
+  <!-- ══ Left rail: brand · nav · workspace list · user ══════════════ -->
+  <aside class="dashboard-sidebar" id="dashboard-sidebar">
+
+    <a href="/" class="rail-brand" id="nav-brand-link">
+      <span class="rail-brand-tile"><i class="fas fa-vector-square"></i></span>
+      <span class="rail-brand-text">Anno<b>Master</b></span>
+    </a>
+
+    <nav class="rail-nav">
+      <a class="rail-nav-item active" href="/">
+        <i class="fas fa-layer-group"></i> Workspaces
+      </a>
+      <a class="rail-nav-item" href="#projects-section">
+        <i class="fas fa-folder"></i> Projects
+      </a>
+      <a class="rail-nav-item" href="/settings">
+        <i class="fas fa-gear"></i> Settings
+      </a>
+    </nav>
+
+    <div class="sidebar-section">
+      <div class="sidebar-header">
+        <span>Your Workspaces</span>
+        <button class="btn-icon" title="New workspace" onclick="WorkspaceFeature.showCreateModal()">
+          <i class="fas fa-plus"></i>
+        </button>
+      </div>
+      <div id="workspace-list" class="workspace-list">
+        <div class="sidebar-loading">Loading…</div>
+      </div>
+    </div>
+
+    <div class="rail-foot">
+      <div class="rail-foot-avatar" id="rail-avatar">U</div>
+      <div class="rail-foot-email" id="rail-email">—</div>
+    </div>
+  </aside>
+
+  <!-- ══ Main column ═════════════════════════════════════════════════ -->
+  <main class="dashboard-main" id="dashboard-main">
+
+    <!-- ── Top bar ── -->
+    <header class="dash-topbar">
+      <button class="sidebar-toggle" id="sidebar-toggle" type="button"
+              aria-label="Toggle navigation" aria-expanded="false"
+              aria-controls="dashboard-sidebar" hidden>
+        <i class="fas fa-bars" aria-hidden="true"></i>
+      </button>
+
+      <div class="dash-crumbs">
+        <span>Workspaces</span>
+        <span class="sep">/</span>
+        <span class="cur" id="crumb-ws">—</span>
+      </div>
+
+      <label class="dash-search">
+        <i class="fas fa-magnifying-glass"></i>
+        <input id="project-search" type="search" placeholder="Search projects…"
+               aria-label="Search projects"
+               oninput="ProjectsFeature.setQuery(this.value)">
+      </label>
+
+      <div class="dash-topbar-right">
+        <button class="dash-icon-btn" id="theme-toggle" type="button"
+                title="Toggle light / dark theme" aria-label="Toggle light / dark theme"
+                onclick="DashboardChrome.toggleTheme()">
+          <i class="fas fa-moon" id="theme-toggle-icon"></i>
+        </button>
+
+        <!-- Reuses .account-btn / .account-dropdown so the dropdown wiring and
+             avatar-symbol loader in navbar.html keep working unchanged. -->
+        <div class="account-btn dash-account" id="user-menu" style="display:none">
+          <div class="user-avatar" id="user-avatar">U</div>
+          <div class="account-dropdown" id="account-dropdown">
+            <div class="account-dropdown-header">
+              <div class="account-dropdown-avatar" id="dd-avatar">U</div>
+              <div>
+                <div class="account-dropdown-name"  id="dd-name">—</div>
+                <div class="account-dropdown-email" id="dd-email">—</div>
+              </div>
+            </div>
+            <div class="account-dropdown-divider"></div>
+            <a class="account-dropdown-item" href="/settings">
+              <i class="fas fa-user-cog"></i> Account Settings
+            </a>
+            <div class="account-dropdown-divider"></div>
+            <button class="account-dropdown-item danger" onclick="AccountSettings.logout()">
+              <i class="fas fa-sign-out-alt"></i> Sign Out
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- ── Page body ── -->
+    <div class="dash-body">
+
+      <!-- Empty state: no workspaces -->
+      <div id="no-workspace-state" class="empty-state" style="display:none">
+        <div class="empty-icon-wrap"><i class="fas fa-layer-group"></i></div>
+        <h2>No workspaces yet</h2>
+        <p>Create a workspace to organise your annotation projects.</p>
+        <button class="btn btn-primary" onclick="WorkspaceFeature.showCreateModal()">
+          <i class="fas fa-plus"></i> New Workspace
+        </button>
+      </div>
+
+      <!-- Workspace content -->
+      <div id="workspace-content" style="display:none">
+
+        <!-- Workspace header -->
+        <div class="workspace-header">
+          <div class="ws-header-left">
+            <div class="ws-title-row">
+              <h1 class="workspace-title" id="ws-title">—</h1>
+              <span class="workspace-role badge badge-owner" id="ws-role-badge"></span>
+            </div>
+            <div class="ws-stats-row" id="ws-stats-row"></div>
+          </div>
+
+          <div class="workspace-actions">
+            <!-- Share / Members button -->
+            <button class="btn btn-secondary btn-sm" id="btn-share-workspace"
+                    onclick="WorkspaceFeature.toggleSharePanel()" title="Share workspace">
+              <i class="fas fa-user-plus"></i> Share
+            </button>
+            <!-- Rename (owner only) -->
+            <button class="btn btn-secondary btn-sm" id="btn-rename-workspace" style="display:none"
+                    onclick="WorkspaceFeature.showRenameModal()" title="Rename workspace">
+              <i class="fas fa-pen"></i>
+            </button>
+            <!-- New Project -->
+            <button class="btn btn-primary btn-sm" id="btn-new-project"
+                    onclick="ProjectsFeature.showCreateModal()">
+              <i class="fas fa-folder-plus"></i> New Project
+            </button>
+          </div>
+        </div>
+
+        <!-- KPI summary — aggregates over the project list, filled by JS -->
+        <div class="kpi-row" id="kpi-row">
+          <div class="kpi-card">
+            <div class="kpi-top">
+              <span class="kpi-label">Total images</span>
+              <span class="kpi-chip blue"><i class="fas fa-images"></i></span>
+            </div>
+            <div class="kpi-value"><b id="kpi-total">0</b></div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-top">
+              <span class="kpi-label">Completed</span>
+              <span class="kpi-chip green"><i class="fas fa-check"></i></span>
+            </div>
+            <div class="kpi-value">
+              <b id="kpi-done">0</b>
+              <span class="kpi-delta" id="kpi-done-pct"></span>
+            </div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-top">
+              <span class="kpi-label">Pending</span>
+              <span class="kpi-chip amber"><i class="far fa-clock"></i></span>
+            </div>
+            <div class="kpi-value"><b id="kpi-pending">0</b></div>
+          </div>
+        </div>
+
+        <!-- Projects section -->
+        <section class="projects-section" id="projects-section">
+          <div class="projects-section-head">
+            <span class="projects-section-label" id="projects-count-label">Projects</span>
+
+            <div class="projects-tools">
+              <div class="sort-control" id="sort-control">
+                <button class="sort-btn" type="button" aria-expanded="false"
+                        onclick="ProjectsFeature.toggleSortMenu()">
+                  Sort: <span id="sort-label">Recent</span>
+                  <span class="caret"></span>
+                </button>
+                <div class="sort-menu" id="sort-menu" hidden>
+                  <button class="sort-opt" onclick="ProjectsFeature.setSort('recent')">Recent</button>
+                  <button class="sort-opt" onclick="ProjectsFeature.setSort('name')">Name</button>
+                  <button class="sort-opt" onclick="ProjectsFeature.setSort('progress')">Progress</button>
+                </div>
+              </div>
+
+              <div class="view-seg" role="group" aria-label="View mode">
+                <button type="button" id="view-grid" class="active" aria-label="Grid view"
+                        onclick="ProjectsFeature.setView('grid')">
+                  <i class="fas fa-th-large"></i>
+                </button>
+                <button type="button" id="view-list" aria-label="List view"
+                        onclick="ProjectsFeature.setView('list')">
+                  <i class="fas fa-list"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Project grid / list -->
+          <div id="projects-grid" class="projects-grid"></div>
+
+          <!-- Empty projects -->
+          <div id="no-projects-state" class="empty-state sub" style="display:none">
+            <div class="empty-icon-wrap"><i class="fas fa-folder-open"></i></div>
+            <h3>No projects yet</h3>
+            <p>Create your first project to start uploading and annotating images.</p>
+            <button class="btn btn-primary btn-sm" onclick="ProjectsFeature.showCreateModal()">
+              <i class="fas fa-folder-plus"></i> New Project
+            </button>
+          </div>
+
+          <!-- No search match -->
+          <div id="no-match-state" class="empty-state sub" style="display:none">
+            <div class="empty-icon-wrap"><i class="fas fa-magnifying-glass"></i></div>
+            <h3>No matching projects</h3>
+            <p>Nothing here matches your search. Try a different term.</p>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <!-- ── Right: Share Panel (slides in) ── -->
+  <aside class="share-panel" id="share-panel" style="display:none">
+    <div class="share-panel-header">
+      <h3 id="share-panel-title">Share Workspace</h3>
+      <button class="share-panel-close" onclick="WorkspaceFeature.closeSharePanel()">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
+    <!-- Invite section (owners only) -->
+    <div id="share-invite-section" style="display:none">
+      <div class="share-section-title">
+        <i class="fas fa-envelope"></i> Invite by email
+      </div>
+      <div class="share-invite-row">
+        <input class="form-input" id="share-email-input" type="email"
+               placeholder="colleague@example.com"
+               onkeydown="if(event.key==='Enter')SharePanel.invite()">
+        <select class="role-select" id="share-role-select">
+          <option value="editor">Editor</option>
+          <option value="viewer">Viewer</option>
+        </select>
+      </div>
+      <button class="btn btn-primary btn-sm share-invite-btn" id="share-invite-btn"
+              onclick="SharePanel.invite()">
+        <i class="fas fa-paper-plane"></i> Invite
+      </button>
+      <div class="form-error" id="share-invite-error"></div>
+      <div class="form-success" id="share-invite-success"></div>
+    </div>
+
+    <!-- Role legend -->
+    <div class="share-legend">
+      <div class="share-legend-row"><span class="badge badge-owner">owner</span> Full control, can delete & share</div>
+      <div class="share-legend-row"><span class="badge badge-editor">editor</span> Upload, annotate, manage classes</div>
+      <div class="share-legend-row"><span class="badge badge-viewer">viewer</span> View only, cannot edit</div>
+    </div>
+
+    <div class="share-section-title">
+      <i class="fas fa-users"></i> Members
+    </div>
+    <div id="share-members-list" class="share-members-list">
+      <div class="sidebar-loading">Loading…</div>
+    </div>
+  </aside>
+
+</div><!-- end dashboard-page -->
+
+
+<!-- ══ MODALS ══════════════════════════════════════════════════════ -->
+
+<!-- Create Workspace -->
+<div class="modal-overlay" id="modal-create-workspace" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h3><i class="fas fa-layer-group"></i> New Workspace</h3>
+      <button class="modal-close" onclick="WorkspaceFeature.hideCreateModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Workspace Name</label>
+        <input class="form-input" id="ws-name-input" placeholder="e.g. Traffic Detection"
+               onkeydown="if(event.key==='Enter')WorkspaceFeature.create()">
+      </div>
+      <div class="form-error" id="ws-create-error"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="WorkspaceFeature.hideCreateModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="WorkspaceFeature.create()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Rename Workspace -->
+<div class="modal-overlay" id="modal-rename-workspace" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h3><i class="fas fa-pen"></i> Rename Workspace</h3>
+      <button class="modal-close" onclick="WorkspaceFeature.hideRenameModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">New Name</label>
+        <input class="form-input" id="ws-rename-input" placeholder="Workspace name"
+               onkeydown="if(event.key==='Enter')WorkspaceFeature.rename()">
+      </div>
+      <div class="form-error" id="ws-rename-error"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="WorkspaceFeature.hideRenameModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="WorkspaceFeature.rename()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Create Project -->
+<div class="modal-overlay" id="modal-create-project" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h3><i class="fas fa-folder-plus"></i> New Project</h3>
+      <button class="modal-close" onclick="ProjectsFeature.hideCreateModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Project Name</label>
+        <input class="form-input" id="project-name-input" placeholder="e.g. cars-detection"
+               onkeydown="if(event.key==='Enter')ProjectsFeature.create()">
+        <p style="font-size:.74rem;color:var(--tx2);margin-top:.4rem">
+          Lowercase letters, numbers and hyphens only.
+        </p>
+      </div>
+      <div class="form-error" id="project-create-error"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="ProjectsFeature.hideCreateModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="ProjectsFeature.create()">Create Project</button>
+    </div>
+  </div>
+</div>
+
+<!-- Rename Project -->
+<div class="modal-overlay" id="modal-rename-project" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h3><i class="fas fa-pen"></i> Rename Project</h3>
+      <button class="modal-close" onclick="ProjectsFeature.closeOpModal('modal-rename-project')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">New Name</label>
+        <input class="form-input" id="proj-rename-input"
+               onkeydown="if(event.key==='Enter')ProjectsFeature.submitRename()">
+      </div>
+      <div class="form-error" id="proj-rename-error"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="ProjectsFeature.closeOpModal('modal-rename-project')">Cancel</button>
+      <button class="btn btn-primary" onclick="ProjectsFeature.submitRename()">Rename</button>
+    </div>
+  </div>
+</div>
+
+<!-- Duplicate Project -->
+<div class="modal-overlay" id="modal-duplicate-project" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h3><i class="fas fa-copy"></i> Duplicate Project</h3>
+      <button class="modal-close" onclick="ProjectsFeature.closeOpModal('modal-duplicate-project')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Name for the copy</label>
+        <input class="form-input" id="proj-duplicate-input"
+               onkeydown="if(event.key==='Enter')ProjectsFeature.submitDuplicate()">
+        <p class="modal-hint">Copies every image, annotation, dataset and class list.
+          Large projects can take a moment.</p>
+      </div>
+      <div class="form-error" id="proj-duplicate-error"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="ProjectsFeature.closeOpModal('modal-duplicate-project')">Cancel</button>
+      <button class="btn btn-primary" onclick="ProjectsFeature.submitDuplicate()">Duplicate</button>
+    </div>
+  </div>
+</div>
+
+<!-- Move Project -->
+<div class="modal-overlay" id="modal-move-project" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h3><i class="fas fa-right-left"></i> Move Project</h3>
+      <button class="modal-close" onclick="ProjectsFeature.closeOpModal('modal-move-project')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Move <b id="proj-move-name"></b> to workspace</label>
+        <select class="form-select role-select" id="proj-move-target" style="width:100%"></select>
+        <p class="modal-hint">Classes travel with the project, so annotations stay correct.
+          You need edit access to the target workspace.</p>
+      </div>
+      <div class="form-error" id="proj-move-error"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="ProjectsFeature.closeOpModal('modal-move-project')">Cancel</button>
+      <button class="btn btn-primary" onclick="ProjectsFeature.submitMove()">Move</button>
+    </div>
+  </div>
+</div>
+
+<!-- Merge Project -->
+<div class="modal-overlay" id="modal-merge-project" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h3><i class="fas fa-code-merge"></i> Merge Project</h3>
+      <button class="modal-close" onclick="ProjectsFeature.closeOpModal('modal-merge-project')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Merge <b id="proj-merge-name"></b> into</label>
+        <select class="form-select role-select" id="proj-merge-target" style="width:100%"></select>
+        <p class="modal-hint">
+          All images and annotations move into the target, and
+          <b id="proj-merge-name-2"></b> is then deleted. Classes are matched by
+          name — any the target doesn't have are added, and class numbers inside
+          the label files are rewritten to match. Saved Versions are not carried
+          over. <b>This cannot be undone.</b>
+        </p>
+      </div>
+      <div class="form-error" id="proj-merge-error"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="ProjectsFeature.closeOpModal('modal-merge-project')">Cancel</button>
+      <button class="btn btn-danger" onclick="ProjectsFeature.submitMerge()">Merge &amp; delete source</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SCRIPTS ══════════════════════════════════════════════════════ -->
+<script src="/static/js/core/api.js"></script>
+<script src="/static/js/core/state.js"></script>
+<script src="/static/js/core/utils.js"></script>
+<script src="/static/js/features/auth.js"></script>
+<script src="/static/js/features/workspace.js"></script>
+<script src="/static/js/features/projects.js"></script>
+<script>
+  /**
+   * DashboardChrome — the bits the shared navbar used to own, now that this
+   * page renders its own top bar: the theme toggle. Persists to the SAME
+   * localStorage keys settings.js writes (`am_theme_mode` + the per-user
+   * variant), so the two controls stay in agreement.
+   */
+  const DashboardChrome = (() => {
+    function _icon() {
+      const el = document.getElementById('theme-toggle-icon');
+      if (!el) return;
+      const light = document.documentElement.classList.contains('light-mode');
+      el.className = light ? 'fas fa-sun' : 'fas fa-moon';
+    }
+
+    function toggleTheme() {
+      const light = document.documentElement.classList.contains('light-mode');
+      const mode  = light ? 'dark' : 'light';
+      ThemeEngine.setThemeMode(mode);
+      localStorage.setItem('am_theme_mode', mode);
+      const u = State.get('user');
+      if (u) localStorage.setItem(`am_theme_mode_${u.id}`, mode);
+      _icon();
+    }
+
+    return { toggleTheme, syncIcon: _icon };
+  })();
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    const user = await AuthFeature.requireAuth();
+    if (!user) return;
+
+    // Top-bar account button + dropdown (same IDs the navbar script wires up)
+    const avatarEl = document.getElementById('user-avatar');
+    const menuEl   = document.getElementById('user-menu');
+    if (avatarEl) avatarEl.textContent = user.username[0].toUpperCase();
+    if (menuEl)   menuEl.style.display = 'flex';
+    const ddName   = document.getElementById('dd-name');
+    const ddEmail  = document.getElementById('dd-email');
+    const ddAvatar = document.getElementById('dd-avatar');
+    if (ddName)   ddName.textContent   = user.username;
+    if (ddEmail)  ddEmail.textContent  = user.email;
+    if (ddAvatar) ddAvatar.textContent = user.username[0].toUpperCase();
+
+    // Rail footer
+    const railAvatar = document.getElementById('rail-avatar');
+    const railEmail  = document.getElementById('rail-email');
+    if (railAvatar) railAvatar.textContent = user.username[0].toUpperCase();
+    if (railEmail) { railEmail.textContent = user.email; railEmail.title = user.email; }
+
+    DashboardChrome.syncIcon();
+    await WorkspaceFeature.loadAll();
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,3939 @@
+<!DOCTYPE html>
+<!-- `app-fixed` opts this page into the non-scrolling, fixed-viewport
+     shell. The rule used to be a bare `html,body{overflow:hidden}` in
+     main.css, which leaked to every page that loaded it and made the
+     whole app unscrollable on mobile. It is now scoped to this class. -->
+<html lang="en" class="app-fixed">
+
+<head>
+
+  <!-- Auth guard: must run before anything else -->
+  <script>
+    (function () {
+      var token = localStorage.getItem('am_token');
+      if (!token) {
+        window.location.href = '/login';
+        throw new Error('Not authenticated');
+      }
+      // Parse workspace context from URL
+      var params = new URLSearchParams(window.location.search);
+      window.AM_WORKSPACE_ID = params.get('workspace_id') || '';
+      window.AM_PROJECT = params.get('project') || '';
+      if (!window.AM_WORKSPACE_ID || !window.AM_PROJECT) {
+        window.location.href = '/';
+        throw new Error('Missing workspace context');
+      }
+      // Seed APP_DATA so state.project is correct before main.js runs
+      window.APP_DATA = {
+        currentProject: window.AM_PROJECT,
+        classes: [],
+        projects: {}
+      };
+      // Expose token globally so _authH() / _authFD() can read it
+      window.__AM_TOKEN = token;
+    })();
+  </script>
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AnnoMaster Pro</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap&subset=latin"
+    rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Cascade contract: tokens → base → page sheets.
+       theme.css has been removed: it was a 1,742-line override sheet
+       carrying 573 `!important` declarations whose only job was to
+       re-state the light palette on top of hardcoded dark values.
+       Those values are now tokens, so the sheet has nothing to do. -->
+  <link rel="stylesheet" href="/static/css/tokens.css">
+  <link rel="stylesheet" href="/static/css/base.css">
+  <link rel="stylesheet" href="/static/css/main.css">
+  <link rel="stylesheet" href="/static/css/upload.css">
+  <link rel="stylesheet" href="/static/css/annotate-v2.css">
+  <link rel="stylesheet" href="/static/css/modes.css">
+  <script src="/static/js/theme.js"></script>
+</head>
+
+<body>
+
+  <!-- ═══ TOP HEADER — ANNOTATE PAGE ═══════════════════════════════════════════ -->
+  <header class="toolbar anno-header" id="annoHeader">
+
+    <!-- LEFT: Brand + Project -->
+    <div class="ah-left">
+      <a class="toolbar-brand" href="/" id="nav-brand-link" title="Back to Dashboard">
+        <span class="brand-icon"><i class="fas fa-crosshairs"></i></span>
+        <span class="brand-name">Anno<span class="brand-accent">Master</span></span>
+      </a>
+      <div class="tb-sep"></div>
+      <div class="project-pill">
+        <i class="fas fa-folder-open"></i>
+        <select id="projectSelect" title="Switch project">
+          <!-- projects loaded dynamically by JS -->
+        </select>
+        <button class="pill-btn" id="newProjectBtn" title="New project"><i class="fas fa-plus"></i></button>
+        <button class="pill-btn red" id="deleteProjectBtn" title="Delete project"><i
+            class="fas fa-trash-alt"></i></button>
+      </div>
+      <div class="tb-sep"></div>
+      <!-- Inline progress bar -->
+      <div class="hdr-progress-wrap" title="Annotation progress">
+        <div class="hdr-progress-bar">
+          <div class="hdr-progress-fill" id="hdrProgressFill" style="width:0%"></div>
+        </div>
+        <span class="hdr-progress-pct" id="hdrProgressPct">0%</span>
+      </div>
+    </div>
+
+    <!-- CENTER: Image nav + name + status -->
+    <div class="ah-center">
+      <button class="ah-nav-btn" id="prevImgBtn" title="Previous (←)" disabled><i
+          class="fas fa-chevron-left"></i></button>
+      <div class="ah-counter">
+        <div class="ah-file-row">
+          <span class="ah-filename" id="hdrFileName">—</span>
+          <span class="hdr-status-badge unannotated" id="hdrImageStatus"><i class="fas fa-circle"></i>
+            Unannotated</span>
+        </div>
+        <span class="ah-idx" id="hdrCounter">0 / 0</span>
+      </div>
+      <button class="ah-nav-btn" id="nextImgBtn" title="Next (→)" disabled><i class="fas fa-chevron-right"></i></button>
+    </div>
+
+    <!-- RIGHT: Save + actions -->
+    <div class="ah-right">
+      <div class="hdr-save saved" id="hdrSaveStatus"><i class="fas fa-check-circle"></i> Saved</div>
+      <div class="tb-sep"></div>
+      <label class="autosave-toggle" title="Auto-save">
+        <input type="checkbox" id="autoSaveToggle" checked>
+        <span class="aToggle"></span>
+        <span class="autosave-lbl">Auto</span>
+      </label>
+      <div class="tb-sep"></div>
+      <button class="ah-complete-btn" id="completeBtn" title="Mark as complete"><i
+          class="fas fa-check-double"></i><span>Done</span></button>
+      <button class="tb-btn icon" id="addToDatasetHdrBtn" title="Add annotated images to Dataset" style="display:none">
+        <i class="fas fa-database"></i><span>Dataset</span>
+      </button>
+      <button class="tb-btn icon" id="helpBtn" title="Shortcuts (?)"><i class="fas fa-keyboard"></i></button>
+      <button class="tb-btn icon" id="statsBtn" title="Dataset Statistics"><i class="fas fa-chart-bar"></i></button>
+      <button class="tb-btn icon" id="settingsBtn" title="Settings"><i class="fas fa-cog"></i></button>
+      <button class="tb-btn accent" id="exportBtn"><i class="fas fa-file-export"></i><span>Export</span></button>
+      <div class="tb-sep"></div>
+      <!-- Account dropdown in annotate header -->
+      <div class="account-btn anno-account-btn" id="user-menu" style="display:none">
+        <div class="user-avatar" id="user-avatar">U</div>
+        <div class="account-dropdown" id="account-dropdown">
+          <div class="account-dropdown-header">
+            <div class="account-dropdown-avatar" id="dd-avatar">U</div>
+            <div>
+              <div class="account-dropdown-name" id="dd-name">—</div>
+              <div class="account-dropdown-email" id="dd-email">—</div>
+            </div>
+          </div>
+          <div class="account-dropdown-divider"></div>
+          <button class="account-dropdown-item" onclick="AccountSettings.open()">
+            <i class="fas fa-user-cog"></i> Account Settings
+          </button>
+          <a class="account-dropdown-item" href="/">
+            <i class="fas fa-th-large"></i> Dashboard
+          </a>
+          <div class="account-dropdown-divider"></div>
+          <button class="account-dropdown-item danger" onclick="AccountSettings.logout()">
+            <i class="fas fa-sign-out-alt"></i> Sign Out
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <span id="hdrBreadcrumbFileSep" style="display:none"></span>
+  <span id="imageCounter" style="display:none"></span>
+  <div id="uploadOverlay"
+    style="display:none;position:fixed;inset:0;z-index:99999;background:var(--overlay);backdrop-filter:blur(12px);display:none;align-items:center;justify-content:center;flex-direction:column;gap:24px;">
+    <div style="position:relative;display:flex;align-items:center;justify-content:center;">
+      <div
+        style="width:90px;height:90px;border-radius:50%;border:2px solid var(--accent-a15);border-top-color:var(--accent);animation:spinSlow 1s linear infinite;position:absolute;">
+      </div>
+      <div
+        style="width:70px;height:70px;border-radius:50%;border:2px solid var(--accent-a08);border-bottom-color:var(--accent);animation:spinSlow 1.5s linear infinite reverse;position:absolute;">
+      </div>
+      <i class="fas fa-cloud-upload-alt" style="font-size:28px;color:var(--accent);"></i>
+    </div>
+    <div style="text-align:center;display:flex;flex-direction:column;gap:8px;">
+      <div id="uploadOverlayText" style="font-size:16px;font-weight:700;color:var(--tx);font-family:'Sora',sans-serif;">
+        Uploading images…</div>
+      <div id="uploadOverlayPct"
+        style="font-size:36px;font-weight:800;color:var(--accent);font-family:'JetBrains Mono',monospace;line-height:1;">0%
+      </div>
+      <div id="uploadOverlaySub" style="font-size:12px;color:var(--tx3);font-family:'JetBrains Mono',monospace;"></div>
+    </div>
+    <div
+      style="width:320px;background:var(--ink-a06);border-radius:20px;height:8px;overflow:hidden;position:relative;">
+      <div id="uploadOverlayBar"
+        style="height:100%;width:0%;background:linear-gradient(90deg,var(--accent-dim),var(--accent));border-radius:20px;transition:width .3s ease;box-shadow:0 0 12px var(--accent-a40);">
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ PAGE: UPLOAD ═══════════════════════════════════════════ -->
+
+  <div class="sdm-overlay" id="splitDatasetModal" style="display:none">
+    <div class="sdm-modal">
+
+      <!-- ── Header ─────────────────────────────────────────── -->
+      <div class="sdm-header">
+        <div class="sdm-title-row">
+          <span class="sdm-icon">⚡</span>
+          <div>
+            <h2 class="sdm-title">Add to Dataset</h2>
+            <p class="sdm-subtitle" id="sdmBatchLabel">job_2024-01-15_10-30-00</p>
+          </div>
+        </div>
+        <button class="sdm-close" id="sdmCloseBtn" title="Close">✕</button>
+      </div>
+
+      <!-- ── Batch Stats Row ────────────────────────────────── -->
+      <div class="sdm-stats-row">
+        <div class="sdm-stat">
+          <span class="sdm-stat-val" id="sdmTotalCount">0</span>
+          <span class="sdm-stat-lbl">Total</span>
+        </div>
+        <div class="sdm-stat sdm-stat--green">
+          <span class="sdm-stat-val" id="sdmAnnotatedCount">0</span>
+          <span class="sdm-stat-lbl">Annotated ✓</span>
+        </div>
+        <div class="sdm-stat sdm-stat--orange">
+          <span class="sdm-stat-val" id="sdmUnannotatedCount">0</span>
+          <span class="sdm-stat-lbl">Remaining</span>
+        </div>
+      </div>
+
+      <!-- ── Info Banner ───────────────────────────────────── -->
+      <div class="sdm-info-banner">
+        <span class="sdm-info-icon">ℹ</span>
+        Only <strong id="sdmMoveCount">0</strong> annotated images will be moved.
+        Unannotated images stay in Active Work.
+      </div>
+
+      <!-- ── Split Configuration ──────────────────────────── -->
+      <div class="sdm-section">
+        <div class="sdm-section-header">
+          <span class="sdm-section-title">Split Configuration</span>
+          <button class="sdm-reset-btn" id="sdmResetBtn" title="Reset to defaults">Reset</button>
+        </div>
+
+        <!-- Visual split bar -->
+        <div class="sdm-split-bar" id="sdmSplitBar">
+          <div class="sdm-bar-train" id="sdmBarTrain" style="width:70%">
+            <span class="sdm-bar-lbl">Train</span>
+          </div>
+          <div class="sdm-bar-valid" id="sdmBarValid" style="width:20%">
+            <span class="sdm-bar-lbl">Valid</span>
+          </div>
+          <div class="sdm-bar-test" id="sdmBarTest" style="width:10%">
+            <span class="sdm-bar-lbl">Test</span>
+          </div>
+        </div>
+
+        <!-- Sliders -->
+        <div class="sdm-sliders">
+
+          <!-- Train -->
+          <div class="sdm-slider-row">
+            <div class="sdm-slider-meta">
+              <span class="sdm-slider-dot sdm-dot-train"></span>
+              <span class="sdm-slider-name">Train</span>
+              <span class="sdm-slider-count" id="sdmCountTrain">0 images</span>
+            </div>
+            <div class="sdm-slider-track">
+              <input type="range" class="sdm-slider sdm-slider-train" id="sdmTrainSlider" min="0" max="100" value="70"
+                step="1">
+            </div>
+            <div class="sdm-pct-box">
+              <input type="number" class="sdm-pct-input" id="sdmTrainPct" min="0" max="100" value="70">
+              <span class="sdm-pct-sign">%</span>
+            </div>
+          </div>
+
+          <!-- Valid -->
+          <div class="sdm-slider-row">
+            <div class="sdm-slider-meta">
+              <span class="sdm-slider-dot sdm-dot-valid"></span>
+              <span class="sdm-slider-name">Valid</span>
+              <span class="sdm-slider-count" id="sdmCountValid">0 images</span>
+            </div>
+            <div class="sdm-slider-track">
+              <input type="range" class="sdm-slider sdm-slider-valid" id="sdmValidSlider" min="0" max="100" value="20"
+                step="1">
+            </div>
+            <div class="sdm-pct-box">
+              <input type="number" class="sdm-pct-input" id="sdmValidPct" min="0" max="100" value="20">
+              <span class="sdm-pct-sign">%</span>
+            </div>
+          </div>
+
+          <!-- Test -->
+          <div class="sdm-slider-row">
+            <div class="sdm-slider-meta">
+              <span class="sdm-slider-dot sdm-dot-test"></span>
+              <span class="sdm-slider-name">Test</span>
+              <span class="sdm-slider-count" id="sdmCountTest">0 images</span>
+            </div>
+            <div class="sdm-slider-track">
+              <input type="range" class="sdm-slider sdm-slider-test" id="sdmTestSlider" min="0" max="100" value="10"
+                step="1">
+            </div>
+            <div class="sdm-pct-box">
+              <input type="number" class="sdm-pct-input" id="sdmTestPct" min="0" max="100" value="10">
+              <span class="sdm-pct-sign">%</span>
+            </div>
+          </div>
+
+        </div><!-- /sdm-sliders -->
+
+        <!-- Sum warning -->
+        <div class="sdm-sum-row">
+          <span class="sdm-sum-label">Total:</span>
+          <span class="sdm-sum-val" id="sdmSumVal">100%</span>
+          <span class="sdm-sum-warn" id="sdmSumWarn" style="display:none">
+            ⚠ Must equal 100%
+          </span>
+        </div>
+
+      </div><!-- /sdm-section -->
+
+      <!-- ── Preview Distribution ─────────────────────────── -->
+      <div class="sdm-section sdm-preview-section" id="sdmPreviewSection">
+        <div class="sdm-section-title">Preview Distribution</div>
+        <div class="sdm-preview-grid">
+          <div class="sdm-preview-card sdm-pc-train">
+            <div class="sdm-pc-label">🟢 Train</div>
+            <div class="sdm-pc-count" id="sdmPreviewTrain">0</div>
+            <div class="sdm-pc-sub">images</div>
+          </div>
+          <div class="sdm-preview-card sdm-pc-valid">
+            <div class="sdm-pc-label">🔵 Validation</div>
+            <div class="sdm-pc-count" id="sdmPreviewValid">0</div>
+            <div class="sdm-pc-sub">images</div>
+          </div>
+          <div class="sdm-preview-card sdm-pc-test">
+            <div class="sdm-pc-label">🟣 Test</div>
+            <div class="sdm-pc-count" id="sdmPreviewTest">0</div>
+            <div class="sdm-pc-sub">images</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Folder Preview ────────────────────────────────── -->
+      <div class="sdm-folder-preview">
+        <div class="sdm-folder-title">Output Structure</div>
+        <div class="sdm-folder-tree">
+          <div class="sdm-tree-root">📁 Completed_Datasets /</div>
+          <div class="sdm-tree-job"> 📁 <span id="sdmFolderJobName">job_YYYY-MM-DD_HH-MM-SS</span> /</div>
+          <div class="sdm-tree-split"> 📁 train / images/ &nbsp; labels/</div>
+          <div class="sdm-tree-split"> 📁 valid / images/ &nbsp; labels/</div>
+          <div class="sdm-tree-split"> 📁 test &nbsp;/ images/ &nbsp; labels/</div>
+          <div class="sdm-tree-file"> 📄 data.yaml &nbsp; 📄 classes.txt</div>
+        </div>
+      </div>
+
+      <!-- ── Footer Actions ────────────────────────────────── -->
+      <div class="sdm-footer">
+        <button class="sdm-btn-cancel" id="sdmCancelBtn">Cancel</button>
+        <button class="sdm-btn-confirm" id="sdmConfirmBtn" disabled>
+          <span class="sdm-btn-icon">→</span>
+          Move <span id="sdmConfirmCount">0</span> Images to Dataset
+        </button>
+      </div>
+
+    </div><!-- /sdm-modal -->
+  </div><!-- /sdm-overlay -->
+
+
+
+  <div class="page" id="page-upload">
+
+    <!-- Split-to-Dataset MODAL (overlay, not sidebar) -->
+    <div class="usp-overlay" id="uspModal" style="display:none">
+      <div class="usp-modal">
+        <div class="usp-head">
+          <div class="usp-head-icon"><i class="fas fa-database"></i></div>
+          <div class="usp-head-text">
+            <div class="usp-head-title">Add to Completed Dataset</div>
+            <div class="usp-head-sub" id="uspBatchLabel">Set split ratios for annotated images</div>
+          </div>
+          <button class="usp-close" id="uspCloseBtn"><i class="fas fa-times"></i></button>
+        </div>
+
+        <!-- Info strip: how many will be moved -->
+        <div class="usp-info-strip" id="uspInfoStrip">
+          <div class="usp-info-cell annotated">
+            <div class="usp-info-num" id="uspAnnotatedCount">—</div>
+            <div class="usp-info-lbl">Annotated → Dataset</div>
+          </div>
+          <div class="usp-info-cell raw">
+            <div class="usp-info-num" id="uspRawCount">—</div>
+            <div class="usp-info-lbl">Raw → Stay in Batch</div>
+          </div>
+          <div class="usp-info-cell null">
+            <div class="usp-info-num" id="uspNullCount">—</div>
+            <div class="usp-info-lbl">Null refs → Dataset</div>
+          </div>
+        </div>
+
+        <!-- Visual split bar preview -->
+        <div class="usp-split-section">
+          <div class="usp-split-label-row">
+            <span>Split Ratios</span>
+            <span class="usp-ratio-err" id="uspRatioErr" style="display:none"><i class="fas fa-exclamation-circle"></i>
+              Must sum to 100%</span>
+          </div>
+          <div class="usp-preview-bar">
+            <div class="usp-preview-train" id="uspPreviewTrain" style="width:70%">Train</div>
+            <div class="usp-preview-val" id="uspPreviewVal" style="width:15%">Val</div>
+            <div class="usp-preview-test" id="uspPreviewTest" style="width:15%">Test</div>
+          </div>
+          <div class="usp-sliders">
+            <div class="usp-slider-row">
+              <div class="usp-slider-lbl train"><i class="fas fa-dumbbell"></i> Train</div>
+              <input type="range" id="batchTrainSlider" min="0" max="100" value="70" step="5" class="usp-range train">
+              <div class="usp-slider-pct" id="batchTrainPct">70%</div>
+            </div>
+            <div class="usp-slider-row">
+              <div class="usp-slider-lbl val"><i class="fas fa-check-circle"></i> Val</div>
+              <input type="range" id="batchValSlider" min="0" max="100" value="15" step="5" class="usp-range val">
+              <div class="usp-slider-pct" id="batchValPct">15%</div>
+            </div>
+            <div class="usp-slider-row">
+              <div class="usp-slider-lbl test"><i class="fas fa-flask"></i> Test</div>
+              <input type="range" id="batchTestSlider" min="0" max="100" value="15" step="5" class="usp-range test">
+              <div class="usp-slider-pct" id="batchTestPct">15%</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Note about what happens -->
+        <div class="usp-note">
+          <i class="fas fa-info-circle"></i>
+          Annotated images will be <strong>added to the dataset</strong>. Files stay in Active Work — only the status is updated.
+          Unannotated images remain pending in the batch.
+        </div>
+
+        <div class="usp-footer">
+          <button class="usp-cancel-btn" id="uspCancelBtn"><i class="fas fa-times"></i> Cancel</button>
+          <button class="usp-confirm-btn" id="uspConfirmBtn"><i class="fas fa-check"></i> Create Dataset</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="up-layout">
+
+      <!-- ═══ LEFT: ACTIVE WORK ═══════════════════════════════════ -->
+      <aside class="up-pane up-activework-pane">
+        <div class="up-pane-head">
+          <div class="up-pane-head-left">
+            <h2 class="up-pane-title">Active Work</h2>
+            <span class="up-pane-badge" id="upActiveCount">0</span>
+          </div>
+          <div class="up-pane-actions">
+            <span class="up-autorefresh-dot" id="upAutoRefreshDot" title="Auto-refresh active"></span>
+            <button class="up-icon-btn" id="upActiveRefreshBtn" title="Refresh">
+              <i class="fas fa-sync-alt"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Tag filter — hidden until the project actually has tags -->
+        <div class="up-tagbar" id="upActiveTagBar" hidden>
+          <i class="fas fa-tag"></i>
+          <select class="up-tag-filter" id="upActiveTagFilter" aria-label="Filter batches by tag">
+            <option value="">All tags</option>
+          </select>
+        </div>
+
+        <div class="uhp-list" id="uhpList">
+          <div class="uhp-empty" id="uhpEmpty">
+            <div class="uhp-empty-icon"><i class="fas fa-inbox"></i></div>
+            <p class="uhp-empty-title">No batches yet</p>
+            <span class="uhp-empty-sub">Upload images or a YOLO dataset to get started</span>
+          </div>
+        </div>
+      </aside>
+
+      <!-- ═══ CENTER: UPLOAD ════════════════════════════════════════ -->
+      <main class="up-pane up-upload-pane">
+        <div class="up-pane-head">
+          <div class="up-pane-head-left">
+            <h2 class="up-pane-title">Upload Data</h2>
+          </div>
+          <div class="up-pane-project-wrap">
+            <i class="fas fa-folder-open"></i>
+            <span id="upCenterProjectLabel">—</span>
+          </div>
+        </div>
+
+        <div class="up-upload-body">
+
+          <!-- ── Drop zone (now at the top of center section) ── -->
+          <div class="upload-big-drop" id="upPageDrop">
+            <div class="ubd-icon-ring">
+              <i class="fas fa-cloud-upload-alt"></i>
+            </div>
+            <h3 class="ubd-title">Drop your dataset here</h3>
+            <p class="ubd-desc">
+              Drag and drop images, videos, or archives to start your next annotation project. Support for JPEG, PNG, MP4, and ZIP.
+            </p>
+            <button class="ubd-browse-btn" type="button">Browse Files</button>
+
+            <!-- File count chip shown by JS -->
+            <div class="ubd-file-preview" id="upFilePreview" style="display:none">
+              <i class="fas fa-check-circle"></i>
+              <span id="upFilePreviewText">0 files ready</span>
+            </div>
+          </div>
+
+          <!-- ── Upload type cards (now at the bottom of center section) ── -->
+          <div class="up-cards-grid">
+            <div class="upload-option-card" id="uocImages">
+              <div class="uoc-icon-wrap images"><i class="fas fa-images"></i></div>
+              <span class="uoc-title">Raw Images</span>
+            </div>
+            <div class="upload-option-card" id="uocFolder">
+              <div class="uoc-icon-wrap folder"><i class="fas fa-folder-open"></i></div>
+              <span class="uoc-title">YOLO Folder</span>
+            </div>
+            <div class="upload-option-card" id="uocVideo">
+              <div class="uoc-icon-wrap video"><i class="fas fa-film"></i></div>
+              <span class="uoc-title">Video Frames</span>
+            </div>
+            <div class="upload-option-card" id="uocImport">
+              <div class="uoc-icon-wrap zip"><i class="fas fa-file-archive"></i></div>
+              <span class="uoc-title">ZIP Dataset</span>
+            </div>
+          </div>
+
+          <!-- ── Upload progress ── -->
+          <div id="upPageProgress" class="up-prog-wrap" style="display:none">
+            <div class="up-prog-top">
+              <div class="up-prog-label">
+                <i class="fas fa-circle-notch fa-spin"></i>
+                <span id="upPageProgText">Uploading…</span>
+              </div>
+              <div class="up-prog-pct" id="upPageProgPct">0%</div>
+            </div>
+            <div class="up-prog-bar">
+              <div class="up-prog-fill" id="upPageProgFill" style="width:0%"></div>
+            </div>
+            <div class="up-prog-text" id="upPageProgSub"></div>
+          </div>
+
+          <!-- ── Import result ── -->
+          <div class="up-import-result" id="upYoloResult" style="display:none"></div>
+
+        </div>
+      </main>
+
+      <!-- ═══ RIGHT: COMPLETED DATASETS ═════════════════════════════ -->
+      <aside class="up-pane up-datasets-pane">
+        <div class="up-pane-head">
+          <div class="up-pane-head-left">
+            <h2 class="up-pane-title">Completed Datasets</h2>
+            <span class="up-pane-badge" id="upDsCount">0</span>
+          </div>
+          <div class="up-pane-actions">
+            <button class="up-icon-btn" id="upDsRefreshBtn" title="Refresh">
+              <i class="fas fa-sync-alt"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="up-tagbar" id="upDsTagBar" hidden>
+          <i class="fas fa-tag"></i>
+          <select class="up-tag-filter" id="upDsTagFilter" aria-label="Filter datasets by tag">
+            <option value="">All tags</option>
+          </select>
+        </div>
+
+        <div class="upds-list" id="upDsList">
+          <div class="uhp-empty" id="upDsEmpty">
+            <div class="uhp-empty-icon"><i class="fas fa-database"></i></div>
+            <p class="uhp-empty-title">No datasets yet</p>
+            <span class="uhp-empty-sub">Annotate a batch then click<br>"Add to Dataset" to build one</span>
+          </div>
+        </div>
+      </aside>
+
+    </div><!-- .up-layout -->
+
+    <!-- Hidden file inputs (IDs must never change — JS depends on them) -->
+    <input type="file" id="upPageImagesInput" accept=".jpg,.jpeg,.png,.bmp,.tiff,.webp" multiple style="display:none">
+    <input type="file" id="upPageFolderInput" accept=".jpg,.jpeg,.png,.bmp,.tiff,.webp,.txt,.yaml,.yml" multiple
+      webkitdirectory style="display:none">
+    <input type="file" id="upPageVideoInput" accept=".mp4,.avi,.mov,.mkv,.webm" multiple style="display:none">
+    <input type="file" id="upPageImportInput" accept=".zip" style="display:none">
+    <input type="hidden" id="upPageProjectName">
+    <button id="upPageCreateBtn" style="display:none"></button>
+  </div>
+
+  <!-- ═══ PAGE: ANNOTATE ════════════════════════════════════════ -->
+  <div class="page active" id="page-annotate">
+
+    <!-- WORKSPACE -->
+    <div class="workspace">
+
+      <!-- LEFT SIDEBAR -->
+      <aside class="sidebar left-sidebar" id="sidebarLeft">
+        <div class="panel-head sb-head-collapsible" id="leftSbHead">
+          <span class="ph-title"><i class="fas fa-images"></i> <span class="sb-label">Media Library</span></span>
+          <div class="ph-head-right">
+            <span class="ph-badge" id="totalCount">0</span>
+            <button class="sb-collapse-btn" id="leftSbToggle" title="Collapse panel">
+              <i class="fas fa-chevron-left"></i>
+            </button>
+          </div>
+        </div>
+        <!-- Collapsed icon strip -->
+        <div class="sb-collapsed-strip" id="leftSbStrip">
+          <button class="sb-strip-btn" id="leftSbExpand" title="Expand Media Library">
+            <i class="fas fa-images"></i>
+            <span class="sb-strip-count" id="totalCountStrip">0</span>
+          </button>
+        </div>
+
+        <!-- Collapsible content -->
+        <div class="sb-content" id="leftSbContent">
+
+          <!-- ── Job lock bar ── -->
+          <div class="job-lock-bar" id="jobLockBar" style="display:none">
+            <div class="jlb-header">
+              <i class="fas fa-layer-group"></i>
+              <span class="jlb-name">Job</span>
+              <button class="jlb-clear-btn" id="jlbClearBtn" title="Show all jobs">
+                <i class="fas fa-times"></i> All jobs
+              </button>
+            </div>
+            <div class="jlb-stats">
+              <div class="jlb-stat annotated">
+                <i class="fas fa-check-circle"></i>
+                <span class="jlb-annotated">0</span>
+                <span class="jlb-stat-lbl">Done</span>
+              </div>
+              <div class="jlb-divider"></div>
+              <div class="jlb-stat pending">
+                <i class="fas fa-circle"></i>
+                <span class="jlb-pending">0</span>
+                <span class="jlb-stat-lbl">Left</span>
+              </div>
+              <div class="jlb-divider"></div>
+              <div class="jlb-stat total">
+                <i class="fas fa-images"></i>
+                <span class="jlb-total">0</span>
+                <span class="jlb-stat-lbl">Total</span>
+              </div>
+            </div>
+            <div class="jlb-progress-track">
+              <div class="jlb-fill" style="width:0%"></div>
+            </div>
+            <div class="jlb-pct-row">
+              <span class="jlb-pct">0%</span>
+              <span class="jlb-pct-lbl">complete</span>
+            </div>
+          </div>
+
+          <!-- ══ Sub-section: Overview ══════════════════════════════ -->
+          <div class="ml-sub-head expanded panel-head-collapsible" id="mlOverviewHead" data-target="mlOverviewBody">
+            <div class="ml-sub-head-inner">
+              <span class="ml-sub-title">
+                <span class="ml-sub-icon"><i class="fas fa-chart-bar"></i></span>
+                Overview
+              </span>
+              <div class="ml-sub-right">
+                <i class="fas fa-chevron-down ml-chevron"></i>
+              </div>
+            </div>
+          </div>
+          <div class="panel-body ml-sub-body" id="mlOverviewBody">
+            <div class="anno-count-row">
+              <div class="aco-badge total" title="Total images"><span class="aco-n" id="acoTotal">0</span>Total</div>
+              <div class="aco-badge annotated" title="Annotated"><span class="aco-n" id="acoAnnotated">0</span>Done
+              </div>
+              <div class="aco-badge empty" title="Pending"><span class="aco-n" id="acoEmpty">0</span>Left</div>
+            </div>
+            <div class="job-stats-bar" id="jobStatsBar" style="display:none;">
+              <div class="jsb-label"><i class="fas fa-layer-group"></i> <span id="jobStatsName">Current job</span></div>
+              <div class="jsb-stats">
+                <span class="jsb-stat total" id="jobStatTotal">0</span><span class="jsb-unit">total</span>
+                <span class="jsb-dot"></span>
+                <span class="jsb-stat annotated" id="jobStatAnnotated">0</span><span class="jsb-unit">done</span>
+                <span class="jsb-dot"></span>
+                <span class="jsb-stat pending" id="jobStatPending">0</span><span class="jsb-unit">left</span>
+              </div>
+              <div class="jsb-progress-track">
+                <div class="jsb-progress-fill" id="jobStatFill" style="width:0%"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ══ Sub-section: Filter ════════════════════════════════ -->
+          <div class="ml-sub-head expanded panel-head-collapsible" id="mlFilterHead" data-target="mlFilterBody">
+            <div class="ml-sub-head-inner">
+              <span class="ml-sub-title">
+                <span class="ml-sub-icon"><i class="fas fa-filter"></i></span>
+                Filter
+              </span>
+              <div class="ml-sub-right">
+                <i class="fas fa-chevron-down ml-chevron"></i>
+              </div>
+            </div>
+          </div>
+          <div class="panel-body ml-sub-body" id="mlFilterBody">
+            <!-- Search -->
+            <div class="search-bar">
+              <i class="fas fa-search"></i>
+              <input type="text" id="imageSearch" placeholder="Search images…" autocomplete="off">
+              <button id="clearSearch" class="clear-btn" style="display:none;"><i class="fas fa-times"></i></button>
+            </div>
+            <!-- Status filter pills -->
+            <div class="filter-tabs" id="filterTabs">
+              <div class="filter-group-label">Status</div>
+              <div class="filter-pills">
+                <button class="ftab active" data-filter="all">All</button>
+                <button class="ftab annotated" data-filter="annotated" title="Annotated only">
+                  <span class="ftab-dot"></span>Done
+                </button>
+                <button class="ftab empty" data-filter="empty" title="Unannotated">
+                  <span class="ftab-dot"></span>Left
+                </button>
+              </div>
+              <div class="filter-group-label">Split</div>
+              <div class="filter-pills">
+                <button class="ftab active" data-filter="all" data-split-filter="all">All</button>
+                <button class="ftab train" data-filter="train" data-split-filter="train">Train</button>
+                <button class="ftab valid" data-filter="valid" data-split-filter="valid">Val</button>
+                <button class="ftab test" data-filter="test" data-split-filter="test">Test</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- ══ Sub-section: Upload ════════════════════════════════ -->
+          <div class="ml-sub-head panel-head-collapsible" id="mlUploadHead" data-target="mlUploadBody">
+            <div class="ml-sub-head-inner">
+              <span class="ml-sub-title">
+                <span class="ml-sub-icon"><i class="fas fa-cloud-upload-alt"></i></span>
+                Quick Upload
+              </span>
+              <div class="ml-sub-right">
+                <i class="fas fa-chevron-down ml-chevron"></i>
+              </div>
+            </div>
+          </div>
+          <div class="panel-body ml-sub-body ml-sub-body-collapsed" id="mlUploadBody">
+            <div class="upload-zone" id="uploadZone">
+              <i class="fas fa-cloud-upload-alt"></i>
+              <p>Drop images here</p>
+              <button class="mini-btn" id="browseBtn">Browse</button>
+              <input type="file" id="fileInput" accept=".jpg,.jpeg,.png,.bmp,.tiff,.mp4,.avi,.mov,.mkv,.webm" multiple
+                style="display:none;">
+            </div>
+            <div class="upload-prog" id="uploadProg" style="display:none;">
+              <div class="uprog-bar">
+                <div class="uprog-fill" id="uprogFill"></div>
+              </div>
+              <span id="uprogText">Uploading…</span>
+            </div>
+          </div>
+
+          <!-- ══ Sub-section: Images ════════════════════════════════ -->
+          <div class="ml-sub-head expanded panel-head-collapsible" id="mlImagesHead" data-target="mlImagesBody">
+            <div class="ml-sub-head-inner">
+              <span class="ml-sub-title">
+                <span class="ml-sub-icon"><i class="fas fa-th"></i></span>
+                Images
+              </span>
+              <div class="ml-sub-right">
+                <span class="ph-badge" id="totalCount" style="font-size:9px;">0</span>
+                <i class="fas fa-chevron-down ml-chevron"></i>
+              </div>
+            </div>
+          </div>
+          <div class="panel-body panel-body-grow ml-sub-body" id="mlImagesBody">
+            <div class="img-list-wrap" id="imgListWrap">
+              <div class="img-list-vp" id="imgListVp">
+                <div class="img-list-inner" id="imgListInner"></div>
+              </div>
+              <div class="list-empty" id="listEmpty" style="display:none;">
+                <i class="fas fa-inbox"></i>
+                <p>No images</p>
+              </div>
+            </div>
+            <div class="list-page-bar" id="listPageBar" style="display:none;">
+              <button class="lp-prev" title="Previous page (Shift+←)"><i class="fas fa-chevron-left"></i></button>
+              <div class="lp-pills"></div>
+              <span class="lp-info"></span>
+              <button class="lp-next" title="Next page (Shift+→)"><i class="fas fa-chevron-right"></i></button>
+              <select class="lp-perpage" id="lpPerPage" title="Images per page">
+                <option value="25">25</option>
+                <option value="50" selected>50</option>
+                <option value="100">100</option>
+              </select>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="sidebar-resizer right" id="resizeLeft"></div>
+      </aside>
+
+      <!-- CENTER CANVAS -->
+      <main class="canvas-area" id="canvasArea">
+
+        <!-- Lock warning banner — shown when another user is editing this image -->
+        <div id="lockWarningBanner" style="display:none;position:absolute;top:0;left:0;right:0;z-index:50;
+          background:rgba(239,68,68,.13);border-bottom:1px solid rgba(239,68,68,.3);
+          backdrop-filter:blur(4px);padding:7px 16px;align-items:center;gap:8px;">
+          <i class="fas fa-lock" style="color:var(--danger);font-size:12px;"></i>
+          <span id="lockWarningText" style="color:var(--danger);font-size:12px;font-weight:500;flex:1;"></span>
+          <button id="forceLockBtn" style="display:none;font-size:11px;color:var(--danger);
+            background:transparent;border:1px solid rgba(239,68,68,.4);border-radius:5px;
+            padding:2px 8px;cursor:pointer;">Force unlock</button>
+        </div>
+
+        <div class="canvas-empty" id="canvasEmpty">
+          <div class="empty-card">
+            <div class="empty-glyph"><i class="fas fa-draw-polygon"></i></div>
+            <h2>Ready to Annotate</h2>
+            <p>Import a dataset or upload images to begin</p>
+            <div class="empty-btns">
+              <button class="primary-btn" id="emptyImportBtn"><i class="fas fa-file-import"></i> Import Dataset</button>
+              <button class="ghost-btn" id="emptyUploadBtn"><i class="fas fa-upload"></i> Upload Images</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="canvas-wrap" id="canvasWrap" style="display:none;">
+          <canvas id="annoCanvas"></canvas>
+          <div class="draw-dim-badge" id="drawDimBadge"></div>
+
+          <!-- Class assignment popup -->
+          <div class="cls-popup" id="clsPopup" style="display:none;">
+            <div class="cp-header">
+              <span class="cp-header-title"><i class="fas fa-tags"></i> Assign Class</span>
+              <button class="cp-header-close" id="cpHeaderClose" title="Cancel (Esc)"
+                onclick="document.getElementById('cpCancel').click()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="cp-search">
+              <i class="fas fa-search"></i>
+              <input type="text" id="cpSearch" placeholder="Search or type new class…" autocomplete="off">
+              <kbd
+                style="font-size:9px;color:var(--tx3);background:var(--panel);border:1px solid var(--border2);border-radius:3px;padding:1px 4px;flex-shrink:0;">Enter</kbd>
+            </div>
+            <div class="cp-list" id="cpList"></div>
+            <div class="cp-add-cls-section">
+              <button class="cp-add-cls-toggle" id="cpAddClsToggle">
+                <i class="fas fa-plus-circle"></i> Add New Class
+              </button>
+              <div class="cp-add-cls-form" id="cpAddClsForm" style="display:none;">
+                <input type="text" id="cpNewClsName" placeholder="Class name…" autocomplete="off">
+                <button class="primary-btn sm" id="cpAddClsBtn"><i class="fas fa-plus"></i></button>
+              </div>
+            </div>
+            <div class="cp-foot">
+              <button class="cp-del-btn" id="cpDelete" title="Delete box"><i class="fas fa-trash-alt"></i></button>
+              <button class="cp-cancel-btn" id="cpCancel" title="Cancel (Esc)"><i class="fas fa-times"></i>
+                Cancel</button>
+              <button class="cp-confirm-btn" id="cpConfirm" title="Confirm (Enter)"><i class="fas fa-check"></i>
+                Confirm</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- DRAWING TOOLBAR — redesigned horizontal strip at canvas top -->
+        <div class="draw-toolbar" id="floatToolbar">
+
+          <!-- Group 1: Draw modes -->
+          <div class="dt-group">
+            <div class="dt-group-label">Draw</div>
+            <div class="dt-btn-row">
+              <button class="dt-btn active" id="bboxModeBtn" data-mode="bbox" title="Bounding Box (B)">
+                <i class="fas fa-vector-square"></i><span>Box</span>
+              </button>
+              <button class="dt-btn" id="polyModeBtn" data-mode="polygon" title="Polygon (P)">
+                <i class="fas fa-draw-polygon"></i><span>Poly</span>
+              </button>
+              <!-- The old hint told users to "click outside the active box to
+                   deselect, then drag to draw nested boxes" — a workaround for
+                   Draw mode capturing an inside-click as a move. Draw mode no
+                   longer does that, so nested boxes just work. -->
+              <div class="dt-hint-chip" title="Drag anywhere to draw — including inside an existing box. Use the Select tool (V) to move, resize or change a box's class.">
+                <i class="fas fa-info-circle"></i> Drag anywhere · Select tool (V) to edit
+              </div>
+            </div>
+          </div>
+
+          <div class="dt-sep"></div>
+
+          <!-- Group 2: Edit modes -->
+          <div class="dt-group">
+            <div class="dt-group-label">Edit</div>
+            <div class="dt-btn-row">
+              <button class="dt-btn" id="editModeBtn" data-mode="edit" title="Select / Edit (V)">
+                <i class="fas fa-mouse-pointer"></i><span>Select</span>
+              </button>
+              <button class="dt-btn" id="panModeBtn" data-mode="pan" title="Pan (Space)">
+                <i class="fas fa-hand-paper"></i><span>Pan</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="dt-sep"></div>
+
+          <!-- Group 3: View toggles -->
+          <div class="dt-group">
+            <div class="dt-group-label">View</div>
+            <div class="dt-btn-row">
+              <button class="dt-btn toggle active" id="toggleLabelsBtn" title="Toggle Labels (T)">
+                <i class="fas fa-tag"></i><span>Labels</span>
+              </button>
+              <button class="dt-btn toggle" id="toggleGridBtn" title="Toggle Grid (G)">
+                <i class="fas fa-border-all"></i><span>Grid</span>
+              </button>
+              <button class="dt-btn toggle" id="repeatModeBtn" title="Repeat last class (R)">
+                <i class="fas fa-redo-alt"></i><span>Repeat</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="dt-sep"></div>
+
+          <!-- Group 4: History -->
+          <div class="dt-group">
+            <div class="dt-group-label">History</div>
+            <div class="dt-btn-row">
+              <button class="dt-btn" id="undoBtn" title="Undo (Ctrl+Z)" disabled>
+                <i class="fas fa-undo-alt"></i><span>Undo</span>
+              </button>
+              <button class="dt-btn" id="redoBtn" title="Redo (Ctrl+Y)" disabled>
+                <i class="fas fa-redo-alt"></i><span>Redo</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="dt-sep"></div>
+
+          <!-- Group 5: Mark -->
+          <div class="dt-group">
+            <div class="dt-group-label">Mark</div>
+            <div class="dt-btn-row">
+              <button class="dt-btn dt-btn-null" id="nullMarkBtn"
+                title="Mark as Null — image has nothing to annotate (N)">
+                <i class="fas fa-ban"></i><span>Null</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="dt-sep"></div>
+          <div class="dt-group">
+            <div class="dt-group-label">Data</div>
+            <div class="dt-btn-row">
+              <button class="dt-btn" id="importBtn" title="Import Dataset">
+                <i class="fas fa-file-import"></i><span>Import</span>
+              </button>
+              <button class="dt-btn" id="splitBtn" title="Split Dataset">
+                <i class="fas fa-sitemap"></i><span>Split</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="dt-sep dt-sep-accent"></div>
+
+          <!-- Group 6: Smart Detect -->
+          <div class="dt-group">
+            <div class="dt-group-label dt-group-label-ai">AI</div>
+            <div class="dt-btn-row">
+              <button class="dt-btn-ai dt-btn-ai-active" id="smartDetectBtn"
+                title="Smart Detect — AI auto-label with YOLO">
+                <span class="dt-ai-icon"><i class="fas fa-magic"></i></span>
+                <span>Smart Detect</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Group 7: Prompted annotation.
+               Deliberately its own group rather than a second button inside
+               "AI": Smart Detect runs a fixed model that decides what the
+               classes are, while this asks for objects the user names —
+               with a word, or with one example box. Different question,
+               different mental model, so a different control. -->
+          <div class="dt-group">
+            <div class="dt-group-label dt-group-label-ai">Prompt</div>
+            <div class="dt-btn-row">
+              <button class="dt-btn-ai dt-btn-ai-prompt" id="promptAnnotateBtn"
+                title="AI Annotate — find objects by describing them, or by drawing one example">
+                <span class="dt-ai-icon"><i class="fas fa-wand-magic-sparkles"></i></span>
+                <span>AI Annotate</span>
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- The floating "N suggestions to review" banner that used to sit
+             here has been removed: the Smart Detect bar's primary action now
+             carries that count ("Approve 4 Predictions"), and showing the
+             same number in two places invited them to disagree. -->
+
+        <!-- ZOOM CONTROLS — bottom-left -->
+        <div class="zoom-controls" id="zoomControls">
+          <button class="zc-btn" id="zoomOutBtn" title="Zoom Out (-)"><i class="fas fa-minus"></i></button>
+          <span class="zc-display" id="zoomDisplay" title="Dbl-click to reset">100%</span>
+          <button class="zc-btn" id="zoomInBtn" title="Zoom In (+)"><i class="fas fa-plus"></i></button>
+          <div class="zc-sep"></div>
+          <button class="zc-btn" id="fitBtn" title="Fit to screen (F)"><i class="fas fa-expand-alt"></i></button>
+          <button class="zc-btn toggle" id="zoomLockBtn" title="Lock zoom (L)"><i class="fas fa-lock-open"
+              id="zoomLockIcon"></i></button>
+        </div>
+
+        <!-- IMAGE NAVIGATOR — bottom-center: ‹ 3 / 300 › -->
+        <div class="img-nav-bar" id="imgNavBar" style="display:none">
+          <button class="img-nav-btn prev" id="imgNavPrev" title="Previous image (← or A)">
+            <i class="fas fa-chevron-left"></i>
+          </button>
+          <div class="img-nav-counter" id="imgNavCounter">
+            <span class="img-nav-current" id="imgNavCurrent">1</span>
+            <span class="img-nav-sep">/</span>
+            <span class="img-nav-total" id="imgNavTotal">1</span>
+          </div>
+          <button class="img-nav-btn next" id="imgNavNext" title="Next image (→ or D)">
+            <i class="fas fa-chevron-right"></i>
+          </button>
+        </div>
+
+        <!-- ADD TO DATASET — bottom-right -->
+        <div class="atd-fab-wrap" id="atdFabWrap" style="display:none">
+          <!-- Collapsed pill button -->
+          <button class="atd-pill" id="atdPill" title="Add annotated images to Completed Datasets">
+            <span class="atd-pill-dot"></span>
+            <i class="fas fa-layer-group"></i>
+            <span class="atd-pill-label">Add to Dataset</span>
+            <i class="fas fa-chevron-up atd-pill-caret" id="atdPillCaret"></i>
+          </button>
+
+          <!-- Expanded panel (shown on click) -->
+          <div class="atd-panel" id="atdPanel" style="display:none">
+            <div class="atd-panel-head">
+              <div class="atd-panel-title">
+                <i class="fas fa-database"></i>
+                <span>Create Dataset</span>
+              </div>
+              <button class="atd-panel-close" id="atdPanelClose" title="Close"><i class="fas fa-times"></i></button>
+            </div>
+
+            <!-- Job stats row -->
+            <div class="atd-stats-row">
+              <div class="atd-stat annotated">
+                <span class="atd-stat-n" id="atdStatAnnotated">0</span>
+                <span class="atd-stat-lbl">Annotated</span>
+              </div>
+              <div class="atd-stat raw">
+                <span class="atd-stat-n" id="atdStatRaw">0</span>
+                <span class="atd-stat-lbl">Unannotated</span>
+              </div>
+              <div class="atd-stat total">
+                <span class="atd-stat-n" id="atdStatTotal">0</span>
+                <span class="atd-stat-lbl">Total</span>
+              </div>
+            </div>
+
+            <!-- Mini progress bar -->
+            <div class="atd-progress-track">
+              <div class="atd-progress-fill" id="atdProgressFill" style="width:0%"></div>
+            </div>
+            <div class="atd-info-note" id="atdInfoNote">
+              <i class="fas fa-info-circle"></i>
+              Annotated images are added to the dataset. Files stay in place — only their status changes.
+            </div>
+
+            <!-- Split sliders -->
+            <div class="atd-split-section">
+              <div class="atd-split-header">Split Configuration</div>
+
+              <!-- Visual preview bar -->
+              <div class="atd-split-preview">
+                <div class="atd-preview-train" id="atdPreviewTrain" style="width:70%">Train</div>
+                <div class="atd-preview-val" id="atdPreviewVal" style="width:15%">Val</div>
+                <div class="atd-preview-test" id="atdPreviewTest" style="width:15%">Test</div>
+              </div>
+
+              <div class="atd-sliders">
+                <div class="atd-slider-row">
+                  <span class="atd-slider-lbl train"><i class="fas fa-dumbbell"></i> Train</span>
+                  <input type="range" class="atd-range train" id="atdTrainSlider" min="0" max="100" value="70" step="5">
+                  <span class="atd-slider-pct" id="atdTrainPct">70%</span>
+                </div>
+                <div class="atd-slider-row">
+                  <span class="atd-slider-lbl val"><i class="fas fa-check-circle"></i> Val</span>
+                  <input type="range" class="atd-range val" id="atdValSlider" min="0" max="100" value="15" step="5">
+                  <span class="atd-slider-pct" id="atdValPct">15%</span>
+                </div>
+                <div class="atd-slider-row">
+                  <span class="atd-slider-lbl test"><i class="fas fa-flask"></i> Test</span>
+                  <input type="range" class="atd-range test" id="atdTestSlider" min="0" max="100" value="15" step="5">
+                  <span class="atd-slider-pct" id="atdTestPct">15%</span>
+                </div>
+              </div>
+              <div class="atd-ratio-err" id="atdRatioErr" style="display:none">
+                <i class="fas fa-exclamation-circle"></i> Ratios must sum to 100%
+              </div>
+            </div>
+
+            <div class="atd-panel-footer">
+              <button class="atd-cancel-btn" id="atdCancelBtn">Cancel</button>
+              <button class="atd-confirm-btn" id="atdConfirmBtn">
+                <i class="fas fa-check"></i> Create Dataset
+              </button>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- RIGHT SIDEBAR RESTORE TAB — visible on canvas right edge when sidebar is collapsed -->
+      <button class="rsb-restore-tab" id="rsbRestoreTab" style="display:none" title="Expand Labels panel"
+        aria-label="Expand Labels panel">
+        <i class="fas fa-chevron-left"></i>
+        <span class="rsb-restore-label">Labels</span>
+      </button>
+
+      <!-- RIGHT SIDEBAR -->
+      <aside class="sidebar right-sidebar" id="sidebarRight">
+        <div class="sidebar-resizer left" id="resizeRight"></div>
+
+        <!-- Right Panel Tabs -->
+        <div class="rp-tabs">
+          <button class="rp-tab active" data-rpt="labels">Labels</button>
+          <button class="rp-tab" data-rpt="props">Properties</button>
+          <button class="rp-tab" data-rpt="raw">Raw</button>
+          <button class="rp-tab" data-rpt="comments">Notes</button>
+          <button class="rp-tab-collapse" id="rightSbToggle" title="Collapse panel">
+            <i class="fas fa-chevron-right"></i>
+          </button>
+        </div>
+
+        <!-- TAB: Labels -->
+        <div class="rp-panel active" id="rpt-labels">
+          <!-- Classes -->
+          <div class="panel-section" id="clsSectionWrap">
+            <div class="panel-head panel-head-collapsible" id="clsPanelHead" data-target="clsBody">
+              <span class="ph-title"><i class="fas fa-tags"></i> Classes</span>
+              <div class="ph-head-right">
+                <span class="ph-badge" id="clsCount">0</span>
+                <button class="section-collapse-btn" tabindex="-1"><i class="fas fa-chevron-up"></i></button>
+              </div>
+            </div>
+            <div class="panel-body" id="clsBody">
+              <div class="add-cls-row">
+                <input type="text" id="newClassName" placeholder="New class name…" autocomplete="off">
+                <button class="add-cls-btn" id="addClassBtn" title="Add (Enter)"><i class="fas fa-plus"></i></button>
+              </div>
+              <div class="cls-list" id="clsList">
+                <!-- classes rendered dynamically by JS (_populateClassList) -->
+                <div class="cls-empty" id="clsEmpty">
+                  <i class="fas fa-layer-group"></i>
+                  <p>Add a class to start</p>
+                </div>
+              </div>
+              <!-- Unused classes quick-access -->
+              <div class="unused-cls-section" id="unusedClsSection" style="display:none">
+                <div class="unused-cls-title"><i class="fas fa-layer-group"></i> Unused in image</div>
+                <div class="unused-cls-chips" id="unusedClsChips"></div>
+              </div>
+            </div>
+          </div>
+          <div class="panel-divider"></div>
+          <!-- Annotations list -->
+          <div class="panel-section panel-grow" id="annoSectionWrap">
+            <div class="panel-head panel-head-collapsible" id="annoPanelHead" data-target="annoBody">
+              <span class="ph-title"><i class="fas fa-draw-polygon"></i> Annotations</span>
+              <div class="ph-head-right">
+                <span class="ph-badge" id="annoBadge">0</span>
+                <button class="section-collapse-btn" tabindex="-1"><i class="fas fa-chevron-up"></i></button>
+              </div>
+            </div>
+            <div class="panel-body panel-body-grow" id="annoBody">
+              <div class="anno-list" id="annoList">
+                <div class="props-placeholder">
+                  <p>No annotations on this image</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div><!-- end rpt-labels -->
+
+        <!-- TAB: Properties -->
+        <div class="rp-panel" id="rpt-props">
+          <div class="panel-section">
+            <div class="panel-head">
+              <span class="ph-title"><i class="fas fa-cube"></i> Box Properties</span>
+              <button class="icon-del" id="delSelBtn" title="Delete (Del)" style="display:none;"><i
+                  class="fas fa-trash-alt"></i></button>
+            </div>
+            <div class="props-placeholder" id="propsEmpty">
+              <p>Select a box to edit</p>
+            </div>
+            <div class="props-form" id="propsForm" style="display:none;">
+              <div class="pf-group full">
+                <label>Class</label>
+                <select id="propClass" onchange="app.applyPropClass()"></select>
+              </div>
+              <div class="pf-row">
+                <div class="pf-group"><label>X</label><input type="number" id="propX" min="0"></div>
+                <div class="pf-group"><label>Y</label><input type="number" id="propY" min="0"></div>
+                <div class="pf-group"><label>W</label><input type="number" id="propW" min="1"></div>
+                <div class="pf-group"><label>H</label><input type="number" id="propH" min="1"></div>
+              </div>
+              <button class="apply-btn" id="applyPropsBtn"><i class="fas fa-check"></i> Apply</button>
+            </div>
+          </div>
+          <div class="panel-divider"></div>
+          <div class="panel-section">
+            <div class="panel-head">
+              <span class="ph-title"><i class="fas fa-info-circle"></i> Image Info</span>
+            </div>
+            <div class="info-table" id="infoTable">
+              <span class="it-k">File</span><span class="it-v" id="iFile">—</span>
+              <span class="it-k">Size</span><span class="it-v mono" id="iSize">—</span>
+              <span class="it-k">Split</span><span class="it-v" id="iSplit">—</span>
+              <span class="it-k">Index</span><span class="it-v mono" id="iIdx">—</span>
+            </div>
+            <button class="set-cover-btn" id="setCoverBtn" title="Use this image as the project cover photo">
+              <i class="fas fa-image"></i>
+              <span>Set as Project Cover</span>
+            </button>
+          </div>
+        </div><!-- end rpt-props -->
+
+        <!-- TAB: Raw Data -->
+        <div class="rp-panel" id="rpt-raw">
+          <div class="panel-head" style="padding:10px 12px; flex-shrink:0;">
+            <span class="ph-title"><i class="fas fa-code"></i> YOLO Format</span>
+            <button class="mini-btn" id="copyRawBtn"><i class="fas fa-copy"></i> Copy</button>
+          </div>
+          <div class="raw-data-view" id="rawDataView">
+            <div class="raw-data-empty">No annotations yet</div>
+          </div>
+        </div><!-- end rpt-raw -->
+
+        <!-- TAB: Notes -->
+        <div class="rp-panel" id="rpt-comments">
+          <div class="comments-wrap">
+            <div class="panel-head" style="padding:10px 12px; flex-shrink:0;">
+              <span class="ph-title"><i class="fas fa-sticky-note"></i> Image Notes</span>
+              <button class="mini-btn" id="clearNotesBtn"><i class="fas fa-trash-alt"></i></button>
+            </div>
+            <div class="comments-list" id="commentsList"></div>
+            <div class="comment-input-row">
+              <input type="text" id="commentInput" placeholder="Add a note for this image…" autocomplete="off">
+              <button class="comment-send-btn" id="commentSendBtn"><i class="fas fa-paper-plane"></i></button>
+            </div>
+          </div>
+        </div><!-- end rpt-comments -->
+
+      </aside>
+    </div><!-- end .workspace -->
+
+  </div><!-- end #page-annotate -->
+
+  <!-- ═══ PAGE: DATASET ════════════════════════════════════════ -->
+  <div class="page" id="page-dataset">
+
+    <!-- Header -->
+    <div class="ds-header">
+      <div class="ds-title"><i class="fas fa-images"></i> Dataset</div>
+      <div class="ds-controls">
+        <div class="ds-search">
+          <i class="fas fa-search"></i>
+          <input type="text" id="dsSearch" placeholder="Search images…" autocomplete="off">
+        </div>
+        <button class="ghost-btn sm" id="dsExportBtn"><i class="fas fa-file-export"></i> Export</button>
+        <button class="primary-btn sm" id="dsSplitBtn"><i class="fas fa-sitemap"></i> Split</button>
+      </div>
+    </div>
+
+    <!-- Filter bar -->
+    <div class="ds-filter-bar">
+
+      <!-- Split filter with coloured chips -->
+      <div class="ds-filter-group">
+        <span class="ds-filter-label"><i class="fas fa-sitemap"></i> Split</span>
+        <div class="ds-pills" id="dsSplitPills">
+          <button class="ds-pill active" data-dsf="all">All</button>
+          <button class="ds-pill ds-split-train" data-dsf="train">
+            <span class="ds-split-dot train"></span>Train
+          </button>
+          <button class="ds-pill ds-split-valid" data-dsf="val">
+            <span class="ds-split-dot valid"></span>Val
+          </button>
+          <button class="ds-pill ds-split-test" data-dsf="test">
+            <span class="ds-split-dot test"></span>Test
+          </button>
+          <button class="ds-pill" data-dsf="none">Unsplit</button>
+        </div>
+      </div>
+
+      <!-- Status filter — Null removed (covered by Class filter) -->
+      <div class="ds-filter-group">
+        <span class="ds-filter-label"><i class="fas fa-tag"></i> Status</span>
+        <div class="ds-pills" id="dsStatusPills">
+          <button class="ds-pill active" data-dsa="all">All</button>
+          <button class="ds-pill annotated" data-dsa="annotated">
+            <i class="fas fa-check-circle"></i> Done
+          </button>
+          <button class="ds-pill empty" data-dsa="empty">
+            <i class="fas fa-circle"></i> Left
+          </button>
+        </div>
+      </div>
+
+      <!-- Class filter with Null option -->
+      <div class="ds-filter-group">
+        <span class="ds-filter-label"><i class="fas fa-tags"></i> Class</span>
+        <div class="ds-class-select-wrap">
+          <select id="dsClassFilter" class="ds-class-select">
+            <option value="">All classes</option>
+            <option value="__null__">— Null —</option>
+          </select>
+          <i class="fas fa-chevron-down ds-select-caret"></i>
+        </div>
+      </div>
+
+      <!-- Stats + selection actions -->
+      <div class="ds-filter-right">
+        <div class="ds-stats-chip">
+          <span id="dsStatTotal">0</span> images ·
+          <span id="dsStatAnnotated">0</span> annotated
+        </div>
+        <!-- Selection toolbar — shown when items are selected -->
+        <div class="ds-sel-toolbar" id="dsSelToolbar" style="display:none">
+          <span class="ds-sel-count" id="dsSelCount">0 selected</span>
+          <button class="ds-sel-btn annotate" id="dsSelAnnotateBtn">
+            <i class="fas fa-tag"></i><span>Annotate</span>
+          </button>
+          <button class="ds-sel-btn delete" id="dsSelDeleteBtn">
+            <i class="fas fa-trash-alt"></i><span>Delete</span>
+          </button>
+          <button class="ds-sel-btn clear" id="dsSelClearBtn">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <button class="ds-sel-toggle" id="dsSelToggle">
+          <i class="fas fa-check-square"></i><span>Select</span>
+        </button>
+      </div>
+
+    </div>
+
+    <!-- Grid -->
+    <div class="ds-grid-wrap" id="dsGridWrap">
+      <div class="ds-grid" id="dsGrid"></div>
+      <div class="ds-empty" id="dsEmpty" style="display:none">
+        <i class="fas fa-database"></i>
+        <h3>No completed datasets</h3>
+        <p>Annotate images and use "Add to Dataset" to create completed datasets.</p>
+      </div>
+    </div>
+
+    <!-- Pagination -->
+    <div class="ds-pagination" id="dsPagination" style="display:none">
+      <div class="ds-pag-left">
+        <span class="ds-page-info"></span>
+      </div>
+      <div class="ds-page-btns"></div>
+      <div class="ds-pag-right">
+        <span class="ds-perpage-label">Per page</span>
+        <select class="ds-perpage-select" id="dsPerPageSelect">
+          <option value="20">20</option>
+          <option value="30">30</option>
+          <option value="50" selected>50</option>
+          <option value="100">100</option>
+          <option value="200">200</option>
+        </select>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══ PAGE: VERSIONS ════════════════════════════════════════ -->
+  <div class="page" id="page-versions">
+    <div class="vs-layout">
+
+      <!-- Left: version list -->
+      <div class="vs-list-pane">
+        <div class="vs-list-head">
+          <div class="vs-list-head-title"><i class="fas fa-history"></i> Versions</div>
+          <button class="vs-new-btn" id="createVersionBtn">
+            <i class="fas fa-plus"></i> New Version
+          </button>
+        </div>
+        <div class="vs-list-scroll" id="vsListScroll">
+          <div class="vs-empty-list" id="vsEmptyList">
+            <i class="fas fa-archive"></i>
+            <p>No versions yet.<br>Create your first snapshot.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: detail / wizard -->
+      <div class="vs-detail-pane" id="vsDetailPane">
+        <div class="vs-no-selection" id="vsNoSelection">
+          <div class="vs-empty-glyph"><i class="fas fa-box-open"></i></div>
+          <h3>No version selected</h3>
+          <p>Select a version to view details, or create a new one.</p>
+          <button class="vs-start-btn" id="vsStartCreateBtn">
+            <i class="fas fa-plus-circle"></i> Create First Version
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══ VERSION WIZARD OVERLAY ════════════════════════════════ -->
+  <div class="vw-overlay" id="vwOverlay" style="display:none">
+    <div class="vw-backdrop" id="vwBackdrop"></div>
+    <div class="vw-drawer" id="vwDrawer">
+
+      <!-- Drawer header -->
+      <div class="vw-header">
+        <div class="vw-header-left">
+          <div class="vw-header-icon"><i class="fas fa-archive"></i></div>
+          <div>
+            <div class="vw-header-title">Create Dataset Version</div>
+            <div class="vw-header-sub">Snapshot your annotated data for training</div>
+          </div>
+        </div>
+        <button class="vw-close" id="vwClose"><i class="fas fa-times"></i></button>
+      </div>
+
+      <!-- Progress steps -->
+      <div class="vw-steps" id="vwSteps">
+        <div class="vw-step active" data-step="1">
+          <div class="vw-step-num">1</div>
+          <div class="vw-step-label">Source</div>
+        </div>
+        <div class="vw-step-line"></div>
+        <div class="vw-step" data-step="2">
+          <div class="vw-step-num">2</div>
+          <div class="vw-step-label">Split</div>
+        </div>
+        <div class="vw-step-line"></div>
+        <div class="vw-step" data-step="3">
+          <div class="vw-step-num">3</div>
+          <div class="vw-step-label">Preprocess</div>
+        </div>
+        <div class="vw-step-line"></div>
+        <div class="vw-step" data-step="4">
+          <div class="vw-step-num">4</div>
+          <div class="vw-step-label">Augment</div>
+        </div>
+        <div class="vw-step-line"></div>
+        <div class="vw-step" data-step="5">
+          <div class="vw-step-num">5</div>
+          <div class="vw-step-label">Create</div>
+        </div>
+      </div>
+
+      <!-- Step content area -->
+      <div class="vw-body" id="vwBody">
+
+        <!-- ── STEP 1: Source & Name ─────────────────────────────── -->
+        <div class="vw-panel active" id="vwStep1">
+          <div class="vw-panel-head">
+            <div class="vw-panel-title"><span class="vw-num">1</span> Version Name & Source Images</div>
+            <div class="vw-panel-desc">Name this version and review your dataset statistics.</div>
+          </div>
+
+          <div class="vw-field-row">
+            <div class="vw-field">
+              <label class="vw-label">Version Name</label>
+              <input type="text" class="vw-input" id="vwName" placeholder="e.g. v1.0, baseline, post-review"
+                autocomplete="off">
+            </div>
+            <div class="vw-field">
+              <label class="vw-label">Notes <span style="opacity:.5">(optional)</span></label>
+              <input type="text" class="vw-input" id="vwNote" placeholder="Describe what changed…" autocomplete="off">
+            </div>
+          </div>
+
+          <div class="vw-stats-grid" id="vwStatsGrid">
+            <div class="vw-stat-card total">
+              <div class="vw-stat-val" id="vwStatImages">—</div>
+              <div class="vw-stat-lbl">Total Images</div>
+            </div>
+            <div class="vw-stat-card annotated">
+              <div class="vw-stat-val" id="vwStatAnnotated">—</div>
+              <div class="vw-stat-lbl">Annotated</div>
+            </div>
+            <div class="vw-stat-card classes">
+              <div class="vw-stat-val" id="vwStatClasses">—</div>
+              <div class="vw-stat-lbl">Classes</div>
+            </div>
+            <div class="vw-stat-card warn">
+              <div class="vw-stat-val" id="vwStatUnannotated">—</div>
+              <div class="vw-stat-lbl">Unannotated</div>
+            </div>
+          </div>
+
+          <div class="vw-notice" id="vwUnannoNotice" style="display:none">
+            <i class="fas fa-exclamation-triangle"></i>
+            <span>Some images are unannotated. Only annotated images will be included in the version.</span>
+          </div>
+        </div>
+
+        <!-- ── STEP 2: Train/Test Split ─────────────────────────── -->
+        <div class="vw-panel" id="vwStep2">
+          <div class="vw-panel-head">
+            <div class="vw-panel-title"><span class="vw-num">2</span> Train / Validation / Test Split</div>
+            <div class="vw-panel-desc">Define how to distribute your images across training, validation, and test sets.
+            </div>
+          </div>
+
+          <!-- Split presets -->
+          <div class="vw-presets" id="vwSplitPresets">
+            <button class="vw-preset active" data-train="70" data-val="20" data-test="10">
+              <span class="vw-preset-name">Standard</span>
+              <span class="vw-preset-vals">70 / 20 / 10</span>
+            </button>
+            <button class="vw-preset" data-train="80" data-val="10" data-test="10">
+              <span class="vw-preset-name">Train-heavy</span>
+              <span class="vw-preset-vals">80 / 10 / 10</span>
+            </button>
+            <button class="vw-preset" data-train="75" data-val="15" data-test="10">
+              <span class="vw-preset-name">Balanced</span>
+              <span class="vw-preset-vals">75 / 15 / 10</span>
+            </button>
+            <button class="vw-preset" data-train="90" data-val="10" data-test="0">
+              <span class="vw-preset-name">Minimal Test</span>
+              <span class="vw-preset-vals">90 / 10 / 0</span>
+            </button>
+          </div>
+
+          <!-- Visual split bar -->
+          <div class="vw-split-bar-wrap">
+            <div class="vw-split-bar" id="vwSplitBar">
+              <div class="vw-sb-train" id="vwSbTrain" style="width:70%">
+                <span>Train <b id="vwSbTrainPct">70%</b></span>
+              </div>
+              <div class="vw-sb-val" id="vwSbVal" style="width:20%">
+                <span>Val <b id="vwSbValPct">20%</b></span>
+              </div>
+              <div class="vw-sb-test" id="vwSbTest" style="width:10%">
+                <span>Test <b id="vwSbTestPct">10%</b></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sliders -->
+          <div class="vw-sliders">
+            <div class="vw-slider-row">
+              <span class="vw-sl-dot train"></span>
+              <span class="vw-sl-label">Train</span>
+              <input type="range" class="vw-slider train" id="vwTrainSlider" min="10" max="95" value="70">
+              <span class="vw-sl-count train" id="vwTrainCount">— imgs</span>
+              <span class="vw-sl-pct" id="vwTrainPct">70%</span>
+            </div>
+            <div class="vw-slider-row">
+              <span class="vw-sl-dot val"></span>
+              <span class="vw-sl-label">Valid</span>
+              <input type="range" class="vw-slider val" id="vwValSlider" min="0" max="50" value="20">
+              <span class="vw-sl-count val" id="vwValCount">— imgs</span>
+              <span class="vw-sl-pct" id="vwValPct">20%</span>
+            </div>
+            <div class="vw-slider-row">
+              <span class="vw-sl-dot test"></span>
+              <span class="vw-sl-label">Test</span>
+              <input type="range" class="vw-slider test" id="vwTestSlider" min="0" max="50" value="10">
+              <span class="vw-sl-count test" id="vwTestCount">— imgs</span>
+              <span class="vw-sl-pct" id="vwTestPct">10%</span>
+            </div>
+          </div>
+          <div class="vw-split-err" id="vwSplitErr" style="display:none">
+            <i class="fas fa-exclamation-triangle"></i> Ratios must sum to 100%
+          </div>
+          <label class="vw-check-row">
+            <input type="checkbox" id="vwShuffle" checked>
+            <span>Shuffle images before splitting</span>
+          </label>
+        </div>
+
+        <!-- ── STEP 3: Preprocessing ─────────────────────────────── -->
+        <div class="vw-panel" id="vwStep3">
+          <div class="vw-panel-head">
+            <div class="vw-panel-title"><span class="vw-num">3</span> Preprocessing</div>
+            <div class="vw-panel-desc">Resize and normalise images to improve training efficiency. Applied to all images
+              in the dataset.</div>
+          </div>
+
+          <!-- Resize mode selector -->
+          <div class="vw-resize-modes" id="vwResizeModes">
+            <button class="vw-rm-btn active" data-mode="stretch" id="vwRmStretch">
+              <div class="vw-rm-icon"><i class="fas fa-expand"></i></div>
+              <div class="vw-rm-name">Stretch</div>
+              <div class="vw-rm-desc">Exact dimensions, may change ratio</div>
+            </button>
+            <button class="vw-rm-btn" data-mode="reflect" id="vwRmReflect">
+              <div class="vw-rm-icon"><i class="fas fa-border-style"></i></div>
+              <div class="vw-rm-name">Fit (Reflect)</div>
+              <div class="vw-rm-desc">Keep ratio, mirror-fill edges</div>
+            </button>
+            <button class="vw-rm-btn" data-mode="black" id="vwRmBlack">
+              <div class="vw-rm-icon"><i class="fas fa-square"></i></div>
+              <div class="vw-rm-name">Fit (Black)</div>
+              <div class="vw-rm-desc">Keep ratio, black-bar fill</div>
+            </button>
+            <button class="vw-rm-btn" data-mode="none" id="vwRmNone">
+              <div class="vw-rm-icon"><i class="fas fa-ban"></i></div>
+              <div class="vw-rm-name">No Resize</div>
+              <div class="vw-rm-desc">Keep original dimensions</div>
+            </button>
+          </div>
+
+          <!-- Dimension inputs -->
+          <div class="vw-dims" id="vwDims">
+            <div class="vw-dim-group">
+              <label class="vw-label">Width (px)</label>
+              <input type="number" class="vw-dim-input" id="vwResizeW" value="1280" min="32" max="4096">
+            </div>
+            <div class="vw-dim-sep"><i class="fas fa-times"></i></div>
+            <div class="vw-dim-group">
+              <label class="vw-label">Height (px)</label>
+              <input type="number" class="vw-dim-input" id="vwResizeH" value="720" min="32" max="4096">
+            </div>
+            <button class="vw-ratio-lock" id="vwRatioLock" title="Lock aspect ratio">
+              <i class="fas fa-lock" id="vwRatioIcon"></i>
+            </button>
+            <div class="vw-size-est" id="vwSizeEst">Est. size: —</div>
+          </div>
+
+          <!-- Presets row -->
+          <div class="vw-size-presets">
+            <span class="vw-label">Presets:</span>
+            <button class="vw-size-preset" data-w="640" data-h="640">640²</button>
+            <button class="vw-size-preset" data-w="1280" data-h="720">1280×720</button>
+            <button class="vw-size-preset" data-w="1280" data-h="1280">1280²</button>
+            <button class="vw-size-preset" data-w="416" data-h="416">416²</button>
+            <button class="vw-size-preset" data-w="320" data-h="320">320²</button>
+          </div>
+
+          <!-- Other options -->
+          <div class="vw-pp-opts">
+            <label class="vw-check-row">
+              <input type="checkbox" id="vwAutoOrient" checked>
+              <span>Auto-orient (fix EXIF rotation)</span>
+            </label>
+            <label class="vw-check-row">
+              <input type="checkbox" id="vwNormalize">
+              <span>Normalize pixel values (0–1)</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- ── STEP 4: Augmentation ──────────────────────────────── -->
+        <div class="vw-panel" id="vwStep4">
+          <div class="vw-panel-head">
+            <div class="vw-panel-title"><span class="vw-num">4</span> Augmentation</div>
+            <div class="vw-panel-desc">Generate new training examples by augmenting images in the training set.
+              Augmentations are applied only at export time.</div>
+          </div>
+
+          <div class="vw-aug-list" id="vwAugList">
+            <!-- Built dynamically -->
+          </div>
+
+          <div class="vw-aug-add">
+            <button class="vw-aug-add-btn" id="vwAugAddBtn">
+              <i class="fas fa-plus"></i> Add Augmentation
+            </button>
+          </div>
+
+          <!-- Augmentation picker (shown inline on click) -->
+          <div class="vw-aug-picker" id="vwAugPicker" style="display:none">
+            <div class="vw-aug-grid">
+              <button class="vw-aug-opt" data-aug="flip_h"><i class="fas fa-arrows-alt-h"></i><span>Flip
+                  H</span></button>
+              <button class="vw-aug-opt" data-aug="flip_v"><i class="fas fa-arrows-alt-v"></i><span>Flip
+                  V</span></button>
+              <button class="vw-aug-opt" data-aug="rotate90"><i class="fas fa-redo"></i><span>Rotate 90°</span></button>
+              <button class="vw-aug-opt" data-aug="rotate_range"><i class="fas fa-sync-alt"></i><span>Rotate
+                  ±°</span></button>
+              <button class="vw-aug-opt" data-aug="brightness"><i
+                  class="fas fa-sun"></i><span>Brightness</span></button>
+              <button class="vw-aug-opt" data-aug="contrast"><i class="fas fa-adjust"></i><span>Contrast</span></button>
+              <button class="vw-aug-opt" data-aug="blur"><i class="fas fa-eye-slash"></i><span>Blur</span></button>
+              <button class="vw-aug-opt" data-aug="grayscale"><i
+                  class="fas fa-circle-half-stroke"></i><span>Grayscale</span></button>
+              <button class="vw-aug-opt" data-aug="crop"><i class="fas fa-crop-alt"></i><span>Random
+                  Crop</span></button>
+              <button class="vw-aug-opt" data-aug="noise"><i class="fas fa-wave-square"></i><span>Noise</span></button>
+              <button class="vw-aug-opt" data-aug="cutout"><i class="fas fa-square"></i><span>Cutout</span></button>
+              <button class="vw-aug-opt" data-aug="mosaic"><i class="fas fa-th"></i><span>Mosaic</span></button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── STEP 5: Review & Create ───────────────────────────── -->
+        <div class="vw-panel" id="vwStep5">
+          <div class="vw-panel-head">
+            <div class="vw-panel-title"><span class="vw-num">5</span> Review & Create</div>
+            <div class="vw-panel-desc">Review your configuration before creating the version snapshot.</div>
+          </div>
+
+          <div class="vw-summary" id="vwSummary">
+            <!-- Populated by JS -->
+          </div>
+
+          <div class="vw-create-notice">
+            <i class="fas fa-info-circle"></i>
+            A version snapshot copies all annotated images and labels into a versioned folder. The original data is not
+            moved or deleted.
+          </div>
+        </div>
+
+      </div><!-- /vw-body -->
+
+      <!-- Footer nav -->
+      <div class="vw-footer">
+        <button class="vw-foot-btn ghost" id="vwBtnBack" style="display:none">
+          <i class="fas fa-arrow-left"></i> Back
+        </button>
+        <button class="vw-foot-btn ghost vw-clear" id="vwBtnClear">
+          <i class="fas fa-undo"></i> Reset
+        </button>
+        <div style="flex:1"></div>
+        <button class="vw-foot-btn primary" id="vwBtnNext">
+          Continue <i class="fas fa-arrow-right"></i>
+        </button>
+        <button class="vw-foot-btn create" id="vwBtnCreate" style="display:none">
+          <i class="fas fa-archive"></i> Create Version
+        </button>
+      </div>
+
+    </div><!-- /vw-drawer -->
+  </div><!-- /vw-overlay -->
+
+  <!-- ═══ PAGE: CLASSES ════════════════════════════════════════ -->
+  <div class="page" id="page-classes">
+    <div class="cls-page-header">
+      <h2><i class="fas fa-tags"></i> Class Manager</h2>
+      <button class="ghost-btn sm" id="clsPageSyncBtn"><i class="fas fa-sync-alt"></i> Sync data.yaml</button>
+      <button class="ghost-btn sm" id="clsPageExportBtn"><i class="fas fa-file-export"></i> Export classes.txt</button>
+    </div>
+    <div class="cls-page-body">
+      <div class="cls-add-form">
+        <div class="fg">
+          <label>Class Name</label>
+          <input type="text" id="clsPageName" placeholder="e.g. car, person, bicycle…" autocomplete="off">
+        </div>
+        <div class="fg" style="min-width:80px">
+          <label>Color</label>
+          <div class="color-picker-wrap">
+            <div id="clsPageColorSwatch" class="ct-swatch" style="background:var(--danger);margin-top:4px;"></div>
+            <input type="color" id="clsPageColor" value="#FF3B3B">
+          </div>
+        </div>
+        <button class="primary-btn" id="clsPageAddBtn" style="margin-bottom:0"><i class="fas fa-plus"></i> Add
+          Class</button>
+      </div>
+      <div class="cls-table-wrap">
+        <div class="cls-table-head">
+          <span>Color</span>
+          <span>Name</span>
+          <span>ID</span>
+          <span>Boxes</span>
+          <span>Images</span>
+          <span style="text-align:right">Actions</span>
+        </div>
+        <div id="clsPageTableBody"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ PAGE: PROJECTS ═══════════════════════════════════════════ -->
+  <div class="page" id="page-projects">
+    <!-- Header -->
+    <div class="proj-page-header">
+      <div class="proj-page-title">
+        <i class="fas fa-layer-group"></i>
+        <span>Projects</span>
+        <span class="proj-page-count" id="projPageCount">0</span>
+      </div>
+      <div class="proj-page-actions">
+        <div class="proj-search-wrap">
+          <i class="fas fa-search"></i>
+          <input type="text" id="projSearchInput" placeholder="Search projects…" autocomplete="off">
+        </div>
+        <button class="proj-create-btn" id="projCreateBtn">
+          <i class="fas fa-plus"></i>
+          <span>New Project</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Grid body -->
+    <div class="proj-grid-body" id="projGridBody">
+      <div class="proj-grid" id="projGrid"></div>
+      <div class="proj-empty" id="projEmpty" style="display:none;">
+        <div class="proj-empty-icon"><i class="fas fa-folder-open"></i></div>
+        <div class="proj-empty-title">No projects yet</div>
+        <div class="proj-empty-sub">Create your first project to get started</div>
+        <button class="proj-create-btn" id="projEmptyCreateBtn">
+          <i class="fas fa-plus"></i><span>Create Project</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Create Project Modal ───────────────────────────────────── -->
+  <div class="proj-modal-overlay" id="projModalOverlay" style="display:none;">
+    <div class="proj-modal">
+      <div class="proj-modal-head">
+        <div class="proj-modal-title"><i class="fas fa-folder-plus"></i> New Project</div>
+        <button class="proj-modal-close" id="projModalClose"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="proj-modal-body">
+        <!-- Cover image picker -->
+        <div class="proj-cover-picker" id="projCoverPicker">
+          <div class="proj-cover-preview" id="projCoverPreview">
+            <i class="fas fa-image"></i>
+            <span>Click to set cover image</span>
+          </div>
+          <input type="file" id="projCoverFile" accept="image/*" style="display:none;">
+        </div>
+        <!-- Name input -->
+        <label class="proj-modal-label">Project Name <span class="proj-modal-req">*</span></label>
+        <input type="text" id="projModalNameInput" class="proj-modal-input" placeholder="e.g. traffic-detection"
+          autocomplete="off" maxlength="64">
+        <div class="proj-modal-error" id="projModalError"></div>
+      </div>
+      <div class="proj-modal-foot">
+        <button class="proj-modal-cancel" id="projModalCancel">Cancel</button>
+        <button class="proj-modal-confirm" id="projModalConfirm">
+          <i class="fas fa-check"></i> Create Project
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ LEFT NAV SIDEBAR (was right-nav, now left) ══════════════════ -->
+  <nav class="right-nav" id="rightNav">
+    <div class="rn-toggle-wrap">
+      <button id="rnToggleBtn" class="rn-toggle-btn" title="Expand Sidebar">
+        <i class="fas fa-chevron-right"></i>
+      </button>
+    </div>
+    <div class="rn-pages">
+      <button class="rn-item" data-page="upload" id="rnUpload" title="Upload">
+        <i class="fas fa-cloud-upload-alt"></i>
+        <span class="rn-label">Upload</span>
+      </button>
+      <button class="rn-item active" data-page="annotate" id="rnAnnotate" title="Annotate">
+        <i class="fas fa-pen-nib"></i>
+        <span class="rn-label">Annotate</span>
+        <span class="rn-badge" id="rnAnnotateBadge">0</span>
+      </button>
+      <button class="rn-item" data-page="dataset" id="rnDataset" title="Dataset">
+        <i class="fas fa-images"></i>
+        <span class="rn-label">Dataset</span>
+        <span class="rn-badge" id="rnDatasetBadge">0</span>
+      </button>
+      <button class="rn-item" data-page="versions" id="rnVersions" title="Versions">
+        <i class="fas fa-history"></i>
+        <span class="rn-label">Versions</span>
+      </button>
+      <button class="rn-item" data-page="classes" id="rnClasses" title="Classes">
+        <i class="fas fa-tags"></i>
+        <span class="rn-label">Classes</span>
+        <span class="rn-badge" id="rnClassesBadge">0</span>
+      </button>
+      <!-- Spacer pushes Projects to the bottom -->
+      <div style="flex:1;"></div>
+      <button class="rn-item" data-page="projects" id="rnProjects" title="Projects">
+        <i class="fas fa-briefcase"></i>
+        <span class="rn-label">Projects</span>
+        <span class="rn-badge" id="rnProjectsBadge">0</span>
+      </button>
+    </div>
+
+    <!-- Project panel kept hidden (JS still references these IDs) -->
+    <div class="rn-project-panel" style="display:none;">
+      <div class="rn-proj-header">
+        <div class="rn-proj-title"><i class="fas fa-folder-open"></i> Project</div>
+        <div class="rn-proj-actions">
+          <button class="rn-proj-btn add" id="rnNewProjectBtn" title="New project"><i class="fas fa-plus"></i></button>
+          <button class="rn-proj-btn del" id="rnDeleteProjectBtn" title="Delete project"><i class="fas fa-trash-alt"></i></button>
+        </div>
+      </div>
+      <div class="rn-proj-select-wrap">
+        <i class="fas fa-folder"></i>
+        <select id="rnProjectSelect" class="rn-proj-select" title="Switch project"></select>
+        <i class="fas fa-chevron-down rn-proj-caret"></i>
+      </div>
+      <div class="rn-proj-create-form" id="rnProjCreateForm" style="display:none;">
+        <input type="text" id="rnNewProjName" class="rn-proj-name-inp" placeholder="project-name…" autocomplete="off">
+        <div class="rn-proj-form-btns">
+          <button class="rn-proj-confirm-btn" id="rnProjConfirmBtn"><i class="fas fa-check"></i> Create</button>
+          <button class="rn-proj-cancel-btn" id="rnProjCancelBtn"><i class="fas fa-times"></i></button>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- STATUS BAR -->
+  <footer class="status-bar">
+    <span class="sb-item" id="sbFile"><i class="fas fa-file-image"></i> —</span>
+    <span class="sb-sep"></span>
+    <span class="sb-item mono" id="sbIdx"><i class="fas fa-list-ol"></i> 0 / 0</span>
+    <span class="sb-sep"></span>
+    <span class="sb-item mono" id="sbCursor"><i class="fas fa-crosshairs"></i> 0, 0</span>
+    <span class="sb-sep"></span>
+    <span class="sb-item mono" id="sbZoom"><i class="fas fa-search"></i> 100%</span>
+    <span class="sb-sep"></span>
+    <span class="sb-item" id="sbObjs"><i class="fas fa-draw-polygon"></i> 0 objects</span>
+    <span class="sb-spacer"></span>
+    <span class="sb-mode-chip" id="sbMode"><i class="fas fa-vector-square"></i> Draw</span>
+    <span class="sb-sep"></span>
+    <span class="sb-save" id="sbSave"><i class="fas fa-check-circle"></i> Saved</span>
+  </footer>
+
+  <!-- MODALS -->
+
+  <!-- Video Upload / Frame Extraction -->
+  <div class="modal-overlay" id="uploadModal" style="display:none;">
+    <div class="modal w500">
+      <div class="modal-head">
+        <h3><i class="fas fa-film"></i> Video → Frame Extraction</h3>
+        <button class="modal-x" onclick="app.closeModal('uploadModal')"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+
+        <!-- Step 1 – Select Videos -->
+        <div class="step-label"><span class="step-num">1</span> Select Video Files</div>
+        <input type="file" id="videoFileInput" accept=".mp4,.avi,.mov,.mkv,.webm" multiple style="display:none;">
+        <div id="videoDrop" class="import-drop" style="margin-bottom:10px;">
+          <i class="fas fa-film"></i>
+          <p>Drop video files here or <button class="link-btn"
+              onclick="document.getElementById('videoFileInput').click()">browse</button></p>
+          <p style="font-size:11px;color:var(--tx3);margin-top:4px;">Supports: mp4, avi, mov, mkv, webm</p>
+        </div>
+
+        <!-- Selected videos list -->
+        <div id="videoList" class="video-file-list" style="display:none;"></div>
+
+        <!-- Step 2 – Settings -->
+        <div class="step-label" style="margin-top:14px;"><span class="step-num">2</span> Extraction Settings</div>
+        <div class="extract-settings">
+          <div class="fg">
+            <label>Frame Rate (FPS to extract)</label>
+            <select id="fpsSelect">
+              <option value="1">1 fps — sparse keyframes</option>
+              <option value="2">2 fps</option>
+              <option value="5" selected>5 fps — recommended</option>
+              <option value="10">10 fps — dense</option>
+              <option value="15">15 fps</option>
+              <option value="24">24 fps — every frame (24p video)</option>
+              <option value="30">30 fps — every frame (30p video)</option>
+            </select>
+          </div>
+          <div class="fg">
+            <label>Output Size</label>
+            <select id="sizeSelect" onchange="app.onSizeChange()">
+              <option value="original">Original resolution</option>
+              <option value="1080p">1080p (1920×1080)</option>
+              <option value="720p">720p (1280×720)</option>
+              <option value="480p">480p (854×480)</option>
+              <option value="custom">Custom…</option>
+            </select>
+          </div>
+          <div class="frow" id="customSizeRow" style="display:none;">
+            <input type="number" id="customW" placeholder="Width" min="64" max="7680">
+            <span>×</span>
+            <input type="number" id="customH" placeholder="Height" min="64" max="4320">
+          </div>
+          <div class="fg">
+            <label>Output Format</label>
+            <select id="frameFormatSelect">
+              <option value="jpg">JPG (smaller size)</option>
+              <option value="png">PNG (lossless)</option>
+            </select>
+          </div>
+          <div class="fg">
+            <label>Output Split</label>
+            <select id="frameSplitSelect">
+              <option value="none">No split — add to root</option>
+              <option value="train">Train</option>
+              <option value="valid">Valid</option>
+              <option value="test">Test</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Estimated frame count -->
+        <div class="info-box" id="frameEstimate" style="display:none;">
+          <i class="fas fa-info-circle"></i>
+          <span id="frameEstimateText">Estimated frames: —</span>
+        </div>
+
+        <!-- Extraction progress (shown during extraction) -->
+        <div id="extractProgress" style="display:none; margin-top:12px;">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+            <div class="spinner" style="width:20px;height:20px;border-width:2px;"></div>
+            <span id="extractProgressText" style="font-size:12px;color:var(--tx2);">Extracting frames…</span>
+          </div>
+          <div class="prog-bar">
+            <div class="prog-fill" id="extractProgFill" style="width:0%"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-top:4px;">
+            <span id="extractProgressDetail" style="font-size:11px;color:var(--tx3);">0 frames extracted</span>
+            <span id="extractProgressFile" style="font-size:11px;color:var(--tx3);"></span>
+          </div>
+        </div>
+
+      </div>
+      <div class="modal-foot">
+        <button class="ghost-btn" onclick="app.closeModal('uploadModal')">Cancel</button>
+        <button class="primary-btn" id="startExtractBtn" disabled>
+          <i class="fas fa-magic"></i> Extract Frames
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Import -->
+  <div class="modal-overlay" id="importModal" style="display:none;">
+    <div class="modal w520">
+      <div class="modal-head">
+        <h3><i class="fas fa-file-import"></i> Import YOLO Dataset</h3>
+        <button class="modal-x" onclick="app.closeModal('importModal')"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <pre class="code-hint">dataset.zip
+├── train/images/  train/labels/
+├── valid/images/  valid/labels/
+├── test/images/   test/labels/
+└── data.yaml  (or classes.txt)</pre>
+        <input type="file" id="importFileInput" accept=".zip" style="display:none;">
+        <div id="importDrop" class="import-drop">
+          <i class="fas fa-file-archive"></i>
+          <p>Drop ZIP here or <button class="link-btn"
+              onclick="document.getElementById('importFileInput').click()">browse</button></p>
+          <span class="chosen-file" id="chosenFile"></span>
+        </div>
+        <div id="importPreview" style="display:none;">
+          <div class="preview-grid" id="previewGrid"></div>
+
+          <!-- Split warning — shown when dataset has no train/valid/test structure -->
+          <div id="splitWarnBox" class="split-warn-box" style="display:none;">
+            <div class="swb-icon"><i class="fas fa-exclamation-triangle"></i></div>
+            <div class="swb-text">
+              <strong>Dataset is not split</strong>
+              <p>All images are in a flat folder. After import, do you want to split into Train / Valid / Test?</p>
+            </div>
+            <label class="swb-check">
+              <input type="checkbox" id="splitAfterImport" checked>
+              Split after import
+            </label>
+          </div>
+
+          <div class="fg" style="margin-top:12px;"><label>Duplicate handling</label>
+            <select id="mergeSel">
+              <option value="skip">Skip existing</option>
+              <option value="rename">Rename new</option>
+              <option value="overwrite">Overwrite</option>
+            </select>
+          </div>
+          <div class="cb-row">
+            <label><input type="checkbox" id="impImgs" checked> Import images</label>
+            <label><input type="checkbox" id="impLbls" checked> Import labels</label>
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="ghost-btn" onclick="app.closeModal('importModal')">Cancel</button>
+        <button class="primary-btn" id="startImportBtn" disabled><i class="fas fa-download"></i> Import</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Progress -->
+  <div class="modal-overlay" id="progressModal" style="display:none;">
+    <div class="modal w400">
+      <div class="modal-head">
+        <h3 id="progTitle">Processing…</h3>
+        <button class="modal-x" id="progCancelBtn" onclick="app.closeModal('progressModal')" title="Cancel">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="modal-body center-body">
+        <div class="spinner"></div>
+        <p id="progText">Please wait…</p>
+        <div class="prog-bar">
+          <div class="prog-fill" id="progFill" style="width:0%"></div>
+        </div>
+      </div>
+      <div class="modal-foot" style="justify-content:center">
+        <button class="ghost-btn" id="progCancelFootBtn" onclick="app.closeModal('progressModal')">
+          <i class="fas fa-times"></i> Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Split -->
+  <div class="modal-overlay" id="splitModal" style="display:none;">
+    <div class="modal w460">
+      <div class="modal-head">
+        <h3><i class="fas fa-sitemap"></i> Split Dataset</h3>
+        <button class="modal-x" onclick="app.closeModal('splitModal')"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="preview-grid" id="splitInfo"></div>
+        <div class="ratio-group">
+          <div class="ratio-row">
+            <label>Train</label>
+            <input type="range" id="trainSlider" min="10" max="90" value="70">
+            <input type="number" id="trainNum" value="0.70" step="0.01" min="0.01" max="0.98">
+            <span class="pct" id="trainPct">70%</span>
+          </div>
+          <div class="ratio-row">
+            <label>Valid</label>
+            <input type="range" id="valSlider" min="0" max="50" value="15">
+            <input type="number" id="valNum" value="0.15" step="0.01" min="0" max="0.5">
+            <span class="pct" id="valPct">15%</span>
+          </div>
+          <div class="ratio-row">
+            <label>Test</label>
+            <input type="range" id="testSlider" min="0" max="50" value="15">
+            <input type="number" id="testNum" value="0.15" step="0.01" min="0" max="0.5">
+            <span class="pct" id="testPct">15%</span>
+          </div>
+        </div>
+        <p id="ratioErr" class="ratio-err" style="display:none;"><i class="fas fa-exclamation-triangle"></i> Ratios must
+          sum to 1.0</p>
+        <label class="cb-label"><input type="checkbox" id="shuffleCk" checked> Shuffle before splitting</label>
+      </div>
+      <div class="modal-foot">
+        <button class="ghost-btn" onclick="app.closeModal('splitModal')">Cancel</button>
+        <button class="primary-btn" id="startSplitBtn"><i class="fas fa-sitemap"></i> Split</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Result -->
+  <div class="modal-overlay" id="resultModal" style="display:none;">
+    <div class="modal w440">
+      <div class="modal-head">
+        <h3><i class="fas fa-check-circle" style="color:var(--success)"></i> <span id="resultTitle">Complete</span></h3>
+        <button class="modal-x" onclick="app.closeModal('resultModal')"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="preview-grid" id="resultGrid"></div>
+      </div>
+      <div class="modal-foot"><button class="primary-btn" onclick="app.closeModal('resultModal')">OK</button></div>
+    </div>
+  </div>
+
+  <!-- Shortcuts -->
+  <div class="modal-overlay" id="shortcutsModal" style="display:none;">
+    <div class="modal w540">
+      <div class="modal-head">
+        <h3><i class="fas fa-keyboard"></i> Keyboard Shortcuts</h3>
+        <button class="modal-x" onclick="app.closeModal('shortcutsModal')"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="sc-grid">
+          <div class="sc-col">
+            <h4>Drawing &amp; Editing</h4>
+            <div class="sc-row"><kbd>B</kbd><span>BBox draw mode</span></div>
+            <div class="sc-row"><kbd>V</kbd><span>Edit/select mode</span></div>
+            <div class="sc-row"><kbd>Space</kbd><span>Pan mode</span></div>
+            <div class="sc-row"><kbd>Enter</kbd><span>Confirm annotation</span></div>
+            <div class="sc-row"><kbd>Esc</kbd><span>Cancel / deselect</span></div>
+            <div class="sc-row"><kbd>Del</kbd><span>Delete selected box</span></div>
+            <div class="sc-row"><kbd>C</kbd><span>Change class of selected</span></div>
+            <div class="sc-row"><kbd>Ctrl+C</kbd><span>Copy selected box</span></div>
+            <div class="sc-row"><kbd>Ctrl+V</kbd><span>Paste box (with offset)</span></div>
+            <div class="sc-row"><kbd>Ctrl+A</kbd><span>Select / deselect box</span></div>
+            <div class="sc-row"><kbd>1–9</kbd><span>Select class by number</span></div>
+          </div>
+          <div class="sc-col">
+            <h4>Navigation &amp; View</h4>
+            <div class="sc-row"><kbd>→</kbd> / <kbd>D</kbd><span>Next image (auto-saves)</span></div>
+            <div class="sc-row"><kbd>←</kbd> / <kbd>A</kbd><span>Previous image</span></div>
+            <div class="sc-row"><kbd>F</kbd><span>Fit to screen</span></div>
+            <div class="sc-row"><kbd>+</kbd> / <kbd>−</kbd><span>Zoom in / out</span></div>
+            <div class="sc-row"><kbd>0</kbd><span>Reset zoom to 100%</span></div>
+            <div class="sc-row"><kbd>L</kbd><span>Toggle zoom lock</span></div>
+            <div class="sc-row"><kbd>G</kbd><span>Toggle grid overlay</span></div>
+            <div class="sc-row"><kbd>T</kbd><span>Toggle label text</span></div>
+            <div class="sc-row"><kbd>Ctrl+Z</kbd><span>Undo</span></div>
+            <div class="sc-row"><kbd>Ctrl+Y</kbd><span>Redo</span></div>
+            <div class="sc-row"><kbd>S</kbd><span>Manual save</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- New Project -->
+  <div class="modal-overlay" id="newProjModal" style="display:none;">
+    <div class="modal w360">
+      <div class="modal-head">
+        <h3><i class="fas fa-folder-plus"></i> New Project</h3>
+        <button class="modal-x" onclick="app.closeModal('newProjModal')"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="fg"><label>Project Name</label>
+          <input type="text" id="newProjName" placeholder="my-project" autocomplete="off">
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="ghost-btn" onclick="app.closeModal('newProjModal')">Cancel</button>
+        <button class="primary-btn" id="createProjBtn">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Split Prompt (shown after import if data is unsplit) -->
+  <div class="modal-overlay" id="splitPromptModal" style="display:none;">
+    <div class="modal w420">
+      <div class="modal-head">
+        <h3><i class="fas fa-sitemap" style="color:var(--warning)"></i> Split Dataset?</h3>
+        <button class="modal-x" onclick="app._skipSplit()"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="split-prompt-card">
+          <div class="prompt-icon"><i class="fas fa-exclamation-triangle"></i></div>
+          <h3>Dataset is not split</h3>
+          <p>Your imported dataset doesn't have a Train / Valid / Test structure.<br>
+            Would you like to split it now? You can always do this later from the <strong>Split</strong> button.</p>
+          <div id="splitPromptStats" class="preview-grid" style="margin-top:16px; text-align:left;"></div>
+        </div>
+      </div>
+      <div class="modal-foot" style="justify-content:center;">
+        <button class="ghost-btn" onclick="app._skipSplit()">
+          <i class="fas fa-times"></i> Skip for now
+        </button>
+        <button class="primary-btn" onclick="app._goToSplitFromPrompt()">
+          <i class="fas fa-sitemap"></i> Split Now
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modal-overlay" id="settingsModal" style="display:none;">
+    <div class="modal w480">
+      <div class="modal-head">
+        <h3><i class="fas fa-cog"></i> Settings &amp; Adjustments</h3>
+        <button class="modal-x" onclick="app.closeModal('settingsModal')"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="settings-section">
+          <div class="settings-section-title"><i class="fas fa-image"></i> Image Adjustments</div>
+          <div class="setting-row">
+            <label>Brightness</label>
+            <input type="range" id="brightnessSlider" min="20" max="200" value="100" class="setting-slider">
+            <span class="setting-val" id="brightnessVal">100%</span>
+            <button class="ghost-btn sm" id="resetAdjBtn" title="Reset"><i class="fas fa-undo"></i></button>
+          </div>
+          <div class="setting-row">
+            <label>Contrast</label>
+            <input type="range" id="contrastSlider" min="20" max="200" value="100" class="setting-slider">
+            <span class="setting-val" id="contrastVal">100%</span>
+          </div>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-title"><i class="fas fa-draw-polygon"></i> Annotation Display</div>
+          <div class="setting-row">
+            <label>Fill Opacity</label>
+            <input type="range" id="settingLabelOpacity" min="0" max="1" step="0.05" value="0.8" class="setting-slider">
+            <span class="setting-val" id="settingLabelOpacityVal">80%</span>
+          </div>
+          <div class="setting-row">
+            <label>Border Width</label>
+            <input type="range" id="settingLineWidth" min="0.5" max="5" step="0.5" value="1.8" class="setting-slider">
+            <span class="setting-val" id="settingLineWidthVal">1.8px</span>
+          </div>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-title"><i class="fas fa-th"></i> Grid Overlay</div>
+          <div class="setting-row">
+            <label>Grid Cell Size</label>
+            <input type="range" id="settingGridSize" min="20" max="200" step="10" value="50" class="setting-slider">
+            <span class="setting-val" id="settingGridSizeVal">50px</span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="ghost-btn" onclick="app.closeModal('settingsModal')">Cancel</button>
+        <button class="primary-btn" id="applySettingsBtn"><i class="fas fa-check"></i> Apply</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Statistics Modal -->
+  <div class="modal-overlay" id="statsModal" style="display:none;">
+    <div class="modal w560">
+      <div class="modal-head">
+        <h3><i class="fas fa-chart-bar"></i> Dataset Statistics</h3>
+        <button class="modal-x" onclick="app.closeModal('statsModal')"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body" id="statsBody" style="max-height:480px;overflow-y:auto;">
+        <div style="text-align:center;padding:20px;">
+          <div class="spinner"></div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="primary-btn" onclick="app.closeModal('statsModal')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SMART DETECT BAR ═════════════════════════════════════════
+       Compact horizontal control bar, modelled on Roboflow's Box
+       Prompting UI: sliders inline, one primary action showing the
+       pending count, and an auto-approve toggle.
+
+       Deliberate differences from the reference:
+         • A MODEL SELECTOR — Roboflow's box prompting has no model
+           choice; here the user supplies their own .pt weights, so
+           picking which one runs is essential.
+         • NO "Detect" button. Detection runs automatically when an
+           image loads, in BOTH modes.
+  ══════════════════════════════════════════════════════════════════ -->
+  <div id="sdBar" class="sd-bar" style="display:none" role="region"
+       aria-label="Smart Detect controls">
+
+    <!-- Row 1 — also the drag handle -->
+    <div class="sd-bar-head" id="sdBarHandle" title="Drag to move">
+      <span class="sd-bar-icon"><i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i></span>
+      <span class="sd-bar-title">Smart Detect</span>
+
+      <select class="sd-bar-model" id="sdModelSelect"
+              aria-label="Detection model"></select>
+      <button type="button" class="sd-icon-btn" id="sdModelRefresh"
+              title="Re-scan the models folder for new .pt files">
+        <i class="fas fa-rotate" aria-hidden="true"></i>
+      </button>
+
+      <span class="sd-badge" id="sdModelBadge" title="">AI Labeling</span>
+
+      <!-- Collapsed, the bar shrinks to just this header strip, so the
+           canvas is clear while Smart Detect stays armed. -->
+      <button type="button" class="sd-icon-btn" id="sdBarCollapse"
+              aria-label="Collapse" aria-expanded="true" title="Collapse">
+        <i class="fas fa-chevron-up" aria-hidden="true"></i>
+      </button>
+      <button type="button" class="sd-icon-btn" id="sdBarClose"
+              onclick="SmartDetect.close()" aria-label="Close Smart Detect">
+        <i class="fas fa-times" aria-hidden="true"></i>
+      </button>
+    </div>
+
+    <!-- Row 2: sliders · primary action -->
+    <div class="sd-bar-body">
+
+      <div class="sd-ctrl">
+        <div class="sd-ctrl-top">
+          <span class="sd-ctrl-label">Confidence</span>
+          <button type="button" class="sd-help"
+                  title="Detections scoring below this are discarded entirely — they are never shown or saved."
+                  aria-label="What is confidence?">
+            <i class="fas fa-circle-question" aria-hidden="true"></i>
+          </button>
+          <span class="sd-ctrl-val" id="sdConfVal">45%</span>
+        </div>
+        <input type="range" class="sd-range" id="sdConfSlider"
+               min="5" max="95" step="5" value="45" aria-label="Confidence threshold">
+      </div>
+
+      <div class="sd-ctrl">
+        <div class="sd-ctrl-top">
+          <span class="sd-ctrl-label">Overlap</span>
+          <button type="button" class="sd-help"
+                  title="How much a new detection must overlap an existing box to count as the SAME object. Higher = stricter, so near-misses become separate boxes."
+                  aria-label="What is overlap?">
+            <i class="fas fa-circle-question" aria-hidden="true"></i>
+          </button>
+          <span class="sd-ctrl-val" id="sdIouVal">50%</span>
+        </div>
+        <input type="range" class="sd-range" id="sdIouSlider"
+               min="5" max="95" step="5" value="50" aria-label="Overlap threshold">
+      </div>
+
+      <!-- Primary action. Label carries the live pending count, so the
+           amount of review work is always visible. -->
+      <button class="sd-approve" id="sdApproveBtn" disabled>
+        <i class="fas fa-check" aria-hidden="true"></i>
+        <span id="sdApproveLabel">No predictions</span>
+      </button>
+    </div>
+
+    <!-- Row 3: model info · auto-approve -->
+    <div class="sd-bar-foot">
+      <span class="sd-bar-meta" id="sdModelMeta">—</span>
+      <p class="sd-error" id="sdModelError" hidden></p>
+
+      <label class="sd-check" title="Skip review: save every detection directly as a confirmed annotation.">
+        <input type="checkbox" id="sdAutoApprove">
+        <span>Auto-approve</span>
+      </label>
+
+      <button type="button" class="sd-icon-btn sd-run-now" id="sdRunNowBtn"
+              title="Re-run detection on this image">
+        <i class="fas fa-paper-plane" aria-hidden="true"></i>
+      </button>
+
+      <label class="sd-upload-mini" title="Upload a .pt YOLO model">
+        <input type="file" id="sdModelUpload" accept=".pt" hidden>
+        <i class="fas fa-upload" aria-hidden="true"></i>
+      </label>
+      <span class="sd-upload-status" id="sdModelStatus"></span>
+    </div>
+
+
+    <!-- Hidden compatibility stubs for listeners that still bind by id -->
+    <div hidden>
+      <input type="checkbox" id="sdReplaceToggle"><span id="sdReplaceLabel">OFF</span>
+      <button id="sdRunBtn"></button>
+      <button id="sdModeAutoBtn"></button><button id="sdModeManualBtn"></button>
+      <span id="sdModeHint"></span><span id="sdAutoWarn"></span>
+      <span id="sdModelClassCount"></span><span id="sdModelClasses"></span>
+      <div id="sdStatusBar"><span id="sdStatusText"></span></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       AI ANNOTATE — prompted labelling (text prompting + box prompting)
+
+       Sits on the same floating-bar pattern as Smart Detect above (drag
+       by the header, collapse to the header strip, position persisted as
+       a viewport fraction) because annotators already know that
+       behaviour — but it is a SEPARATE bar, not a tab inside that one:
+       both can legitimately be open at once, and the box-prompt flow
+       needs the canvas while its own controls stay visible.
+
+       The confidence slider here filters what is DISPLAYED from the last
+       run. It does not re-run the model, which is why it can respond on
+       every drag tick: higher confidence simply shows fewer predictions.
+  ═══════════════════════════════════════════════════════════════════ -->
+  <div id="paBar" class="pa-bar" style="display:none" role="region"
+       aria-label="AI Annotate controls">
+
+    <!-- Row 1 — also the drag handle -->
+    <div class="pa-bar-head" id="paBarHandle" title="Drag to move">
+      <span class="pa-bar-icon"><i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i></span>
+      <span class="pa-bar-title">AI Annotate</span>
+
+      <select class="pa-engine" id="paEngineSelect" aria-label="Prompt engine"></select>
+
+      <button type="button" class="pa-icon-btn" id="paBarCollapse"
+              aria-label="Collapse" aria-expanded="true" title="Collapse">
+        <i class="fas fa-chevron-up" aria-hidden="true"></i>
+      </button>
+      <button type="button" class="pa-icon-btn" id="paBarClose"
+              aria-label="Close AI Annotate" title="Close">
+        <i class="fas fa-times" aria-hidden="true"></i>
+      </button>
+    </div>
+
+    <!-- Row 2: prompt type -->
+    <div class="pa-tabs" role="tablist" aria-label="Prompt type">
+      <button type="button" class="pa-tab is-active" id="paTabText"
+              role="tab" aria-selected="true" data-mode="text">
+        <i class="fas fa-keyboard" aria-hidden="true"></i> Text prompt
+      </button>
+      <button type="button" class="pa-tab" id="paTabBox"
+              role="tab" aria-selected="false" data-mode="box">
+        <i class="fas fa-vector-square" aria-hidden="true"></i> Box prompt
+      </button>
+    </div>
+
+    <div class="pa-bar-body">
+
+      <!-- TEXT PROMPTING -->
+      <div class="pa-pane" id="paPaneText">
+        <div class="pa-input-row">
+          <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+          <input type="text" id="paPhraseInput" autocomplete="off"
+                 placeholder="What should it find? e.g. person, helmet, forklift">
+          <button type="button" class="pa-add" id="paPhraseAdd"
+                  title="Add (Enter)"><i class="fas fa-plus"></i></button>
+        </div>
+        <div class="pa-chips" id="paChips"></div>
+        <p class="pa-hint">
+          Describe objects in plain words. Each term becomes a class on the
+          boxes it finds.
+        </p>
+      </div>
+
+      <!-- BOX PROMPTING -->
+      <div class="pa-pane" id="paPaneBox" hidden>
+        <div class="pa-exemplar-row">
+          <button type="button" class="pa-draw-toggle" id="paDrawToggle">
+            <i class="fas fa-crosshairs" aria-hidden="true"></i>
+            <span id="paDrawToggleLabel">Draw example box</span>
+          </button>
+          <span class="pa-exemplar-count" id="paExemplarCount">0 examples</span>
+          <button type="button" class="pa-icon-btn" id="paExemplarClear"
+                  title="Clear example boxes"><i class="fas fa-eraser"></i></button>
+        </div>
+        <p class="pa-hint">
+          Draw one box around an object; the model finds the rest like it.
+          The example boxes are prompts — they are never saved as
+          annotations.
+        </p>
+      </div>
+
+      <!-- CONFIDENCE — filters the last run, never re-runs it -->
+      <div class="pa-ctrl">
+        <div class="pa-ctrl-top">
+          <span class="pa-ctrl-label">Confidence</span>
+          <button type="button" class="pa-help"
+                  title="Adjust the confidence threshold to change how many predictions are shown. Higher confidence means fewer predictions."
+                  aria-label="What is confidence?">
+            <i class="fas fa-circle-question" aria-hidden="true"></i>
+          </button>
+          <span class="pa-ctrl-val" id="paConfVal">40%</span>
+        </div>
+        <input type="range" class="pa-range" id="paConfSlider"
+               min="5" max="95" step="5" value="40"
+               aria-label="Confidence threshold">
+        <p class="pa-slider-note" id="paConfNote">
+          Higher confidence means fewer predictions.
+        </p>
+      </div>
+
+      <div class="pa-actions">
+        <button class="pa-run" id="paRunBtn">
+          <i class="fas fa-bolt" aria-hidden="true"></i>
+          <span id="paRunLabel">Run prompt</span>
+        </button>
+        <button class="pa-approve" id="paApproveBtn" disabled>
+          <i class="fas fa-check" aria-hidden="true"></i>
+          <span id="paApproveLabel">No predictions</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Row 3: engine state / first-run download warning / errors -->
+    <div class="pa-bar-foot">
+      <span class="pa-meta" id="paMeta">—</span>
+      <p class="pa-error" id="paError" hidden></p>
+    </div>
+  </div>
+
+  <!-- ═══ SMART DETECT CLASS PICKER POPUP ═══════════════════════════ -->
+  <div id="sdClsPicker" style="
+  display:none;position:fixed;z-index:2001;
+  width:275px;background:#18181c;
+  border:1px solid #38383f;border-radius:14px;
+  box-shadow:0 16px 48px rgba(0,0,0,.8),0 0 0 1px var(--ink-a08);
+  font-family:'Sora',sans-serif;overflow:hidden;
+">
+    <!-- Header -->
+    <div
+      style="padding:11px 14px 10px;border-bottom:1px solid var(--border2);background:linear-gradient(160deg,var(--card),var(--panel));">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span
+            style="background:linear-gradient(135deg,var(--warning),var(--warning));border-radius:5px;width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <i class="fas fa-magic" style="color:var(--on-fill);font-size:9px;"></i>
+          </span>
+          <span style="font-size:11px;font-weight:700;color:var(--warning);text-transform:uppercase;letter-spacing:.06em;">AI
+            Suggestion</span>
+        </div>
+        <button onclick="SmartDetectPicker.cancel()"
+          style="background:none;border:none;color:var(--tx3);cursor:pointer;padding:2px 5px;font-size:12px;border-radius:4px;"
+          title="Cancel (Esc)">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.3);
+        border-radius:7px;padding:4px 10px;font-size:13px;font-weight:700;color:#fde68a;
+        max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" id="sdCpPredLabel">—</span>
+        <span style="font-size:10px;color:var(--tx3);white-space:nowrap;" id="sdCpConfLabel"></span>
+      </div>
+      <!-- Move/resize tip -->
+      <div
+        style="margin-top:7px;display:flex;align-items:center;gap:5px;background:color-mix(in srgb, var(--indigo) 8%, transparent);border:1px solid color-mix(in srgb, var(--indigo) 20%, transparent);border-radius:5px;padding:4px 8px;">
+        <i class="fas fa-arrows-alt" style="color:var(--indigo);font-size:9px;"></i>
+        <span style="font-size:10px;color:var(--indigo);">Drag box on canvas to move/resize before confirming</span>
+      </div>
+    </div>
+
+    <!-- Class search + list -->
+    <div style="padding:10px 12px 6px;">
+      <div
+        style="font-size:9px;color:var(--tx3);font-weight:700;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px;">
+        Choose Class</div>
+      <div style="position:relative;">
+        <i class="fas fa-search"
+          style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--tx3);font-size:10px;"></i>
+        <input id="sdCpSearch" type="text" placeholder="Search or type new class…" autocomplete="off" style="width:100%;box-sizing:border-box;background:#111115;border:1px solid #2d2d38;
+          border-radius:8px;color:#e4e4e7;font-size:12px;padding:7px 9px 7px 28px;outline:none;
+          transition:border-color .15s;" oninput="SmartDetectPicker._filterList(this.value)"
+          onkeydown="SmartDetectPicker._onSearchKey(event)" onfocus="this.style.borderColor='#6366f1'"
+          onblur="this.style.borderColor='#2d2d38'">
+      </div>
+      <div id="sdCpList"
+        style="max-height:168px;overflow-y:auto;margin-top:5px;display:flex;flex-direction:column;gap:2px;"></div>
+      <!-- Add new class inline -->
+      <div id="sdCpAddRow" style="display:none;margin-top:5px;border-top:1px solid var(--border2);padding-top:6px;">
+        <div style="font-size:10px;color:var(--indigo);font-weight:600;margin-bottom:4px;"><i class="fas fa-plus-circle"></i>
+          Create new class:</div>
+        <div style="display:flex;gap:5px;">
+          <input id="sdCpNewName" type="text" placeholder="class name…" autocomplete="off" style="flex:1;background:#111115;border:1px solid #2d2d38;border-radius:6px;
+            color:#e4e4e7;font-size:12px;padding:5px 8px;outline:none;"
+            onkeydown="if(event.key==='Enter')SmartDetectPicker._addNewClass()">
+          <button onclick="SmartDetectPicker._addNewClass()"
+            style="background:var(--indigo);border:none;border-radius:6px;color:var(--tx);font-size:11px;padding:5px 10px;cursor:pointer;font-weight:600;">
+            Add
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div style="padding:8px 12px 12px;display:flex;gap:6px;border-top:1px solid var(--border2);">
+      <button onclick="SmartDetectPicker.dismiss()" style="flex:0;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);
+      border-radius:8px;color:#f87171;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;
+      transition:all .12s;flex-shrink:0;" onmouseover="this.style.background='rgba(239,68,68,.2)'"
+        onmouseout="this.style.background='rgba(239,68,68,.08)'" title="Dismiss suggestion (Delete)">
+        <i class="fas fa-trash-alt"></i>
+      </button>
+      <button onclick="SmartDetectPicker.cancel()" style="flex:1;background:transparent;border:1px solid #38383f;
+      border-radius:8px;color:var(--tx3);font-size:12px;font-weight:600;padding:7px 0;cursor:pointer;
+      transition:background .12s;" onmouseover="this.style.background='rgba(255,255,255,.04)'"
+        onmouseout="this.style.background='transparent'">
+        Esc
+      </button>
+      <button id="sdCpConfirmBtn" onclick="SmartDetectPicker.confirm()" style="flex:3;background:linear-gradient(135deg,var(--indigo),#4f46e5);
+      border:none;border-radius:8px;color:var(--tx);font-size:12px;font-weight:700;padding:7px 0;cursor:pointer;
+      box-shadow:0 2px 10px rgba(99,102,241,.35);transition:opacity .12s;" onmouseover="this.style.opacity='.9'"
+        onmouseout="this.style.opacity='1'">
+        <i class="fas fa-check"></i> Confirm &nbsp;<span style="opacity:.6;font-size:10px;font-weight:400;">Enter /
+          Dbl-click</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Toast stack -->
+  <div class="toast-stack" id="toastStack"></div>
+
+  <script>
+    // APP_DATA is seeded by the auth guard in <head> using URL params
+    // Classes and projects are loaded dynamically by main.js via API calls
+    if (!window.APP_DATA) {
+      window.APP_DATA = { classes: [], settings: {}, currentProject: window.AM_PROJECT || '', projects: {} };
+    }
+  </script>
+  <script src="/static/js/core/api.js"></script>
+  <script src="/static/js/core/state.js"></script>
+  <script src="/static/js/core/utils.js"></script>
+  <script src="/static/js/main.js"></script>
+  <!-- Prompted annotation. Loaded after main.js because it drives the same
+       `app` / `state` / `Boxes` globals; kept in its own file rather than
+       inlined like Smart Detect so this template does not grow another
+       500 lines of engine code. -->
+  <script src="/static/js/features/prompt-annotate.js"></script>
+
+  <script>
+    /* ═══════════════════════════════════════════════════════════════════
+       SMART DETECT CLASS PICKER
+       Shows when user clicks a manual-detect preview box.
+       Displays the AI-predicted class and lets user confirm or change it.
+    ═══════════════════════════════════════════════════════════════════ */
+    const SmartDetectPicker = (() => {
+      let _currentOpts = null;
+      let _selectedClsId = null;
+      let _allClasses = [];
+      let _outsideHandler = null;
+
+      function open(opts) {
+        _currentOpts = opts;
+        _allClasses = state.classes || [];
+        _selectedClsId = null;
+
+        // Pre-select the AI-predicted class if it exists in the project
+        const matchCls = _allClasses.find(
+          c => c.name.toLowerCase() === opts.predName.toLowerCase()
+        );
+        _selectedClsId = matchCls ? matchCls.id : (_allClasses[0]?.id ?? null);
+
+        // Header
+        document.getElementById('sdCpPredLabel').textContent = opts.predName;
+        document.getElementById('sdCpConfLabel').textContent =
+          Math.round(opts.predConf * 100) + '% conf';
+
+        const searchEl = document.getElementById('sdCpSearch');
+        if (searchEl) searchEl.value = '';
+        document.getElementById('sdCpAddRow').style.display = 'none';
+
+        _renderList('');
+
+        // Position
+        const picker = document.getElementById('sdClsPicker');
+        picker.style.display = '';
+        const vw = window.innerWidth, vh = window.innerHeight;
+        const pw = 264, ph = 380;
+        const mx = opts.mouseEvent?.clientX ?? vw / 2;
+        const my = opts.mouseEvent?.clientY ?? vh / 2;
+        let left = mx + 14;
+        let top = my - 70;
+        if (left + pw > vw - 8) left = mx - pw - 14;
+        if (top + ph > vh - 8) top = vh - ph - 8;
+        if (top < 8) top = 8;
+        picker.style.left = left + 'px';
+        picker.style.top = top + 'px';
+
+        // Scroll selected item into view after render
+        setTimeout(() => {
+          const sel = document.querySelector('#sdCpList .sdcp-selected');
+          if (sel) sel.scrollIntoView({ block: 'nearest' });
+          if (searchEl) searchEl.focus();
+        }, 40);
+
+        // Click-outside to close
+        if (_outsideHandler) document.removeEventListener('mousedown', _outsideHandler);
+        _outsideHandler = (e) => {
+          if (!picker.contains(e.target)) _close();
+        };
+        setTimeout(() => document.addEventListener('mousedown', _outsideHandler), 80);
+      }
+
+      function _renderList(filter) {
+        const list = document.getElementById('sdCpList');
+        if (!list) return;
+        const q = filter.toLowerCase().trim();
+        list.innerHTML = '';
+
+        const filtered = _allClasses.filter(c =>
+          !q || c.name.toLowerCase().includes(q)
+        );
+
+        filtered.forEach(cls => {
+          const isSelected = cls.id === _selectedClsId;
+          const rgb = Array.isArray(cls.color) ? cls.color.join(',') : '99,102,241';
+          const color = `rgb(${rgb})`;
+
+          const item = document.createElement('div');
+          item.className = isSelected ? 'sdcp-selected' : '';
+          item.style.cssText = [
+            'display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:7px;cursor:pointer;',
+            `border:1.5px solid ${isSelected ? color : 'transparent'};`,
+            `background:${isSelected ? `rgba(${rgb},.18)` : 'transparent'};`,
+            'transition:background .1s;user-select:none;'
+          ].join('');
+
+          item.innerHTML =
+            `<span style="width:11px;height:11px;border-radius:3px;flex-shrink:0;background:${color};display:inline-block;"></span>` +
+            `<span style="font-size:12px;font-weight:${isSelected ? '700' : '400'};color:${isSelected ? 'var(--tx)' : 'var(--tx2)'};flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${cls.name}</span>` +
+            (isSelected ? '<i class="fas fa-check" style="font-size:10px;color:var(--indigo);flex-shrink:0;"></i>' : '');
+
+          item.addEventListener('mouseenter', () => {
+            if (!isSelected) item.style.background = 'rgba(255,255,255,.05)';
+          });
+          item.addEventListener('mouseleave', () => {
+            if (!isSelected) item.style.background = 'transparent';
+          });
+          // Single click = select
+          item.addEventListener('click', (e) => {
+            e.stopPropagation();
+            _selectedClsId = cls.id;
+            _renderList(document.getElementById('sdCpSearch')?.value || '');
+          });
+          // Double click = select + confirm
+          item.addEventListener('dblclick', (e) => {
+            e.stopPropagation();
+            _selectedClsId = cls.id;
+            confirm();
+          });
+
+          list.appendChild(item);
+        });
+
+        // "Add new class" row
+        const exactMatch = _allClasses.some(c => c.name.toLowerCase() === q);
+        const addRow = document.getElementById('sdCpAddRow');
+        if (q && !exactMatch) {
+          addRow.style.display = '';
+          const inp = document.getElementById('sdCpNewName');
+          if (inp) inp.value = filter;
+        } else {
+          addRow.style.display = 'none';
+        }
+
+        if (!filtered.length && !q) {
+          list.innerHTML = '<div style="text-align:center;color:var(--tx3);font-size:11px;padding:14px 0;">No classes yet — type to add one</div>';
+        }
+      }
+
+      function _filterList(val) { _renderList(val); }
+
+      // Enter on search: if class selected → confirm; else add new
+      function _onSearchKey(e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const q = e.target.value.trim();
+          if (q) {
+            // If search matches one class exactly, select and confirm
+            const exact = _allClasses.find(c => c.name.toLowerCase() === q.toLowerCase());
+            if (exact) { _selectedClsId = exact.id; confirm(); }
+            else { _addNewClass(); }
+          } else {
+            // No search text — confirm whatever is selected
+            if (_selectedClsId !== null) confirm();
+          }
+        } else if (e.key === 'Escape') {
+          _close();
+        }
+      }
+
+      function _addNewClass() {
+        const inp = document.getElementById('sdCpNewName') ||
+          document.getElementById('sdCpSearch');
+        if (!inp) return;
+        const name = inp.value.trim();
+        if (!name) return;
+        const existing = state.classes.find(c => c.name.toLowerCase() === name.toLowerCase());
+        if (existing) {
+          _selectedClsId = existing.id;
+          document.getElementById('sdCpSearch').value = '';
+          _renderList('');
+          return;
+        }
+        const palette = [[251, 191, 36], [34, 197, 225], [99, 102, 241], [74, 222, 128], [236, 72, 153], [251, 113, 133], [52, 211, 153]];
+        const newId = state.classes.length > 0 ? Math.max(...state.classes.map(c => c.id)) + 1 : 0;
+        state.classes.push({ id: newId, name, color: palette[newId % palette.length] });
+        if (typeof app._populateClassList === 'function') app._populateClassList();
+        _allClasses = state.classes;
+        _selectedClsId = newId;
+        document.getElementById('sdCpSearch').value = '';
+        document.getElementById('sdCpAddRow').style.display = 'none';
+        _renderList('');
+      }
+
+      function confirm() {
+        if (!_currentOpts) return;
+        let clsId = _selectedClsId;
+        if (clsId === null) {
+          const m = state.classes.find(c => c.name.toLowerCase() === _currentOpts.predName.toLowerCase());
+          clsId = m ? m.id : (state.classes[0]?.id ?? null);
+        }
+        if (clsId === null) {
+          const palette = [[251, 191, 36], [34, 197, 225], [99, 102, 241], [74, 222, 128], [236, 72, 153]];
+          clsId = 0;
+          state.classes.push({ id: 0, name: _currentOpts.predName, color: palette[0] });
+          if (typeof app._populateClassList === 'function') app._populateClassList();
+        }
+        const cb = _currentOpts.onConfirm;
+        _close();
+        cb(clsId);
+      }
+
+      function dismiss() {
+        if (!_currentOpts) return;
+        const cb = _currentOpts.onDismiss;
+        _close();
+        if (cb) cb();
+      }
+
+      function cancel() { _close(); }
+
+      function _close() {
+        document.getElementById('sdClsPicker').style.display = 'none';
+        if (_outsideHandler) {
+          document.removeEventListener('mousedown', _outsideHandler);
+          _outsideHandler = null;
+        }
+        _currentOpts = null;
+        _selectedClsId = null;
+      }
+
+      return { open, confirm, cancel, dismiss, _filterList, _onSearchKey, _addNewClass };
+    })();
+  </script>
+
+  <script>
+    /* ═══════════════════════════════════════════════
+       SMART DETECT — Auto Save + Manual click-to-save
+    ═══════════════════════════════════════════════ */
+    const SmartDetect = (() => {
+      const MODE_REVIEW   = 'review';    // suggestions -> human accepts/rejects
+      const MODE_AUTOSAVE = 'autosave';  // written straight to confirmed
+
+      // Seeded from the project's saved settings on open(); these are only
+      // pre-load fallbacks. No model filename is hardcoded anywhere — the
+      // server resolves the default from whatever is in models/.
+      let _mode  = MODE_REVIEW;
+      let _conf  = 0.45;
+      let _model = null;
+      let _iou   = 0.5;
+      let _settingsLoaded = false;
+      let _saveSettingsTimer = null;
+      let _active = false;
+      let _predictions = [];
+      let _saved = [];
+      let _overlay = null;
+      let _octx = null;
+      let _lastPath = null;
+      // Tracks all image paths already processed in this session (prevents re-run on revisit)
+      let _seenPaths = new Set();
+      // Guard flag: prevents model change listener from firing during list rebuild
+      let _rebuildingModels = false;
+      // Per-prediction overrides: {x,y,w,h} in image coords (null = use original)
+      let _adj = [];
+      // Drag state
+      let _drag = null; // {idx, type:'move'|'resize', handle, startCx,startCy, origBox}
+      let _dragMoved = false;
+      let _hoverIdx = -1;
+
+      const HANDLE_R = 6; // resize handle radius in canvas px
+
+      /* ── LEGACY OVERLAY (INERT) ───────────────────────────────────────
+         `#sdOverlay` was a second canvas on which predictions were drawn
+         and reviewed, separately from the real annotations. Suggestions
+         are now first-class boxes on the MAIN canvas — selectable,
+         hit-testable and nestable with confirmed ones — and are reviewed
+         there via Enter/Delete or the review banner.
+
+         The overlay's handlers below are all guarded by `_mode !== 'manual'`.
+         `_mode` is now 'review' | 'autosave', so every one of those guards
+         returns early and the overlay is never drawn or interacted with.
+         The code is retained (rather than deleted) so this change stays
+         easy to revert; it is dead at runtime.
+      ─────────────────────────────────────────────────────────────────── */
+
+      // Convert canvas px → image coords
+      function _toImage(cx, cy) {
+        const pan = app._toCanvas(0, 0);
+        return { ix: (cx - pan.x) / state.zoom, iy: (cy - pan.y) / state.zoom };
+      }
+
+      // Get adjusted box for prediction i in image coords
+      function _getBox(i) {
+        const p = _predictions[i];
+        if (_adj[i]) return { ..._adj[i] };
+        const ix = (p.x_center - p.width / 2) * state.imgW;
+        const iy = (p.y_center - p.height / 2) * state.imgH;
+        return { x: ix, y: iy, w: p.width * state.imgW, h: p.height * state.imgH };
+      }
+
+      // Resize handle positions (canvas coords): corners + edges
+      function _handles(cx, cy, cw, ch) {
+        const hx = cx + cw, hy = cy + ch, mx = cx + cw / 2, my = cy + ch / 2;
+        return [
+          { id: 'nw', x: cx, y: cy }, { id: 'n', x: mx, y: cy }, { id: 'ne', x: hx, y: cy },
+          { id: 'w', x: cx, y: my }, { id: 'e', x: hx, y: my },
+          { id: 'sw', x: cx, y: hy }, { id: 's', x: mx, y: hy }, { id: 'se', x: hx, y: hy },
+        ];
+      }
+
+      function _hitHandle(hx, hy, cx, cy) {
+        return Math.hypot(hx - cx, hy - cy) <= HANDLE_R + 3;
+      }
+
+      // Cursor for handle
+      function _cursor(id) {
+        return {
+          nw: 'nw-resize', ne: 'ne-resize', sw: 'sw-resize', se: 'se-resize',
+          n: 'n-resize', s: 's-resize', e: 'e-resize', w: 'w-resize', move: 'move'
+        }[id] || 'pointer';
+      }
+
+      function _ensureOverlay() {
+        if (_overlay) return;
+        const wrap = document.getElementById('canvasWrap');
+        if (!wrap) return;
+        _overlay = document.createElement('canvas');
+        _overlay.id = 'sdOverlay';
+        _overlay.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;z-index:4;cursor:default;';
+        wrap.style.position = 'relative';
+        wrap.appendChild(_overlay);
+        _octx = _overlay.getContext('2d');
+
+        function _canvasXY(e) {
+          const r = _overlay.getBoundingClientRect();
+          return {
+            cx: (e.clientX - r.left) * (_overlay.width / r.width),
+            cy: (e.clientY - r.top) * (_overlay.height / r.height),
+          };
+        }
+
+        wrap.addEventListener('mousemove', e => {
+          if (!_active || _mode !== 'manual') return;
+          const { cx, cy } = _canvasXY(e);
+
+          // 1. If actively dragging a predicted box, keep overlay solid
+          if (_drag) {
+            _overlay.style.pointerEvents = '';
+            _dragMoved = true;
+            const box = { ..._drag.origBox };
+            const dIx = (cx - _drag.startCx) / state.zoom;
+            const dIy = (cy - _drag.startCy) / state.zoom;
+            if (_drag.type === 'move') {
+              box.x = Math.max(0, Math.min(state.imgW - box.w, box.x + dIx));
+              box.y = Math.max(0, Math.min(state.imgH - box.h, box.y + dIy));
+            } else {
+              const h = _drag.handle;
+              if (h.includes('e')) { box.w = Math.max(10, box.w + dIx); }
+              if (h.includes('s')) { box.h = Math.max(10, box.h + dIy); }
+              if (h.includes('w')) { box.x += dIx; box.w = Math.max(10, box.w - dIx); }
+              if (h.includes('n')) { box.y += dIy; box.h = Math.max(10, box.h - dIy); }
+              box.x = Math.max(0, box.x); box.y = Math.max(0, box.y);
+            }
+            _adj[_drag.idx] = box;
+            _draw();
+            return;
+          }
+
+          // 2. If main canvas is active (dragging, resizing, or drawing a real box), keep overlay transparent
+          if (state.dragging || state.resizing || state.drawing) {
+            _overlay.style.pointerEvents = 'none';
+            return;
+          }
+
+          // 3. Hover detection for cursor and predicted box highlight
+          let cur = 'default', found = -1;
+          for (let i = _predictions.length - 1; i >= 0; i--) {
+            if (_saved[i] || _predictions[i].conf < _conf) continue;
+            const b = _getBox(i);
+            const { x, y } = app._toCanvas(b.x, b.y);
+            const cw = b.w * state.zoom, ch = b.h * state.zoom;
+            for (const h of _handles(x, y, cw, ch)) {
+              if (_hitHandle(h.x, h.y, cx, cy)) { cur = _cursor(h.id); found = i; break; }
+            }
+            if (found >= 0) break;
+            if (cx >= x && cx <= x + cw && cy >= y && cy <= y + ch) { cur = 'move'; found = i; break; }
+          }
+          _hoverIdx = found;
+          _overlay.style.cursor = cur;
+
+          // 4. Update pointer events dynamically so manual drawing and real box editing work natively
+          if (found >= 0) {
+            _overlay.style.pointerEvents = '';
+          } else {
+            _overlay.style.pointerEvents = 'none';
+          }
+
+          _draw();
+        });
+
+        _overlay.addEventListener('mousedown', e => {
+          if (_mode !== 'manual' || e.button !== 0) return;
+          const { cx, cy } = _canvasXY(e);
+          _dragMoved = false;
+          if (_hoverIdx >= 0 && !_saved[_hoverIdx]) {
+            const i = _hoverIdx;
+            const b = _getBox(i);
+            const { x, y } = app._toCanvas(b.x, b.y);
+            const cw = b.w * state.zoom, ch = b.h * state.zoom;
+            // Check handles first
+            for (const h of _handles(x, y, cw, ch)) {
+              if (_hitHandle(h.x, h.y, cx, cy)) {
+                _drag = { idx: i, type: 'resize', handle: h.id, startCx: cx, startCy: cy, origBox: { ...b } };
+                e.preventDefault(); return;
+              }
+            }
+            // Check body
+            if (cx >= x && cx <= x + cw && cy >= y && cy <= y + ch) {
+              _drag = { idx: i, type: 'move', startCx: cx, startCy: cy, origBox: { ...b } };
+              e.preventDefault(); return;
+            }
+          }
+        });
+
+        _overlay.addEventListener('mouseup', e => {
+          if (_mode !== 'manual') return;
+          const { cx, cy } = _canvasXY(e);
+          const wasDrag = _drag && _dragMoved;
+          const dragIdx = _drag?.idx;
+          _drag = null;
+          if (!wasDrag && dragIdx != null) {
+            _hitTest(cx, cy, e);
+          }
+          _draw();
+        });
+
+        _overlay.addEventListener('click', e => {
+          if (_mode !== 'manual' || _dragMoved) return;
+          const { cx, cy } = _canvasXY(e);
+          _hitTest(cx, cy, e);
+        });
+      }
+
+      function _syncSize() {
+        if (!_overlay || !app.canvas) return;
+        _overlay.width = app.canvas.width;
+        _overlay.height = app.canvas.height;
+      }
+
+      // Reset adjustments when new image loaded
+      function _resetAdj() { _adj = _predictions.map(() => null); }
+
+      // ── Draw preview boxes + resize handles (manual mode only) ──────
+      function _draw() {
+        if (!_octx || !app.canvas || !state.imgW || !state.imgH) return;
+        _syncSize();
+        _octx.clearRect(0, 0, _overlay.width, _overlay.height);
+        if (_mode !== 'manual') return;
+
+        _predictions.forEach((p, i) => {
+          if (_saved[i] || p.conf < _conf) return;
+          const b = _getBox(i);
+          const { x, y } = app._toCanvas(b.x, b.y);
+          const cw = b.w * state.zoom, ch = b.h * state.zoom;
+          const isHov = i === _hoverIdx;
+          const isDrag = _drag?.idx === i;
+          const accent = isDrag ? 'rgba(99,102,241,0.95)' : isHov ? 'rgba(251,191,36,1)' : 'rgba(251,191,36,0.85)';
+          const fill = isDrag ? 'rgba(99,102,241,0.12)' : 'rgba(251,191,36,0.07)';
+
+          _octx.save();
+          _octx.setLineDash(isDrag ? [] : [6, 4]);
+          _octx.strokeStyle = accent;
+          _octx.fillStyle = fill;
+          _octx.lineWidth = isDrag ? 2.5 : 2;
+          _octx.shadowColor = accent;
+          _octx.shadowBlur = isHov || isDrag ? 10 : 6;
+          _octx.fillRect(x, y, cw, ch);
+          _octx.strokeRect(x, y, cw, ch);
+          _octx.setLineDash([]);
+          _octx.shadowBlur = 0;
+
+          // Label
+          const label = p.class_name + ' ' + Math.round(p.conf * 100) + '%';
+          const fontSize = Math.max(10, Math.min(13, 12 * state.zoom));
+          _octx.font = `600 ${fontSize}px 'Sora',sans-serif`;
+          const tw = _octx.measureText(label).width;
+          const lh = fontSize + 6;
+          const lx = Math.max(0, x);
+          const ly = Math.max(0, y - lh - 2);
+          _octx.fillStyle = accent;
+          _octx.fillRect(lx, ly, tw + 12, lh);
+          _octx.fillStyle = '#000';
+          _octx.fillText(label, lx + 6, ly + lh - 3);
+
+          // Resize handles (corners + edges) — shown on hover or drag
+          if (isHov || isDrag) {
+            _octx.fillStyle = '#fff';
+            _octx.strokeStyle = accent;
+            _octx.lineWidth = 1.5;
+            for (const h of _handles(x, y, cw, ch)) {
+              _octx.beginPath();
+              _octx.arc(h.x, h.y, HANDLE_R, 0, Math.PI * 2);
+              _octx.fill();
+              _octx.stroke();
+            }
+          }
+
+          // "Click to save" hint chip on hover (no drag)
+          if (isHov && !_drag) {
+            const hint = 'Click to label  •  Drag to move/resize';
+            _octx.font = `500 10px 'Sora',sans-serif`;
+            const hw = _octx.measureText(hint).width;
+            const hx2 = Math.max(0, x + cw / 2 - hw / 2 - 8);
+            const hy2 = y + ch + 5;
+            _octx.fillStyle = 'rgba(30,30,36,0.9)';
+            _octx.beginPath();
+            _octx.roundRect(hx2, hy2, hw + 16, 18, 4);
+            _octx.fill();
+            _octx.fillStyle = '#a1a1aa';
+            _octx.fillText(hint, hx2 + 8, hy2 + 13);
+          }
+
+          _octx.restore();
+        });
+      }
+
+      function _clearOverlay() {
+        if (_octx && _overlay)
+          _octx.clearRect(0, 0, _overlay.width, _overlay.height);
+      }
+
+      // ── Hit test: which prediction was clicked ────────────────────────
+      function _hitTest(cx, cy, mouseEvent) {
+        for (let i = _predictions.length - 1; i >= 0; i--) {
+          if (_saved[i] || _predictions[i].conf < _conf) continue;
+          const b = _getBox(i);
+          const { x, y } = app._toCanvas(b.x, b.y);
+          const cw = b.w * state.zoom, ch = b.h * state.zoom;
+          if (cx >= x && cx <= x + cw && cy >= y && cy <= y + ch) {
+            _openPopupForPrediction(i, _predictions[i], mouseEvent, b);
+            return;
+          }
+        }
+      }
+
+      // ── Open dedicated SD class picker — uses adjusted box coords ────
+      function _openPopupForPrediction(idx, pred, mouseEvent, boxData) {
+        // boxData already has adjusted coords from _getBox
+        const bd = boxData || _getBox(idx);
+
+        SmartDetectPicker.open({
+          predIdx: idx,
+          predName: pred.class_name,
+          predConf: pred.conf,
+          boxData: bd,
+          mouseEvent,
+          onConfirm: (chosenClsId) => {
+            app._pushHistory();
+            state.bboxes.push({
+              id: Math.random().toString(36).slice(2),
+              cls: chosenClsId,
+              type: 'bbox',
+              x: Math.max(0, bd.x),
+              y: Math.max(0, bd.y),
+              w: Math.min(bd.w, state.imgW - bd.x),
+              h: Math.min(bd.h, state.imgH - bd.y),
+            });
+            _saved[idx] = true;
+            _adj[idx] = null;  // clear override
+            app._render();
+            app._updateAnnoList();
+            app._updateClassCounts();
+            app._statusObjects();
+            app._triggerSave();
+            _draw();
+            const remaining = _predictions.filter((p, i) => !_saved[i] && p.conf >= _conf).length;
+            _setStatus(remaining > 0
+              ? `${remaining} detection${remaining > 1 ? 's' : ''} remaining — click to save`
+              : 'All detections saved ✓');
+          },
+          onDismiss: () => {
+            app._pushHistory();
+            _saved[idx] = true; // Mark as dismissed/saved so it disappears
+            _adj[idx] = null;  // clear override
+            app._render();
+            app._updateAnnoList();
+            app._updateClassCounts();
+            app._statusObjects();
+            app._triggerSave();
+            _draw();
+            const remaining = _predictions.filter((p, i) => !_saved[i] && p.conf >= _conf).length;
+            _setStatus(remaining > 0
+              ? `${remaining} detection${remaining > 1 ? 's' : ''} remaining — click to save`
+              : 'All detections saved ✓');
+          }
+        });
+      }
+
+      // ── Mode UI ───────────────────────────────────────────────────────
+      /* Reflect the current mode across the bar. Class flips only — all
+         appearance lives in annotate-v2.css against tokens. */
+      function _updateModeUI() {
+        const isAuto = _mode === MODE_AUTOSAVE;
+
+        const bar = document.getElementById('sdBar');
+        if (bar) bar.classList.toggle('is-auto', isAuto);
+
+        const chk = document.getElementById('sdAutoApprove');
+        if (chk) chk.checked = isAuto;
+
+        const badge = document.getElementById('sdModelBadge');
+        if (badge) {
+          badge.textContent = isAuto ? 'Auto-approving' : 'AI Labeling';
+          badge.title = isAuto
+            ? 'Detections are saved directly as confirmed annotations, with no review.'
+            : 'Detections arrive as suggestions for you to approve or reject.';
+        }
+
+        // Mirror onto the toolbar button so the mode is visible even when
+        // the bar is closed — Auto-approve writes unreviewed ground truth.
+        const tbBtn = document.getElementById('smartDetectBtn');
+        if (tbBtn) tbBtn.setAttribute('data-mode', isAuto ? 'autosave' : 'review');
+
+        if (_overlay) _overlay.style.pointerEvents = 'none';
+      }
+
+      function _setStatus(msg) {
+        const bar = document.getElementById('sdStatusBar');
+        const txt = document.getElementById('sdStatusText');
+        if (!txt) return;
+        txt.textContent = msg;
+        bar.style.display = msg ? '' : 'none';
+      }
+
+      // ── Replace toggle helper ─────────────────────────────────────────
+      /* RETIRED. This used to gate `state.bboxes = []` — a wholesale wipe of
+         human annotations before writing AI output. That behaviour is gone:
+         Boxes.reconcile() never modifies or removes a confirmed box, so
+         there is nothing for a "replace" mode to do. Kept as a stub so the
+         existing panel markup and its change-listener keep working; the
+         toggle is hidden in the UI. */
+      function _shouldReplace() { return false; }
+
+      // ── Run inference ─────────────────────────────────────────────────
+      async function _run() {
+        const item = state.currentIdx >= 0 ? state.media[state.currentIdx] : null;
+        if (!item) return;
+        if (_lastPath === item.path) return;  // already ran on this image this navigation
+        _lastPath = item.path;
+        _predictions = [];
+        _saved = [];
+        _clearOverlay();
+
+        /*
+          NO "already processed" SHORT-CIRCUIT ANY MORE.
+
+          This used to skip frames based on `_seenPaths` (an in-memory Set)
+          and on whether the image already had boxes. Both were wrong:
+
+            • `_seenPaths` emptied on every page reload, so "already handled"
+              was forgotten and re-running duplicated boxes — the original bug.
+            • Skipping whenever the frame had ANY boxes meant a frame with one
+              manual box could never receive suggestions for other objects.
+            • The `replace` branch wiped human annotations wholesale.
+
+          Idempotency is now a property of Boxes.reconcile(), which compares
+          each detection against SAVED state — confirmed boxes are left alone,
+          stale suggestions are refreshed in place, rejected ones stay
+          rejected. That holds across reloads and frame navigation, because
+          it reads the same data the canvas was rehydrated from.
+
+          Marking a frame null is still respected: the user has declared it
+          empty, so there is nothing to detect.
+        */
+        if (state.nullPaths && state.nullPaths.has(item.path)) {
+          _setStatus('Marked as Null — skipped.');
+          return;
+        }
+        if (_mode !== MODE_AUTOSAVE) {
+          const confirmedCount = (state.bboxes || []).filter(
+            b => (b.st || 'confirmed') === 'confirmed').length;
+          if (confirmedCount > 0) {
+            _setStatus(`${confirmedCount} confirmed annotation(s) here — these are protected and will not be touched`);
+          }
+        }
+
+        const runBtn = document.getElementById('sdRunBtn');
+        if (runBtn) { runBtn.disabled = true; runBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>'; }
+        _setStatus('Detecting…');
+
+        try {
+          const r = await fetch(
+            `/api/workspaces/${_wsId()}/projects/${encodeURIComponent(_proj())}/ai/predict`,
+            {
+              method: 'POST', headers: _authH(),
+              body: JSON.stringify({ path: item.path, model: _model, conf: _conf })
+            }
+          );
+          const d = await r.json();
+          if (!r.ok) { _setStatus('Error: ' + (d.error || 'prediction failed')); return; }
+
+          _predictions = (d.predictions || []).filter(p => p.conf >= _conf);
+          _saved = _predictions.map(() => false);
+          _resetAdj();
+          _hoverIdx = -1;
+          _drag = null;
+          const n = _predictions.length;
+
+          // Both modes now commit through the same reconcile path, so
+          // suggestions become first-class boxes on the main canvas and are
+          // reviewed there (select → Enter/Delete, or the banner's bulk
+          // actions). `_seenPaths` is no longer consulted — reconcile is the
+          // idempotency guarantee, and it survives reloads.
+          _seenPaths.add(item.path);   // retained only as a network de-dupe hint
+          // Always report the outcome — in Auto-Save the user needs to see
+          // what was written, since nothing else surfaces it.
+          _saveAll(false);
+        } catch (e) {
+          _setStatus('Error: ' + e.message);
+        } finally {
+          if (runBtn) { runBtn.disabled = false; runBtn.innerHTML = '<i class="fas fa-magic"></i> Detect'; }
+        }
+      }
+
+      // ── Save all predictions (auto mode "Save All" button) ────────────
+      /*
+        Commit model output as SUGGESTIONS.
+
+        REWRITTEN — the previous version was the source of the duplicate and
+        overwrite bugs. It did three things wrong:
+
+          1. It pushed predictions straight into `state.bboxes` as ordinary
+             boxes with no state tag, so the instant they landed they were
+             indistinguishable from hand-drawn annotations — and were
+             exported as ground truth without anyone reviewing them.
+          2. Its "replace" path ran `state.bboxes = []`, destroying human
+             work outright whenever the toggle was on.
+          3. It had no overlap check at all. Duplicate suppression relied on
+             `_seenPaths` / `_lastPath`, both in-memory and both empty again
+             after a reload — which is exactly why re-running detection or
+             revisiting a frame produced doubled boxes.
+
+        Now every prediction goes through Boxes.reconcile(), which compares
+        against saved state (confirmed / suggested / rejected) by class + IoU.
+        Nothing here can ever remove or modify a confirmed box.
+      */
+      function _saveAll(silent) {
+        if (!_predictions.length) {
+          _setStatus('No objects detected.');
+          return;
+        }
+        const usable = _predictions.filter((p, i) => !_saved[i] && p.conf >= _conf);
+        if (!usable.length) { _setStatus('Nothing to save.'); return; }
+
+        app._pushHistory();
+
+        // Map predictions into canvas-space boxes, creating any missing class.
+        const detections = usable.map((p, i) => {
+          const matchCls = state.classes.find(
+            c => c.name.toLowerCase() === p.class_name.toLowerCase());
+          let clsId = matchCls ? matchCls.id : null;
+          if (clsId === null) {
+            const palette = [[251, 191, 36], [34, 197, 225], [99, 102, 241], [74, 222, 128], [236, 72, 153]];
+            clsId = state.classes.length > 0 ? Math.max(...state.classes.map(c => c.id)) + 1 : 0;
+            state.classes.push({
+              id: clsId, name: p.class_name,
+              color: palette[clsId % palette.length]
+            });
+            if (typeof app._populateClassList === 'function') app._populateClassList();
+          }
+          const ix = (p.x_center - p.width / 2) * state.imgW;
+          const iy = (p.y_center - p.height / 2) * state.imgH;
+          _saved[i] = true;
+          return {
+            id: Math.random().toString(36).slice(2),
+            cls: clsId, type: 'bbox',
+            x: Math.max(0, ix), y: Math.max(0, iy),
+            w: Math.min(p.width  * state.imgW, state.imgW - ix),
+            h: Math.min(p.height * state.imgH, state.imgH - iy),
+            conf: p.conf,
+          };
+        });
+
+        // The mode ONLY changes what happens to the output — detection
+        // itself, the model and the threshold are identical in both.
+        const isAuto = _mode === MODE_AUTOSAVE;
+        const { boxes, summary } = isAuto
+          ? Boxes.reconcileAutoSave(state.bboxes, detections, _iou)
+          : Boxes.reconcile(state.bboxes, detections, _iou);
+        state.bboxes = boxes;
+
+        // Auto-Save writes confirmed ground truth with nobody reviewing it,
+        // so leave an audit trail of exactly what the model wrote.
+        if (isAuto) {
+          const item2 = state.currentIdx >= 0 ? state.media[state.currentIdx] : null;
+          if (item2) {
+            fetch(_p('/ai/autosave_log'), {
+              method: 'POST', headers: _authH(),
+              body: JSON.stringify({
+                path: item2.path, model: _model, conf: _conf, iou: _iou,
+                added: summary.added, replaced: summary.replaced || 0,
+                total: detections.length,
+              }),
+            }).catch(() => {});
+          }
+        }
+
+        app._render();
+        app._updateAnnoList();
+        app._updateClassCounts();
+        app._statusObjects();
+        app._updateReviewBanner();
+        app._triggerSave();
+
+        // Report what actually happened — silently discarding detections
+        // without saying why is confusing ("I ran it and nothing appeared").
+        const bits = [];
+        if (summary.added)            bits.push(`${summary.added} new`);
+        if (summary.replaced)         bits.push(`${summary.replaced} updated`);
+        if (summary.refreshed)        bits.push(`${summary.refreshed} refreshed`);
+        if (summary.skippedConfirmed) bits.push(`${summary.skippedConfirmed} skipped (already confirmed)`);
+        if (summary.skippedRejected)  bits.push(`${summary.skippedRejected} skipped (previously rejected)`);
+        const msg     = bits.length ? bits.join(' · ') : 'No changes';
+        const touched = (summary.added || 0) + (summary.replaced || 0) + (summary.refreshed || 0);
+
+        _setStatus(touched
+          ? (isAuto ? `${msg} — saved` : `${msg} — review to confirm`)
+          : msg);
+        if (!silent) {
+          app._toast(
+            touched
+              ? (isAuto ? `${touched} annotation(s) saved` : `${touched} suggestion(s) ready to review`)
+              : msg,
+            touched ? (isAuto ? 'success' : 'info') : 'info');
+        }
+      }
+
+      // ── Hook into image load ──────────────────────────────────────────
+      function _hookNavigation() {
+        const origLoad = app.loadImage.bind(app);
+        app.loadImage = async function (idx, force) {
+          await origLoad(idx, force);
+          // Small delay so canvas is rendered before we draw overlay.
+          // Do NOT reset _lastPath here — that would re-run on every revisit.
+          // Instead, _run() guards with _seenPaths (auto) or explicit button (manual).
+          if (_active) setTimeout(() => _run(), 120);
+        };
+        // Keep overlay in sync with canvas redraws
+        const origRender = app._render.bind(app);
+        app._render = function () { origRender(); if (_active && _mode === 'manual') _draw(); };
+      }
+
+      /* ═══════════════════════════════════════════════════════════════
+         DRAG + COLLAPSE
+
+         The bar floats over the canvas, so every pixel it covers is
+         annotation area the user cannot see. Two mitigations:
+
+           • drag it anywhere by the header,
+           • collapse it to just the header strip.
+
+         Both the position and the collapsed state persist in
+         localStorage, keyed per user, so the layout the annotator
+         settles on survives navigation and reloads.
+
+         Position is stored as a viewport-relative FRACTION rather than
+         raw pixels — a bar parked near the right edge on a wide monitor
+         would otherwise end up off-screen on a laptop.
+      ═══════════════════════════════════════════════════════════════ */
+      const _POS_KEY = 'am_sdbar_pos';
+      const _COL_KEY = 'am_sdbar_collapsed';
+
+      function _clampIntoView(left, top, el) {
+        const wrap = el.offsetParent || document.body;
+        const maxL = Math.max(0, wrap.clientWidth  - el.offsetWidth);
+        const maxT = Math.max(0, wrap.clientHeight - el.offsetHeight);
+        return { left: Math.min(Math.max(0, left), maxL),
+                 top:  Math.min(Math.max(0, top),  maxT) };
+      }
+
+      function _applySavedPos() {
+        const bar = document.getElementById('sdBar');
+        if (!bar) return;
+        if (window.innerWidth <= 639) return;   // docked on small screens
+        let raw = null;
+        try { raw = JSON.parse(localStorage.getItem(_POS_KEY) || 'null'); } catch (e) {}
+        if (!raw || typeof raw.fx !== 'number') return;
+        const wrap = bar.offsetParent || document.body;
+        const pos = _clampIntoView(raw.fx * wrap.clientWidth,
+                                   raw.fy * wrap.clientHeight, bar);
+        bar.classList.add('is-moved');
+        bar.style.left = pos.left + 'px';
+        bar.style.top  = pos.top  + 'px';
+      }
+
+      function _initDrag() {
+        const bar    = document.getElementById('sdBar');
+        const handle = document.getElementById('sdBarHandle');
+        if (!bar || !handle) return;
+
+        let sx = 0, sy = 0, ox = 0, oy = 0, dragging = false;
+
+        handle.addEventListener('mousedown', e => {
+          // Ignore presses that landed on a control inside the header.
+          if (e.target.closest('button, select, input, label')) return;
+          if (window.innerWidth <= 639) return;
+          e.preventDefault();
+          const r = bar.getBoundingClientRect();
+          const wrapRect = (bar.offsetParent || document.body).getBoundingClientRect();
+          ox = r.left - wrapRect.left;
+          oy = r.top  - wrapRect.top;
+          sx = e.clientX; sy = e.clientY;
+          dragging = true;
+          // Freeze the current centred position before switching to
+          // explicit left/top, so it does not jump on the first move.
+          bar.classList.add('is-moved', 'is-dragging');
+          bar.style.left = ox + 'px';
+          bar.style.top  = oy + 'px';
+        });
+
+        window.addEventListener('mousemove', e => {
+          if (!dragging) return;
+          const pos = _clampIntoView(ox + (e.clientX - sx),
+                                     oy + (e.clientY - sy), bar);
+          bar.style.left = pos.left + 'px';
+          bar.style.top  = pos.top  + 'px';
+        });
+
+        window.addEventListener('mouseup', () => {
+          if (!dragging) return;
+          dragging = false;
+          bar.classList.remove('is-dragging');
+          const wrap = bar.offsetParent || document.body;
+          try {
+            localStorage.setItem(_POS_KEY, JSON.stringify({
+              fx: parseFloat(bar.style.left) / Math.max(1, wrap.clientWidth),
+              fy: parseFloat(bar.style.top)  / Math.max(1, wrap.clientHeight),
+            }));
+          } catch (e) {}
+        });
+
+        // Re-clamp after a resize so the bar cannot be stranded off-screen.
+        window.addEventListener('resize', () => {
+          if (!bar.classList.contains('is-moved')) return;
+          const pos = _clampIntoView(parseFloat(bar.style.left) || 0,
+                                     parseFloat(bar.style.top)  || 0, bar);
+          bar.style.left = pos.left + 'px';
+          bar.style.top  = pos.top  + 'px';
+        });
+
+        // ── Collapse ──────────────────────────────────────────────────
+        const btn = document.getElementById('sdBarCollapse');
+        const setCollapsed = (on) => {
+          bar.classList.toggle('is-collapsed', on);
+          if (btn) btn.setAttribute('aria-expanded', String(!on));
+          if (btn) btn.title = on ? 'Expand' : 'Collapse';
+          try { localStorage.setItem(_COL_KEY, on ? '1' : '0'); } catch (e) {}
+        };
+        btn?.addEventListener('click', () =>
+          setCollapsed(!bar.classList.contains('is-collapsed')));
+        try {
+          if (localStorage.getItem(_COL_KEY) === '1') setCollapsed(true);
+        } catch (e) {}
+
+        _applySavedPos();
+      }
+
+      // ── Public: open / close / setMode ───────────────────────────────
+      async function open() {
+        _active = true;
+        const bar = document.getElementById('sdBar');
+        if (bar) bar.style.display = '';
+        _updateModeUI();
+        // Settings first, so _loadModels() can restore this project's saved
+        // model rather than defaulting to the first one in the list.
+        if (!_settingsLoaded) await _loadSettings();
+        await _loadModels();
+        _lastPath = null;
+        // Opening the panel no longer fires detection. It previously ran
+        // immediately on open, which in Auto-Save would write annotations
+        // to the current frame before the user had chosen anything.
+        // Detection runs automatically on the current image — there is no
+        // Detect button. _run() is idempotent via reconcile, so this is safe
+        // to fire on every image load.
+        _run();
+      }
+
+      function close() {
+        _active = false;
+        _clearOverlay();
+        _predictions = []; _saved = []; _adj = []; _lastPath = null;
+        _seenPaths.clear();
+        _drag = null; _hoverIdx = -1;
+        document.getElementById('sdBar').style.display = 'none';
+        if (_overlay) _overlay.style.pointerEvents = 'none';
+      }
+
+      function setMode(m) {
+        // Accept the legacy names so any old persisted value still resolves.
+        _mode = (m === MODE_AUTOSAVE || m === 'auto') ? MODE_AUTOSAVE : MODE_REVIEW;
+        _updateModeUI();
+        _clearOverlay();
+        _predictions = []; _saved = []; _adj = [];
+        _drag = null; _hoverIdx = -1;
+        _setStatus('');
+        _persist({ mode: _mode });
+        // Switching mode no longer auto-runs detection. Doing so meant a
+        // stray click on "Auto-Save" immediately wrote unreviewed boxes to
+        // the current frame with no confirmation.
+      }
+
+      // ── Per-project settings ──────────────────────────────────────────
+      // Model choice and threshold are stored in the project's project.json
+      // (settings.ai) rather than localStorage, so they follow the project
+      // rather than the browser — different projects target different object
+      // sets and therefore different weights.
+      async function _loadSettings() {
+        try {
+          const r = await fetch(_p('/ai/settings'), { headers: _authH() });
+          if (!r.ok) return;
+          const d = await r.json();
+          if (d.model) _model = d.model;
+          if (typeof d.conf === 'number') _conf = d.conf;
+          if (typeof d.iou  === 'number') _iou  = d.iou;
+          if (d.mode) _mode = (d.mode === MODE_AUTOSAVE) ? MODE_AUTOSAVE : MODE_REVIEW;
+          _settingsLoaded = true;
+
+          const cs = document.getElementById('sdConfSlider');
+          const cv = document.getElementById('sdConfVal');
+          if (cs) cs.value = Math.round(_conf * 100);
+          if (cv) cv.textContent = `${Math.round(_conf * 100)}%`;
+          const is = document.getElementById('sdIouSlider');
+          const iv = document.getElementById('sdIouVal');
+          if (is) is.value = Math.round(_iou * 100);
+          if (iv) iv.textContent = `${Math.round(_iou * 100)}%`;
+          _updateModeUI();
+        } catch (e) { /* non-fatal — defaults stay in effect */ }
+      }
+
+      // Debounced: the confidence slider fires continuously while dragging.
+      function _persist(patch) {
+        if (!patch) return;
+        clearTimeout(_saveSettingsTimer);
+        _saveSettingsTimer = setTimeout(async () => {
+          try {
+            await fetch(_p('/ai/settings'), {
+              method: 'PUT', headers: _authH(), body: JSON.stringify(patch),
+            });
+          } catch (e) { /* best effort */ }
+        }, 400);
+      }
+
+      // ── Load model list ───────────────────────────────────────────────
+      // Re-scans server-side on every call, so a .pt dropped into models/
+      // while the server runs appears here without a restart.
+      async function _loadModels() {
+        const sel = document.getElementById('sdModelSelect');
+        if (!sel) return;
+        try {
+          const r = await fetch('/api/ai/models', { headers: _authH() });
+          const d = await r.json();
+          const models = d.models || [];
+
+          _rebuildingModels = true;
+          sel.innerHTML = '';
+          if (!models.length) {
+            sel.innerHTML = '<option value="">No models found in models/</option>';
+            _showModelError('Add a .pt file to the models/ folder, then press refresh.');
+            _rebuildingModels = false;
+            return;
+          }
+          models.forEach(m => {
+            const o = document.createElement('option');
+            o.value = m.name;
+            o.textContent = `${m.name} · ${m.size_mb} MB`;
+            sel.appendChild(o);
+          });
+          // Keep the saved selection if it still exists, else fall back.
+          if (_model && models.some(m => m.name === _model)) sel.value = _model;
+          else { _model = models[0].name; sel.value = _model; }
+          _rebuildingModels = false;
+          _describeModel(_model);
+        } catch (e) {
+          _rebuildingModels = false;
+          _showModelError('Could not read the model list from the server.');
+        }
+      }
+
+      function _showModelError(msg) {
+        const el = document.getElementById('sdModelError');
+        if (!el) return;
+        el.hidden = !msg;
+        el.textContent = msg || '';
+        const run = document.getElementById('sdRunNowBtn');
+        if (run) run.disabled = !!msg;
+      }
+
+      // Validate the selected model and show the classes IT can detect.
+      // These often differ from the project's own class list, so seeing them
+      // before running avoids a confusing empty result.
+      /* Validate the selected model and summarise what it can detect.
+         A .pt is often trained on a different class set than the project's
+         own class list, so surfacing this BEFORE a run avoids a confusing
+         empty result ("it detected nothing" when the model simply has no
+         matching classes). */
+      async function _describeModel(name) {
+        const meta = document.getElementById('sdModelMeta');
+        if (!name) return;
+        _showModelError('');
+        if (meta) meta.textContent = 'Checking model…';
+        try {
+          const r = await fetch(`/api/ai/models/${encodeURIComponent(name)}/info`,
+                                { headers: _authH() });
+          const d = await r.json();
+          if (!r.ok || !d.valid) {
+            _showModelError(d.error || 'This model could not be loaded.');
+            if (meta) meta.textContent = '';
+            return;
+          }
+          const preview = d.classes.slice(0, 4).join(', ');
+          const extra   = d.classes.length > 4 ? ` +${d.classes.length - 4} more` : '';
+          if (meta) {
+            meta.textContent =
+              `${d.class_count} class${d.class_count !== 1 ? 'es' : ''}: ${preview}${extra}`;
+            meta.title = d.classes.join(', ');
+          }
+        } catch (e) {
+          _showModelError('Could not validate this model.');
+          if (meta) meta.textContent = '';
+        }
+      }
+
+      // ── Init ──────────────────────────────────────────────────────────
+      function init() {
+        document.getElementById('smartDetectBtn')?.addEventListener('click', open);
+        _initDrag();
+
+        // Every lookup is optional-chained: a missing node must not throw
+        // and abort the rest of init().
+
+        // Sliders read 5-95 (percent) and store 0.05-0.95, matching the
+        // reference UI where both values are shown as percentages.
+        document.getElementById('sdConfSlider')?.addEventListener('input', e => {
+          _conf = parseInt(e.target.value, 10) / 100;
+          const v = document.getElementById('sdConfVal');
+          if (v) v.textContent = `${Math.round(_conf * 100)}%`;
+          _persist({ conf: _conf });   // debounced — fires continuously while dragging
+        });
+
+        // "Overlap" = how much a new detection must overlap an existing box
+        // to count as the same object. It feeds the IoU threshold used by
+        // both reconcilers, which is what stops re-runs duplicating boxes.
+        document.getElementById('sdIouSlider')?.addEventListener('input', e => {
+          _iou = parseInt(e.target.value, 10) / 100;
+          const v = document.getElementById('sdIouVal');
+          if (v) v.textContent = `${Math.round(_iou * 100)}%`;
+          _persist({ iou: _iou });
+        });
+
+        // Auto-approve IS the mode switch: checked = write straight to
+        // confirmed, unchecked = suggestions awaiting review.
+        document.getElementById('sdAutoApprove')?.addEventListener('change', e => {
+          setMode(e.target.checked ? MODE_AUTOSAVE : MODE_REVIEW);
+          // Turning it on adopts whatever is already pending on this frame,
+          // which is what "auto-approve" means to a user who just enabled it.
+          if (e.target.checked) app.acceptAllSuggestions();
+        });
+
+        // Primary action — bulk-approve everything pending on this frame.
+        document.getElementById('sdApproveBtn')?.addEventListener('click', () => {
+          app.acceptAllSuggestions();
+        });
+
+        // Manual re-run. Detection is automatic on image load; this is for
+        // re-running after changing the model or the thresholds.
+        document.getElementById('sdRunNowBtn')?.addEventListener('click', () => {
+          _lastPath = null; _run();
+        });
+
+        document.getElementById('sdModelSelect')?.addEventListener('change', e => {
+          if (_rebuildingModels) return;   // ignore events fired during rebuild
+          _model = e.target.value;
+          _persist({ model: _model });
+          _describeModel(_model);          // validate + show its class list
+        });
+
+        // Re-scan models/ on demand, so a .pt added while the server is
+        // running can be picked up without a restart.
+        document.getElementById('sdModelRefresh')?.addEventListener('click', () => {
+          _loadModels();
+        });
+
+        document.getElementById('sdRunBtn')?.addEventListener('click', () => {
+          _lastPath = null; _run();
+        });
+
+        document.getElementById('sdModelUpload')?.addEventListener('change', async e => {
+          const file = e.target.files[0]; if (!file) return;
+          const fd = new FormData(); fd.append('model', file);
+          const statusEl = document.getElementById('sdModelStatus') || { };
+          statusEl.textContent = 'Uploading…';
+          try {
+            const r = await fetch('/api/ai/upload_model',
+              { method: 'POST', headers: _authFD(), body: fd });
+            const d = await r.json();
+            statusEl.textContent = d.success ? `Uploaded: ${d.name}` : (d.error || 'Failed');
+            if (d.success) _loadModels();
+          } catch (err) { statusEl.textContent = 'Upload error'; }
+          e.target.value = '';
+        });
+
+        // Key listener to delete/dismiss suggestion box on Delete/Backspace
+        window.addEventListener('keydown', e => {
+          if (!_active || _mode !== 'manual') return;
+          if (e.key === 'Delete' || e.key === 'Backspace') {
+            if (document.activeElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
+            if (_hoverIdx >= 0 && !_saved[_hoverIdx]) {
+              e.preventDefault();
+              app._pushHistory();
+              _saved[_hoverIdx] = true;
+              _adj[_hoverIdx] = null;
+              app._render();
+              app._updateAnnoList();
+              app._updateClassCounts();
+              app._statusObjects();
+              app._triggerSave();
+              _draw();
+              const remaining = _predictions.filter((p, i) => !_saved[i] && p.conf >= _conf).length;
+              _setStatus(remaining > 0
+                ? `${remaining} detection${remaining > 1 ? 's' : ''} remaining — click to save`
+                : 'All detections saved ✓');
+            }
+          }
+        });
+
+        _hookNavigation();
+      }
+
+      return { init, open, close, setMode };
+    })();
+
+    document.addEventListener('DOMContentLoaded', () => SmartDetect.init());
+
+    // Release annotation lock on page unload (tab close / navigate away)
+    window.addEventListener('beforeunload', () => {
+      if (typeof app !== 'undefined') app._releaseLock();
+    });
+
+  </script>
+
+  <script>
+    // Populate navbar account button + wire dropdown toggle
+    (async function () {
+      const t = localStorage.getItem('am_token') || sessionStorage.getItem('am_token') || '';
+      if (!t) return;
+      try {
+        const res = await fetch('/api/auth/me', { headers: { 'Authorization': 'Bearer ' + t } });
+        if (!res.ok) return;
+        const user = await res.json();
+        const a = document.getElementById('user-avatar');
+        const m = document.getElementById('user-menu');
+        const da = document.getElementById('dd-avatar');
+        const dn = document.getElementById('dd-name');
+        const de = document.getElementById('dd-email');
+        if (a) a.textContent = user.username[0].toUpperCase();
+        if (da) da.textContent = user.username[0].toUpperCase();
+        if (dn) dn.textContent = user.username;
+        if (de) de.textContent = user.email;
+        if (m) m.style.display = 'flex';
+        if (typeof State !== 'undefined') State.set('user', user);
+
+        // Dropdown toggle
+        if (m) {
+          m.addEventListener('click', function (e) {
+            if (!e.target.closest('.account-dropdown')) {
+              m.classList.toggle('open');
+            }
+          });
+          document.addEventListener('click', function (e) {
+            if (!m.contains(e.target)) m.classList.remove('open');
+          });
+        }
+      } catch (e) { }
+    })();
+
+    // Sidebar expand/collapse logic
+    document.addEventListener('DOMContentLoaded', () => {
+      const toggleBtn = document.getElementById('rnToggleBtn');
+      if (toggleBtn) {
+        toggleBtn.addEventListener('click', () => {
+          document.body.classList.toggle('nav-expanded');
+          const isExpanded = document.body.classList.contains('nav-expanded');
+          toggleBtn.title = isExpanded ? 'Collapse Sidebar' : 'Expand Sidebar';
+          localStorage.setItem('nav-expanded', isExpanded ? 'true' : 'false');
+        });
+        // Restore state on load
+        if (localStorage.getItem('nav-expanded') === 'true') {
+          document.body.classList.add('nav-expanded');
+          toggleBtn.title = 'Collapse Sidebar';
+        }
+      }
+    });
+  </script>
+</body>
+
+</html>

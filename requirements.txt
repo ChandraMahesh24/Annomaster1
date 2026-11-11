@@ -1,0 +1,23 @@
+# Python packages (pip install -r requirements.txt)
+flask>=3.0.0
+flask-sqlalchemy>=3.1.0
+flask-migrate>=4.0.5
+flask-limiter>=3.5.0
+limits>=3.6.0
+Pillow>=10.0.0
+pyyaml>=6.0
+python-dotenv>=1.0.0
+werkzeug>=3.0.0
+PyJWT>=2.8.0
+
+# AI Smart Detect — YOLO inference
+ultralytics>=8.0.0
+
+# Optional: for video frame extraction fallback (ffmpeg is preferred)
+# opencv-python>=4.8.0
+
+# System dependency — install separately:
+# Windows: https://ffmpeg.org/download.html  → add to PATH
+# Linux:   sudo apt install ffmpeg
+# Mac:     brew install ffmpeg
+# Supports: mp4, avi, mov, mkv, dav (CCTV/Dahua), h264, h265, ts, and all ffmpeg formats

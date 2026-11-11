@@ -1,0 +1,37 @@
+/* ═══════════════════════════════════════════════════════════════
+   workspace.css — workspace-specific overrides
+   Requires: tokens.css → base.css → layout.css → this file.
+═══════════════════════════════════════════════════════════════ */
+
+.workspace-item .workspace-delete-btn {
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+.workspace-item:hover .workspace-delete-btn,
+/* Hover alone left this control unreachable by keyboard. */
+.workspace-item:focus-within .workspace-delete-btn { opacity: 1; }
+/* …and unreachable entirely on touch devices, where there is no
+   hover state at all. */
+@media (pointer: coarse) {
+  .workspace-item .workspace-delete-btn { opacity: 1; }
+}
+
+.workspace-role.badge { vertical-align: middle; margin-left: var(--sp-2); }
+
+/* `.role-select` previously hardcoded #16161f / #f0f0f8 — a dark
+   card colour and near-white text — so on the light theme it
+   rendered as a dark box with white text sitting inside an
+   otherwise white members table. Tokenised. */
+.role-select {
+  background: var(--card);
+  border: 1px solid var(--border2);
+  color: var(--tx);
+  border-radius: var(--r-xs);
+  padding: var(--sp-1) var(--sp-2);
+  font-size: var(--fs-xs);
+  cursor: pointer;
+}
+.role-select:focus { border-color: var(--accent); outline: none; }
+
+#invite-success { color: var(--success); font-size: var(--fs-sm); margin-top: var(--sp-1); }
+#invite-error   { color: var(--danger);  font-size: var(--fs-sm); margin-top: var(--sp-1); }

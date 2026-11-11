@@ -1,0 +1,22 @@
+[
+  {
+    "upload_id": 1,
+    "job_name": "job_2026-07-25_10-15-15_766",
+    "source": "video",
+    "batch_db_id": 1,
+    "cls_names": [],
+    "in_dataset": false,
+    "uploaded_at": "2026-07-25T04:45:15.782821+00:00",
+    "uploaded_by": 1
+  },
+  {
+    "upload_id": 2,
+    "job_name": "job_2026-07-25_10-18-11_521",
+    "source": "folder",
+    "batch_db_id": 1,
+    "cls_names": [],
+    "in_dataset": false,
+    "uploaded_at": "2026-07-25T04:48:11.553562+00:00",
+    "uploaded_by": 1
+  }
+]

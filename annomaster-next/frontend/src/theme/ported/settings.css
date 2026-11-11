@@ -1,0 +1,1101 @@
+/* ── Account Settings Page Design System ── */
+
+.settings-page {
+  padding-top: var(--nav-h);
+  background: var(--bg);
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+.settings-wrapper {
+  max-width: 1100px;
+  margin: 3rem auto;
+  padding: 0 1.5rem;
+  display: grid;
+  grid-template-columns: 270px 1fr;
+  gap: 2.5rem;
+  align-items: start;
+}
+
+/* Sidebar navigation card */
+.settings-sidebar {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 1.5rem 1rem;
+  position: sticky;
+  top: calc(var(--nav-h) + 2rem);
+  box-shadow: var(--sh-md);
+}
+
+.settings-sidebar-header {
+  padding: 0.5rem 0.75rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1.25rem;
+}
+
+.settings-sidebar-header h2 {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--tx);
+  letter-spacing: -0.02em;
+}
+
+.settings-sidebar-header p {
+  font-size: 0.74rem;
+  color: var(--tx2);
+  margin-top: 0.25rem;
+}
+
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.settings-nav-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: none;
+  border: 1px solid transparent;
+  color: var(--tx2);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: left;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.settings-nav-btn i {
+  font-size: 1rem;
+  width: 18px;
+  text-align: center;
+  color: var(--tx3);
+  transition: color 0.15s;
+}
+
+.settings-nav-btn:hover:not(.active) {
+  background: var(--panel);
+  color: var(--tx);
+}
+
+.settings-nav-btn:hover i {
+  color: var(--tx2);
+}
+
+.settings-nav-btn.active {
+  background: var(--accent-bg);
+  color: var(--accent);
+  border-color: var(--accent-glow);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+.settings-nav-btn.active i {
+  color: var(--accent);
+}
+
+/* Danger / Reset Tab spec */
+.settings-nav-btn.danger-nav {
+  color: var(--danger);
+  margin-top: 1rem;
+  border-top: 1px solid var(--border);
+  padding-top: 1.25rem;
+  border-radius: 0;
+}
+
+.settings-nav-btn.danger-nav i {
+  color: var(--danger);
+}
+
+.settings-nav-btn.danger-nav:hover {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+/* Content Main Section */
+.settings-main {
+  min-width: 0; /* prevents flex breakouts */
+}
+
+.settings-panel {
+  display: none;
+  animation: slideFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.settings-panel.active {
+  display: block;
+}
+
+@keyframes slideFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.panel-header {
+  margin-bottom: 2rem;
+}
+
+.panel-header h2 {
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--tx);
+}
+
+.panel-header p {
+  font-size: 0.88rem;
+  color: var(--tx2);
+  margin-top: 0.4rem;
+  line-height: 1.4;
+}
+
+/* Settings Card Component */
+.settings-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 1.75rem;
+  margin-bottom: 1.5rem;
+  box-shadow: var(--sh-sm);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.settings-card:hover {
+  border-color: var(--border2);
+}
+
+.card-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--tx);
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.card-title i {
+  color: var(--accent);
+}
+
+.card-desc {
+  font-size: 0.78rem;
+  color: var(--tx2);
+  margin-bottom: 1.25rem;
+  line-height: 1.45;
+}
+
+/* Forms structure within settings */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.25rem;
+}
+
+.form-group.full-width {
+  grid-column: span 2;
+}
+
+.form-textarea {
+  width: 100%;
+  padding: 0.7rem 0.9rem;
+  background: var(--panel);
+  border: 1px solid var(--border2);
+  border-radius: var(--r-sm);
+  color: var(--tx);
+  font-size: 0.875rem;
+  outline: none;
+  transition: border-color 0.15s;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.form-textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+
+.form-feedback-bar {
+  margin: 0.5rem 0 1rem;
+  min-height: 1.2rem;
+}
+
+/* Profile Picture custom selectors */
+.profile-avatar-section {
+  display: flex;
+  align-items: center;
+  gap: 1.75rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 1.5rem;
+  margin-bottom: 1.75rem;
+}
+
+.avatar-large {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: var(--accent);
+  /* was #000 — unreadable on the light theme's dark-green accent */
+  color: var(--accent-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 2.2rem;
+  box-shadow: 0 0 20px var(--accent-glow);
+  user-select: none;
+  transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.avatar-upload-info h4 {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--tx);
+}
+
+.avatar-upload-info p {
+  font-size: 0.76rem;
+  color: var(--tx2);
+  margin-top: 0.2rem;
+}
+
+.avatar-select-grid {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.avatar-preset {
+  background: var(--panel);
+  border: 1px solid var(--border2);
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.avatar-preset:hover {
+  background: var(--card2);
+  border-color: var(--accent);
+  transform: scale(1.15) rotate(5deg);
+}
+
+.avatar-preset.reset-btn {
+  font-size: 0.8rem;
+  color: var(--tx2);
+}
+
+.avatar-preset.reset-btn:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+/* Theme Mode selection grids */
+.section-subtitle {
+  font-size: 0.9rem;
+  font-weight: 700;
+  margin: 1.5rem 0 0.5rem;
+  color: var(--tx);
+}
+
+.theme-mode-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.25rem;
+  margin-bottom: 2rem;
+}
+
+.theme-mode-card {
+  background: var(--card);
+  border: 2px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 1.25rem;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.theme-mode-card:hover {
+  border-color: var(--border3);
+  transform: translateY(-2px);
+}
+
+.theme-mode-card.active {
+  border-color: var(--accent);
+  box-shadow: 0 8px 32px var(--accent-glow);
+}
+
+.theme-preview {
+  height: 75px;
+  border-radius: var(--r-sm);
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+/* ── Theme preview swatches ────────────────────────────────────
+   INTENTIONALLY hardcoded. These are the little thumbnails in the
+   theme picker that show what Dark and Light look like, so they
+   must render their own palette regardless of the active theme.
+   Do not "fix" these to use tokens — that would make both
+   previews identical and the picker meaningless. */
+.dark-preview {
+  background: #0d0d16;
+}
+
+.dark-preview::before {
+  content: '';
+  position: absolute;
+  top: 10px; left: 10px;
+  width: 40px; height: 10px;
+  /* Hardcoded on purpose — part of the dark swatch (see note above). */
+  background: rgba(255,255,255,0.08);
+  border-radius: 3px;
+}
+
+.dark-preview::after {
+  content: '';
+  position: absolute;
+  top: 25px; left: 10px;
+  width: 60px; height: 25px;
+  background: #16161f;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.05);
+}
+
+.light-preview {
+  background: #f8f9fa;
+}
+
+.light-preview::before {
+  content: '';
+  position: absolute;
+  top: 10px; left: 10px;
+  width: 40px; height: 10px;
+  background: rgba(0,0,0,0.08);
+  border-radius: 3px;
+}
+
+.light-preview::after {
+  content: '';
+  position: absolute;
+  top: 25px; left: 10px;
+  width: 60px; height: 25px;
+  background: #ffffff;
+  border-radius: 4px;
+  border: 1px solid rgba(0,0,0,0.05);
+}
+
+.preview-accent {
+  position: absolute;
+  top: 10px; right: 10px;
+  width: 10px; height: 10px;
+  background: var(--accent);
+  border-radius: 50%;
+  box-shadow: 0 0 6px var(--accent-glow);
+}
+
+.theme-mode-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.theme-mode-info i {
+  font-size: 1.1rem;
+  color: var(--accent);
+  margin-bottom: 0.25rem;
+}
+
+.theme-mode-info h4 {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--tx);
+}
+
+.theme-mode-info p {
+  font-size: 0.74rem;
+  color: var(--tx2);
+  line-height: 1.35;
+}
+
+/* Custom Accent Color picker */
+.color-picker-container {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 1.5rem;
+}
+
+.accent-color-grid {
+  display: flex;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+
+.color-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.color-circle:hover {
+  transform: scale(1.15);
+}
+
+.color-circle.active {
+  /* was a hardcoded white ring + white glow — invisible against
+     the light theme's white surface, so the selected swatch had
+     no visible selection state at all in light mode. */
+  border-color: var(--tx);
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--tx);
+}
+
+.custom-color-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.82rem;
+  color: var(--tx2);
+}
+
+#custom-accent-picker {
+  -webkit-appearance: none;
+  border: none;
+  width: 44px;
+  height: 24px;
+  border-radius: 4px;
+  cursor: pointer;
+  background: none;
+}
+
+#custom-accent-picker::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+#custom-accent-picker::-webkit-color-swatch {
+  border: 1px solid var(--border3);
+  border-radius: 4px;
+}
+
+/* 2FA Toggle switch styling */
+.twofa-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.toggle-control-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.toggle-text h4 {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--tx);
+}
+
+.toggle-text p {
+  font-size: 0.74rem;
+  color: var(--tx2);
+  margin-top: 0.15rem;
+}
+
+/* The Switch container */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 46px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: var(--border3);
+  transition: .25s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 34px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: #fff;
+  transition: .25s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 50%;
+  box-shadow: var(--sh-sm);
+}
+
+input:checked + .slider {
+  background-color: var(--accent);
+}
+
+input:checked + .slider:before {
+  transform: translateX(22px);
+  /* The knob sits ON the accent-filled track once checked, so it
+     must use the accent's foreground token. Hardcoded #000 was
+     near-invisible against the light theme's dark-green accent. */
+  background-color: var(--accent-ink);
+}
+
+/* Authentic simulated QR code grid */
+.twofa-setup-box {
+  background: var(--panel);
+  border: 1px solid var(--border2);
+  border-radius: var(--r-sm);
+  padding: 1.5rem;
+  margin-top: 1rem;
+  animation: slideDown 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    max-height: 0;
+    overflow: hidden;
+  }
+  to {
+    opacity: 1;
+    max-height: 400px;
+  }
+}
+
+.twofa-setup-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1.75rem;
+  align-items: center;
+}
+
+.twofa-qr-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.mock-qr-code {
+  width: 110px;
+  height: 110px;
+  background: #ffffff;
+  padding: 8px;
+  border-radius: 6px;
+  box-sizing: border-box;
+  position: relative;
+}
+
+.qr-block {
+  position: absolute;
+  background: #000000;
+}
+
+.qr-block.top-left {
+  top: 8px; left: 8px;
+  width: 32px; height: 32px;
+  border: 6px solid #000;
+  box-sizing: border-box;
+  background: none;
+}
+
+.qr-block.top-right {
+  top: 8px; right: 8px;
+  width: 32px; height: 32px;
+  border: 6px solid #000;
+  box-sizing: border-box;
+  background: none;
+}
+
+.qr-block.bottom-left {
+  bottom: 8px; left: 8px;
+  width: 32px; height: 32px;
+  border: 6px solid #000;
+  box-sizing: border-box;
+  background: none;
+}
+
+.qr-center-pixels {
+  position: absolute;
+  top: 36px; left: 36px;
+  width: 38px; height: 38px;
+  background-image: 
+    linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%, #000), 
+    linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%, #000);
+  background-size: 8px 8px;
+  background-position: 0 0, 4px 4px;
+}
+
+.qr-label {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.7rem;
+  color: var(--tx2);
+  letter-spacing: 0.05em;
+  background: var(--glass);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+}
+
+.twofa-setup-instructions p {
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--tx2);
+  margin-bottom: 0.5rem;
+}
+
+.code-verify-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.code-input {
+  max-width: 120px;
+  text-align: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1rem;
+  letter-spacing: 0.1em;
+}
+
+/* Active sessions list styling */
+.sessions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.session-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.85rem 1.1rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.session-item.revoking {
+  opacity: 0;
+  transform: scale(0.9) translateX(30px);
+}
+
+.session-icon {
+  font-size: 1.3rem;
+  color: var(--tx3);
+  flex-shrink: 0;
+  width: 24px;
+  text-align: center;
+}
+
+.session-icon.active {
+  color: var(--accent);
+  filter: drop-shadow(0 0 6px var(--accent-glow));
+}
+
+.session-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.session-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.session-device {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--tx);
+}
+
+.session-current-badge {
+  font-size: 0.62rem;
+  background: var(--accent-bg);
+  color: var(--accent);
+  border: 1px solid var(--accent-glow);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.session-location {
+  font-size: 0.73rem;
+  color: var(--tx2);
+  margin-top: 0.15rem;
+}
+
+/* Checkbox control notification stylings */
+.notification-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-top: 0.5rem;
+}
+
+.notification-checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.notification-checkbox-row input {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer;
+  height: 0; width: 0;
+}
+
+.checkbox-box {
+  position: relative;
+  height: 20px;
+  width: 20px;
+  background-color: var(--panel);
+  border: 1px solid var(--border2);
+  border-radius: 5px;
+  flex-shrink: 0;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.notification-checkbox-row:hover input ~ .checkbox-box {
+  border-color: var(--border3);
+}
+
+.notification-checkbox-row input:checked ~ .checkbox-box {
+  background-color: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+
+.checkbox-box:after {
+  content: "";
+  position: absolute;
+  display: none;
+  left: 6px;
+  top: 2px;
+  width: 5px;
+  height: 10px;
+  border: solid #000;
+  border-width: 0 2.5px 2.5px 0;
+  transform: rotate(45deg);
+}
+
+.notification-checkbox-row input:checked ~ .checkbox-box:after {
+  display: block;
+}
+
+.notif-label-text h4 {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--tx);
+  line-height: 1.2;
+}
+
+.notif-label-text p {
+  font-size: 0.74rem;
+  color: var(--tx2);
+  margin-top: 0.25rem;
+  line-height: 1.35;
+}
+
+/* Layout preferences options */
+.layout-preference-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.25rem;
+  margin-top: 1.25rem;
+}
+
+.layout-card {
+  background: var(--panel);
+  border: 2px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 1.25rem;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.layout-card:hover {
+  border-color: var(--border3);
+  transform: translateY(-2px);
+}
+
+.layout-card.active {
+  border-color: var(--accent);
+  box-shadow: 0 8px 32px var(--accent-glow);
+}
+
+.layout-preview-lines {
+  height: 60px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.layout-preview-lines span {
+  display: block;
+  height: 4px;
+  background: var(--border3);
+  border-radius: 2px;
+}
+
+.expanded-lines {
+  gap: 10px;
+}
+
+.compact-lines {
+  gap: 4px;
+}
+
+.compact-lines span {
+  height: 3px;
+  background: var(--border3);
+}
+
+.layout-info h4 {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--tx);
+}
+
+.layout-info p {
+  font-size: 0.72rem;
+  color: var(--tx2);
+  margin-top: 0.2rem;
+}
+
+/* Danger Zone Custom Card styling */
+.danger-zone-box {
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-br);
+}
+
+.danger-zone-box:hover {
+  border-color: var(--danger);
+}
+
+.danger-zone-box .card-title i {
+  color: var(--danger);
+}
+
+/* Dynamic density mode classes applied on Body/Wrappers */
+body.compact-mode {
+  font-size: 12px;
+}
+
+body.compact-mode .settings-wrapper {
+  margin: 1.5rem auto;
+  gap: 1.5rem;
+}
+
+body.compact-mode .settings-sidebar {
+  padding: 1rem 0.5rem;
+}
+
+body.compact-mode .settings-nav-btn {
+  padding: 0.55rem 0.8rem;
+}
+
+body.compact-mode .settings-card {
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+body.compact-mode .form-grid {
+  gap: 0.85rem;
+}
+
+body.compact-mode .profile-avatar-section {
+  padding: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+body.compact-mode .avatar-large {
+  width: 60px;
+  height: 60px;
+  font-size: 1.8rem;
+}
+
+body.compact-mode .panel-header {
+  margin-bottom: 1.25rem;
+}
+
+/* Toasts stacks notifications */
+.toast-container {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  z-index: 2000;
+}
+
+.toast {
+  background: var(--card);
+  border: 1px solid var(--border2);
+  border-left: 4px solid var(--accent);
+  color: var(--tx);
+  padding: 0.85rem 1.25rem;
+  border-radius: var(--r-sm);
+  font-size: 0.82rem;
+  font-weight: 600;
+  box-shadow: var(--sh-lg);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  animation: slideToastIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.toast i {
+  color: var(--accent);
+}
+
+.toast.error-toast {
+  border-left-color: var(--danger);
+}
+
+.toast.error-toast i {
+  color: var(--danger);
+}
+
+@keyframes slideToastIn {
+  from {
+    opacity: 0;
+    transform: translateX(100px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.toast.fade-out {
+  animation: fadeToastOut 0.3s ease forwards;
+}
+
+@keyframes fadeToastOut {
+  to {
+    opacity: 0;
+    transform: translateY(20px) scale(0.9);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SETTINGS PAGE — Premium Light Mode Overrides
+   Synced with theme.css light mode palette
+═══════════════════════════════════════════════════════════════ */
+/* The `body.light-mode { --bg … --tx3 }` palette that used to sit
+   here has been removed. Its comment claimed it was "synced with
+   theme.css light mode tokens" — it was not. It had drifted:
+   --bg was #eef0f3 here vs #f7f9fb there, and --tx was #0d1117 vs
+   #191c1e. Because settings.css loaded AFTER theme.css, this
+   stale copy won, so the Settings page rendered a measurably
+   different light theme from the rest of the app.
+   Light values now come from tokens.css alone. */
+
+/* ═══════════════════════════════════════════════════════════════
+   LIGHT-THEME ADJUSTMENTS
+
+   This section used to be ~190 lines of `body.light-mode …
+   !important` overrides covering the sidebar, cards, inputs,
+   toggles, sessions, checkboxes, 2FA box, avatars and toasts.
+
+   All of it was redundant. Every base rule in this file already
+   reads from semantic tokens (var(--card), var(--surface),
+   var(--panel), var(--border3)…), so once tokens.css flips the
+   palette those rules produce correct light values on their own.
+   The overrides were re-asserting the same values at higher
+   specificity — 78 `!important` declarations that did nothing
+   except make the file impossible to reason about.
+
+   Two of them were actively WRONG, and are fixed rather than
+   restored:
+     • `.settings-nav-btn.active` and the input focus ring
+       hardcoded rgba(0,229,176,…) — the DARK theme's teal — inside
+       light-mode blocks. Light mode's accent is green (#006c49),
+       so those states rendered a teal tint that appeared nowhere
+       else on the page.
+     • `.color-circle.active` forced a #0d1117 border, fighting
+       the tokenised rule further up this file.
+
+   Only genuinely light-specific design decisions remain below.
+═══════════════════════════════════════════════════════════════ */
+
+/* The accent glow reads as a smudge on a bright background —
+   drop it in light mode only. */
+:root.light-mode .settings-nav-btn.active,
+body.light-mode .settings-nav-btn.active {
+  box-shadow: none;
+}
+
+/* The toggle track is drawn from --border3, which is a light
+   translucent white on dark. On a white surface that is invisible,
+   so the track needs an explicitly darker fill. */
+:root.light-mode .slider,
+body.light-mode .slider {
+  background-color: rgba(25, 28, 30, .22);
+}
+
+/* NOTE: the layout-preview decoration lines needed an override
+   here too, until their base rules were switched from a hardcoded
+   rgba(255,255,255,…) to var(--border3) — which already inverts
+   per theme. No override required. */

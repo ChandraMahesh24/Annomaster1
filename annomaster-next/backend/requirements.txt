@@ -1,0 +1,41 @@
+# AnnoMaster-next backend — FastAPI + Postgres + Celery
+# Install:  pip install -r requirements.txt
+#
+# Pinned to what the code actually imports (verified against app/). Celery,
+# psycopg and ultralytics are the heavyweight installs; the rest are light.
+
+# ── Web framework + ASGI server ──────────────────────────────────────────────
+fastapi>=0.115,<0.116
+uvicorn[standard]>=0.30           # ASGI server (run: uvicorn app.main:app)
+python-multipart>=0.0.9           # required by FastAPI for UploadFile / Form
+
+# ── ORM + migrations (Postgres is the deploy target) ─────────────────────────
+SQLAlchemy>=2.0,<2.1
+alembic>=1.13
+psycopg[binary]>=3.1              # postgresql+psycopg:// driver
+# (SQLite, used for local verification, needs no driver — it's in the stdlib.)
+
+# ── Validation / settings ────────────────────────────────────────────────────
+pydantic>=2.7,<3
+pydantic-settings>=2.1
+# Note: email is validated with a regex in schemas/, so pydantic[email] /
+# email_validator is intentionally NOT required.
+
+# ── Auth ─────────────────────────────────────────────────────────────────────
+python-jose[cryptography]>=3.3    # JWT encode/decode
+passlib[bcrypt]>=1.7              # password hashing (new hashes use pbkdf2_sha256;
+                                  # bcrypt kept only to verify legacy hashes)
+
+# ── Background jobs (Celery + Redis broker/backend) ──────────────────────────
+celery>=5.3
+redis>=5.0
+# Rate limiting is a small built-in (app/core/ratelimit.py, Redis-or-memory),
+# so slowapi is NOT a dependency.
+
+# ── Media / AI ───────────────────────────────────────────────────────────────
+Pillow>=10.0                      # image dimensions for COCO/VOC export
+ultralytics>=8.0                  # YOLO inference (Smart Detect / Celery task)
+# data.yaml is emitted as plain strings, so PyYAML is not required.
+
+# ── External runtime dependency (not pip-installable) ────────────────────────
+# ffmpeg must be on PATH for video frame extraction (same as the original app).

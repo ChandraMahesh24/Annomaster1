@@ -1,0 +1,184 @@
+{# `hide_navbar` lets a page supply its OWN chrome (the dashboard's rail + top
+   bar) while still pulling in the AccountSettings script below — logout, the
+   off-canvas drawer wiring and the account-dropdown toggle live there and are
+   needed regardless of whether this <nav> renders. Set it with
+   `{% set hide_navbar = true %}` immediately before the include. #}
+{% if not hide_navbar %}
+<nav class="navbar">
+
+  <!-- Mobile drawer toggle. Rendered on every page but revealed by
+       JS only where a .dashboard-sidebar actually exists, so pages
+       without one (settings, members, upload) don't show a control
+       that does nothing. -->
+  <button class="sidebar-toggle" id="sidebar-toggle" type="button"
+          aria-label="Toggle navigation" aria-expanded="false"
+          aria-controls="dashboard-sidebar" hidden>
+    <i class="fas fa-bars" aria-hidden="true"></i>
+  </button>
+
+  <!-- Brand — single "AnnoMaster", click → dashboard with auth check -->
+  <div class="navbar-brand">
+    <a href="/" class="brand-link" id="nav-brand-link">
+      <span class="brand-icon">⬡</span>
+      <span class="brand-name">Anno<span class="brand-accent">Master</span></span>
+    </a>
+  </div>
+
+  <!-- Center: workspace breadcrumb (filled by JS when inside annotate page) -->
+  <div class="navbar-center" id="navbar-workspace-info"></div>
+
+  <!-- Right: account button -->
+  <div class="navbar-actions">
+    <div class="account-btn" id="user-menu" style="display:none">
+      <div class="user-avatar" id="user-avatar">U</div>
+      <span class="user-name" id="user-name"></span>
+      <i class="fas fa-chevron-down nav-chevron"></i>
+
+      <div class="account-dropdown" id="account-dropdown">
+        <div class="account-dropdown-header">
+          <div class="account-dropdown-avatar" id="dd-avatar">U</div>
+          <div>
+            <div class="account-dropdown-name"  id="dd-name">—</div>
+            <div class="account-dropdown-email" id="dd-email">—</div>
+          </div>
+        </div>
+        <div class="account-dropdown-divider"></div>
+        <a class="account-dropdown-item" href="/settings">
+          <i class="fas fa-user-cog"></i> Account Settings
+        </a>
+        <a class="account-dropdown-item" href="/">
+          <i class="fas fa-th-large"></i> Dashboard
+        </a>
+        <div class="account-dropdown-divider"></div>
+        <button class="account-dropdown-item danger" onclick="AccountSettings.logout()">
+          <i class="fas fa-sign-out-alt"></i> Sign Out
+        </button>
+      </div>
+    </div>
+  </div>
+</nav>
+{% endif %}
+
+<!-- Account settings JS — inline so it's available on every page -->
+<script>
+(function() {
+  // Load dynamic profile avatar from localStorage
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith('am_avatar_')) {
+      const symbol = localStorage.getItem(key);
+      document.addEventListener('DOMContentLoaded', () => {
+        const navAvatar = document.getElementById('user-avatar');
+        const ddAvatar = document.getElementById('dd-avatar');
+        if (navAvatar) navAvatar.textContent = symbol;
+        if (ddAvatar) ddAvatar.textContent = symbol;
+      });
+    }
+  }
+})();
+
+const AccountSettings = (() => {
+  function _tok() {
+    return localStorage.getItem('am_token') || sessionStorage.getItem('am_token') || '';
+  }
+  async function _api(method, path, body) {
+    const h = { 'Content-Type': 'application/json' };
+    const t = _tok();
+    if (t) h['Authorization'] = 'Bearer ' + t;
+    const res = await fetch(path, {
+      method, headers: h,
+      body: body ? JSON.stringify(body) : undefined
+    });
+    if (res.status === 401) {
+      localStorage.removeItem('am_token');
+      sessionStorage.removeItem('am_token');
+      window.location.href = '/login';
+      return null;
+    }
+    return res;
+  }
+
+  async function logout() {
+    await _api('POST', '/api/auth/logout');
+    localStorage.removeItem('am_token');
+    sessionStorage.removeItem('am_token');
+    window.location.href = '/login';
+  }
+
+  // ── Mobile sidebar drawer ────────────────────────────────────
+  // The dashboard sidebar is a fixed 234px column on desktop. Below
+  // 1023px layout.css slides it off-canvas; this wires the control
+  // that brings it back, plus the two dismissal paths users expect
+  // (tap the backdrop, press Escape).
+  document.addEventListener('DOMContentLoaded', () => {
+    const toggle   = document.getElementById('sidebar-toggle');
+    const sidebar  = document.getElementById('dashboard-sidebar');
+    const backdrop = document.getElementById('sidebar-backdrop');
+    if (!toggle || !sidebar) return;
+
+    toggle.hidden = false;
+    if (backdrop) backdrop.hidden = false;
+
+    const setOpen = (open) => {
+      sidebar.classList.toggle('open', open);
+      if (backdrop) backdrop.classList.toggle('open', open);
+      toggle.setAttribute('aria-expanded', String(open));
+    };
+
+    toggle.addEventListener('click', () => {
+      setOpen(!sidebar.classList.contains('open'));
+    });
+    if (backdrop) backdrop.addEventListener('click', () => setOpen(false));
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && sidebar.classList.contains('open')) {
+        setOpen(false);
+        toggle.focus();
+      }
+    });
+    // Selecting a workspace should close the drawer on mobile,
+    // otherwise it stays open covering the content you just chose.
+    sidebar.addEventListener('click', (e) => {
+      if (e.target.closest('.workspace-item') && window.innerWidth <= 1023) {
+        setOpen(false);
+      }
+    });
+    // Returning to desktop width must clear the mobile state, or the
+    // sidebar keeps a stale `.open` class and the backdrop lingers.
+    window.addEventListener('resize', () => {
+      if (window.innerWidth > 1023) setOpen(false);
+    });
+  });
+
+  // Wire up brand link auth check
+  document.addEventListener('DOMContentLoaded', () => {
+    const brandLink = document.getElementById('nav-brand-link');
+    if (brandLink) {
+      brandLink.addEventListener('click', e => {
+        const tok = localStorage.getItem('am_token') || sessionStorage.getItem('am_token');
+        if (!tok) {
+          e.preventDefault();
+          window.location.href = '/login';
+        }
+      });
+    }
+    // Close dropdown on outside click
+    document.addEventListener('click', e => {
+      const menu = document.getElementById('user-menu');
+      if (menu && !menu.contains(e.target)) {
+        menu.classList.remove('open');
+      }
+    });
+    // Toggle dropdown on click
+    const menu = document.getElementById('user-menu');
+    if (menu) {
+      menu.addEventListener('click', e => {
+        if (!e.target.closest('.account-dropdown')) {
+          menu.classList.toggle('open');
+        }
+      });
+    }
+  });
+
+  return { logout };
+})();
+</script>

@@ -1,0 +1,37 @@
+# Dev infrastructure for AnnoMaster-next.
+#
+#   docker compose up -d        # start Postgres + Redis
+#   (then, in backend/)  alembic upgrade head  &&  uvicorn app.main:app --reload
+#   (worker)             celery -A app.core.celery_app.celery_app worker -l info
+#
+# This is the path to a GREEN /health. On a box without Docker, point
+# DATABASE_URL / REDIS_URL at locally-installed or managed services instead.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: annomaster
+      POSTGRES_PASSWORD: annomaster
+      POSTGRES_DB: annomaster
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U annomaster"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  pgdata:

@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign In | AnnoMaster AI</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/tokens.css">
+  <link rel="stylesheet" href="/static/css/base.css">
+  <link rel="stylesheet" href="/static/css/modes.css">
+  <!-- Applies the saved theme before paint, so the page opens in the
+       user's theme with no flash. The Light/Dark chip below writes the
+       same am_theme_mode key the Settings page does. -->
+  <script src="/static/js/theme.js"></script>
+  <link rel="stylesheet" href="/static/css/auth-3d.css">
+</head>
+<body>
+
+<div class="l-stage">
+  <div class="l-layer l-glow-1" aria-hidden="true"></div>
+  <div class="l-layer l-glow-2" aria-hidden="true"></div>
+  <canvas id="scene" aria-hidden="true"></canvas>
+  <div class="l-layer" id="vignette" aria-hidden="true"></div>
+
+  <div class="l-shell">
+
+    <header class="l-header">
+      <a href="/" class="l-brand">
+        <div class="l-logo"><i></i></div>
+        <div class="l-brand-text">
+          <div class="l-brand-name">AnnoMaster</div>
+          <div class="l-brand-sub">AI Platform</div>
+        </div>
+      </a>
+      <div class="l-tools">
+        <div class="l-status">
+          <div class="l-dot l-pulse"></div>
+          <span>All systems operational</span>
+        </div>
+        <button type="button" class="l-chip-btn" id="mode-btn" title="Switch 3D object">Data field</button>
+        <button type="button" class="l-chip-btn" id="theme-btn" title="Toggle theme">
+          <span class="l-theme-dot"></span>
+          <span id="theme-label">Dark</span>
+        </button>
+      </div>
+    </header>
+
+    <div class="l-grid">
+
+      <section class="l-copy">
+        <div class="l-eyebrow l-rise">Neural labeling · v4</div>
+        <h1 class="l-h1 l-rise" style="animation-delay:.08s;">A living surface for<br><span>machine perception.</span></h1>
+        <p class="l-lede l-rise" style="animation-delay:.16s;">Sign in to your workspace. Move your cursor across the field — every point reacts, the way your dataset does.</p>
+        <div class="l-stats l-rise" style="animation-delay:.24s;">
+          <div class="l-stat"><div class="l-stat-lbl">Frames labeled</div><div class="l-stat-val">4.28M</div></div>
+          <div class="l-stat"><div class="l-stat-lbl">Model agreement</div><div class="l-stat-val">99.98%</div></div>
+          <div class="l-stat"><div class="l-stat-lbl">Throughput</div><div class="l-stat-val">12.4k / min</div></div>
+        </div>
+        <div class="l-hint l-rise" style="animation-delay:.3s;">
+          <div class="l-dot l-pulse"></div>
+          <span id="point-label">initializing field…</span>
+        </div>
+      </section>
+
+      <section class="l-form-col">
+        <div class="l-card-wrap l-rise" style="animation-delay:.12s;">
+          <div class="l-halo" aria-hidden="true"></div>
+
+          <div class="l-card" data-nodrag>
+            <h2>Welcome back</h2>
+            <p class="l-card-sub">Access your annotation workspace</p>
+
+            <div class="l-sso">
+              <button type="button" onclick="socialLogin('google')">Google</button>
+              <button type="button" onclick="socialLogin('github')">GitHub</button>
+              <button type="button" onclick="socialLogin('sso')">SSO</button>
+            </div>
+
+            <div class="l-or"><i></i><span>or email</span><i></i></div>
+
+            <form id="login-form" class="l-fields" novalidate>
+              <div>
+                <label class="l-label" for="email">Email address</label>
+                <input class="l-input" type="email" id="email" placeholder="you@company.com" autocomplete="email" autofocus>
+              </div>
+              <div>
+                <div class="l-label-row">
+                  <label class="l-label" for="password">Password</label>
+                  <a href="/forgot-password" id="forgot-link">Forgot?</a>
+                </div>
+                <div class="l-input-wrap">
+                  <input class="l-input has-toggle" type="password" id="password" placeholder="••••••••••••" autocomplete="current-password">
+                  <button type="button" class="l-pw-toggle" id="pw-toggle" aria-label="Show password" onclick="togglePw()">Show</button>
+                </div>
+              </div>
+              <label class="l-check">
+                <input type="checkbox" id="remember" checked>
+                <span>Keep me signed in for 30 days</span>
+              </label>
+              <div class="l-error" id="err" role="alert"></div>
+              <button type="submit" class="l-submit" id="submit-btn">
+                <span class="l-spinner"></span>
+                <span id="btn-text">Sign in to workspace →</span>
+              </button>
+            </form>
+
+            <p class="l-switch">New to AnnoMaster? <a href="/register">Create a workspace →</a></p>
+          </div>
+
+          <div class="l-compliance">
+            <div>SOC 2 Type II</div>
+            <div>GDPR</div>
+            <div>ISO 27001</div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <footer class="l-footer">
+      <span>© 2026 AnnoMaster AI</span>
+      <nav>
+        <a href="#">Privacy</a>
+        <a href="#">Terms</a>
+        <a href="#">Status</a>
+      </nav>
+    </footer>
+  </div>
+</div>
+
+<script>
+  /* ── Password toggle ── */
+  function togglePw() {
+    const el = document.getElementById('password');
+    const btn = document.getElementById('pw-toggle');
+    const show = el.type === 'password';
+    el.type = show ? 'text' : 'password';
+    btn.textContent = show ? 'Hide' : 'Show';
+    btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+  }
+
+  /* ── Placeholder for a flow that doesn't exist yet ── */
+  function socialLogin(p) {
+    document.getElementById('err').textContent = p.charAt(0).toUpperCase() + p.slice(1) + ' login coming soon! Use email for now.';
+  }
+
+  /* ── Main login ── */
+  async function doLogin() {
+    const email    = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+    const err      = document.getElementById('err');
+    err.textContent = '';
+    if (!email || !password) { err.textContent = 'Please fill in all fields.'; return; }
+    const btn  = document.getElementById('submit-btn');
+    const text = document.getElementById('btn-text');
+    btn.disabled = true;
+    btn.classList.add('is-loading');
+    text.textContent = 'Signing in…';
+    try {
+      const res  = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
+      // A crash returns an HTML error page, not JSON — don't let that read as a network error.
+      let data = {};
+      try { data = await res.json(); } catch (_) {}
+      if (!res.ok) { err.textContent = data.error || (res.status >= 500 ? 'Server error (' + res.status + '). Please try again or contact your administrator.' : 'Login failed.'); return; }
+      if (data.token) { localStorage.setItem('am_token', data.token); sessionStorage.setItem('am_token', data.token); }
+      window.location.href = '/';
+    } catch (e) { err.textContent = 'Network error. Please try again.'; }
+    finally { btn.disabled = false; btn.classList.remove('is-loading'); text.textContent = 'Sign in to workspace →'; }
+  }
+  document.getElementById('login-form').addEventListener('submit', e => { e.preventDefault(); doLogin(); });
+
+</script>
+
+<script type="module" src="/static/js/features/auth-scene.js"></script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+{
+  "classes": [
+    {
+      "id": 0,
+      "name": "mahesh",
+      "color": "#ff3b3b"
+    },
+    {
+      "id": 1,
+      "name": "person",
+      "color": "#ff8e1e"
+    }
+  ],
+  "settings": {
+    "ai": {
+      "model": "blackshirt_26_05_2026_v2.pt",
+      "conf": 0.25,
+      "mode": "review",
+      "iou": 0.5
+    }
+  }
+}
