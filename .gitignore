@@ -74,7 +74,7 @@ build/
 .vscode/
 .idea/
 *.swp
-.claude/settings.local.json
+.claude/
 .DS_Store
 Thumbs.db
 ehthumbs.db
