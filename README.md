@@ -7,8 +7,8 @@
 <br/>
 
 <p>
-  <b>Label images faster with AI — without ever letting a model write your ground truth.</b><br/>
-  <sub>Run your own YOLO models, ask SAM3 for objects by name or by example, and export clean YOLO datasets.</sub>
+  <b>A complete image-annotation studio for YOLO: label by hand, label with AI, export clean datasets.</b><br/>
+  <sub>Draw boxes and polygons manually, let your own YOLO model or SAM3 suggest labels, review them, split the data, and download a training-ready version.</sub>
 </p>
 
 <p>
@@ -27,87 +27,309 @@
 </p>
 
 <h3>
-  <a href="#-features">Features</a>
+  <a href="#-features-at-a-glance">Features</a>
+  <span> · </span>
+  <a href="#%EF%B8%8F-manual-annotation">Manual Annotation</a>
+  <span> · </span>
+  <a href="#-ai-assisted-labelling">AI Labelling</a>
   <span> · </span>
   <a href="#-quick-start">Quick Start</a>
   <span> · </span>
-  <a href="#-ai-models">AI Models</a>
-  <span> · </span>
-  <a href="#-how-it-works">How It Works</a>
-  <span> · </span>
   <a href="#%EF%B8%8F-keyboard-shortcuts">Shortcuts</a>
   <span> · </span>
-  <a href="#-architecture">Architecture</a>
+  <a href="#%EF%B8%8F-architecture">Architecture</a>
 </h3>
 
 </div>
 
 <br/>
 
-## 💡 Why AnnoMaster?
+## 🔄 The Workflow
 
-Most AI-labelling tools quietly turn model output into labels — and a dataset full of unreviewed predictions trains a model that repeats its own mistakes. **AnnoMaster treats every prediction as a _suggestion_.** It's drawn dashed, it's counted as pending, and it **never reaches your exported dataset until a human accepts it**.
+```mermaid
+flowchart LR
+    A["📤 Upload<br/><sub>images · video · ZIP</sub>"] --> B["🖊️ Annotate<br/><sub>by hand or with AI</sub>"]
+    B --> C["✅ Review<br/><sub>accept / reject AI</sub>"]
+    C --> D["🗂️ Dataset<br/><sub>train · valid · test</sub>"]
+    D --> E["📦 Version<br/><sub>snapshot + data.yaml</sub>"]
+    E --> F["⬇️ Download ZIP<br/><sub>ready for yolo train</sub>"]
 
-You get the speed of AI with a dataset you can still trust.
+    style A fill:#e0f2fe,stroke:#0ea5e9,color:#0c4a6e
+    style B fill:#ede9fe,stroke:#8b5cf6,color:#4c1d95
+    style C fill:#d1fae5,stroke:#10b981,color:#064e3b
+    style D fill:#fef3c7,stroke:#f59e0b,color:#78350f
+    style E fill:#fce7f3,stroke:#ec4899,color:#831843
+    style F fill:#dcfce7,stroke:#22c55e,color:#14532d
+```
 
-<br/>
+## ✨ Features at a Glance
 
-## ✨ Features
+<table>
+<tr>
+<td width="33%" valign="top">
+
+#### 🖊️ Manual annotation
+Bounding boxes & polygons, select/move/resize, nested boxes, repeat-class mode, copy/paste, undo/redo, auto-save, null images
+
+</td>
+<td width="33%" valign="top">
+
+#### 🤖 AI-assisted labelling
+**Smart Detect** with your YOLO model, **SAM3 text prompts**, **box prompts** that learn from your examples
+
+</td>
+<td width="33%" valign="top">
+
+#### ✅ Safe by design
+AI output is a *suggestion* until you accept it. Exports contain **only human-confirmed** labels
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+#### 📤 Upload & import
+Images, folders, **video → frames** (FPS, resolution, JPG/PNG), and **YOLO dataset ZIPs** with split detection
+
+</td>
+<td valign="top">
+
+#### 🗂️ Datasets & versions
+Train / valid / test split sliders, tags, filters, immutable **version snapshots** with `data.yaml`, ZIP download
+
+</td>
+<td valign="top">
+
+#### 👥 Team workspaces
+Owner / editor / viewer roles, invites, batch **assignment**, per-image **locks**, audit log
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+#### ⚡ GPU or CPU
+CUDA + fp16 when available, automatic CPU fallback — even on out-of-memory
+
+</td>
+<td valign="top">
+
+#### 🎨 Personalisation
+Dark / light / custom accent themes, compact mode, avatars, box style, grid size
+
+</td>
+<td valign="top">
+
+#### 🔐 Accounts
+JWT login, password reset by email, profile, change password, delete account
+
+</td>
+</tr>
+</table>
+
+<div align="right"><a href="#top">⬆ back to top</a></div>
+
+## 🖊️ Manual Annotation
+
+The annotation canvas is a full labelling studio — fast enough to label thousands of frames by hand.
 
 <table>
 <tr>
 <td width="50%" valign="top">
 
-### 🤖 Smart Detect
-Run **your own YOLO `.pt` model** on every image as it opens. Drop a new model into `models/` and it appears on refresh — no restart. Choose **Review** (suggestions) or **Auto-approve** (audit-logged).
+### 🛠️ Drawing tools
+- **Bounding box** <kbd>B</kbd> — drag anywhere to draw, **even inside another box** (nested objects work)
+- **Polygon** <kbd>P</kbd> — click points, <kbd>Enter</kbd> to close the shape
+- **Select / Edit** <kbd>V</kbd> — move, resize with handles, change class, delete
+- **Pan** — hold <kbd>Space</kbd> and drag
+- **Lock aspect ratio** while resizing
 
 </td>
 <td width="50%" valign="top">
 
-### 💬 Text prompting
-Type `excavator, person, forklift` and **SAM3** finds them. A **live confidence slider** filters the results instantly, so there's no waiting for a re-run.
-
-</td>
-</tr>
-<tr>
-<td width="50%" valign="top">
-
-### 📦 Box prompting — teach by example
-Draw a few **“This is”** / **“Not this”** example boxes. Every image you open is then labelled from them, even for **look-alike classes** that no word can describe (e.g. *staff* vs *customer*).
-
-</td>
-<td width="50%" valign="top">
-
-### ✅ Human-in-the-loop by design
-Accept with <kbd>Enter</kbd>, reject with <kbd>Delete</kbd>. Editing a suggestion counts as accepting it. **Exports contain only human-confirmed labels**, always.
+### 🏷️ Classes
+- **Class popup** after every box — search, arrow keys, <kbd>Enter</kbd>, or create a new class on the spot
+- **Repeat mode** <kbd>R</kbd> — skip the popup and reuse the last class
+- Change a box's class with <kbd>C</kbd>
+- Rename classes, pick **class colours**, sync classes across the project
+- Live **per-class object counts** in the side panel
 
 </td>
 </tr>
 <tr>
-<td width="50%" valign="top">
+<td valign="top">
 
-### ⚡ GPU or CPU — never an error
-Uses **CUDA with fp16** when available. If the GPU fails or runs out of memory, it **falls back to CPU automatically**. The same code runs on any machine.
+### ⚡ Speed features
+- **Auto-save** — every change is written to YOLO `.txt` immediately
+- **Undo / redo** <kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd>
+- **Copy / paste boxes** <kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>Ctrl</kbd>+<kbd>V</kbd> — great for video frames
+- **Select all** <kbd>Ctrl</kbd>+<kbd>A</kbd>
+- **Mark as Null** <kbd>N</kbd> — "nothing to label here", counted as done
 
 </td>
-<td width="50%" valign="top">
+<td valign="top">
 
-### 🎞️ Images & video
-Upload images, or **MP4 / AVI / MOV / MKV / DAV (CCTV)** video and extract frames with ffmpeg. Duplicate images are detected.
+### 🔍 View controls
+- **Zoom** <kbd>+</kbd> / <kbd>-</kbd>, **fit** <kbd>F</kbd>, **lock zoom** <kbd>L</kbd> across images
+- **Grid overlay** <kbd>G</kbd> with adjustable cell size
+- **Show / hide labels** <kbd>T</kbd>
+- **Brightness & contrast** sliders for dark or washed-out images
+- **Box style** — border width and fill opacity
 
 </td>
 </tr>
 <tr>
-<td width="50%" valign="top">
+<td valign="top">
 
-### 👥 Team workspaces
-**Owner / editor / viewer** roles, member invites, per-image **annotation locks** so two people never overwrite each other, and a full **audit log**.
+### 🖼️ Media library
+- Thumbnail sidebar with **paging** (100 / 200 per page)
+- Filter by **annotated / unannotated / null**, by **class** and by **tag**
+- **Annotation progress** bar for the job
+- Set any image as the **project cover photo**
 
 </td>
-<td width="50%" valign="top">
+<td valign="top">
+
+### 🔒 Working as a team
+- Opening an image **locks it** to you, with a heartbeat, so two people never overwrite each other
+- Owners can **force-release** a stuck lock
+- Viewers can look but not edit
+
+</td>
+</tr>
+</table>
+
+<div align="right"><a href="#top">⬆ back to top</a></div>
+
+## 🤖 AI-Assisted Labelling
+
+Three ways to let AI do the first pass — all of them produce **suggestions** you review.
+
+<table>
+<tr>
+<th width="33%">🎯 Smart Detect</th>
+<th width="33%">💬 Text prompt</th>
+<th width="33%">📦 Box prompt</th>
+</tr>
+<tr valign="top">
+<td>
+
+Runs **your own YOLO `.pt` model** on every image as it opens.
+
+- Upload a model from the UI or drop it into `models/`
+- Confidence & IoU sliders
+- **Review** mode → suggestions
+- **Auto-approve** mode → saved directly (audit-logged)
+- Settings saved **per project**
+- Draggable, collapsible panel
+
+</td>
+<td>
+
+Type what you want: `excavator, person, forklift` — **SAM3** finds them.
+
+- Up to 20 phrases at once
+- **Live confidence slider** filters results instantly (no re-run)
+- New class names are created automatically
+- Auto-predicts each image as you move on
+
+</td>
+<td>
+
+Draw a few examples — **“This is”** or **“Not this”** — and pick the class.
+
+- Every image you open is labelled from your examples
+- Works for **look-alike classes** no word can describe (e.g. *staff* vs *customer*)
+- **SAM3 finds** objects, **DINOv2 decides** the class
+- 📥 *Use my boxes* turns your confirmed boxes into examples
+
+</td>
+</tr>
+</table>
+
+### ✅ Review: a prediction is a suggestion until a human accepts it
+
+```mermaid
+flowchart LR
+    A["🖼️ Image opens"] --> B{"🤖 AI model"}
+    B --> C["💭 Suggested<br/><i>dashed box</i>"]
+    C -->|"Enter · or edit it"| D["✅ Confirmed"]
+    C -->|"Delete"| E["🚫 Rejected"]
+    D --> F[("labels/*.txt<br/>ground truth")]
+    E --> G[("remembered — not<br/>suggested again")]
+    F --> H["📦 Dataset export"]
+
+    style C fill:#fef3c7,stroke:#f59e0b,stroke-dasharray: 5 5,color:#78350f
+    style D fill:#d1fae5,stroke:#10b981,color:#064e3b
+    style E fill:#fee2e2,stroke:#ef4444,color:#7f1d1d
+    style H fill:#ede9fe,stroke:#8b5cf6,color:#4c1d95
+```
+
+- Accept one with <kbd>Enter</kbd>, all with <kbd>Shift</kbd>+<kbd>Enter</kbd>; reject with <kbd>Delete</kbd> / <kbd>Shift</kbd>+<kbd>Delete</kbd>.
+- **Moving, resizing or re-classing a suggestion accepts it.**
+- Only **confirmed** boxes reach the YOLO `.txt` files, so a dataset never contains unreviewed AI output.
+- Re-running a model never duplicates boxes or overwrites a box a human confirmed.
+
+<details>
+<summary><b>📦 How box prompting works</b></summary>
+<br/>
+
+```mermaid
+sequenceDiagram
+    actor You
+    participant Panel as AI Annotate panel
+    participant SAM3 as SAM3 (finds)
+    participant DINO as DINOv2 (classifies)
+
+    You->>Panel: Draw "This is" box → class "staff"
+    You->>Panel: Draw "This is" box → class "customer"
+    You->>Panel: Open the next image
+    Panel->>SAM3: Find objects like these examples
+    SAM3-->>DINO: Candidate boxes
+    DINO-->>Panel: Class of the nearest example for each box
+    Panel-->>You: Dashed suggestions → Enter to accept
+```
+
+Accuracy on a real *staff vs customer* project: **76 %** correct class with 3 example frames → **86 %** with 6. Add **“Not this”** examples to remove false positives. Examples last while the panel is open; closing it clears them.
+</details>
+
+<div align="right"><a href="#top">⬆ back to top</a></div>
+
+## 📤 Upload, Datasets & Versions
+
+<table>
+<tr>
+<td width="33%" valign="top">
+
+### 📤 Upload
+- Drag & drop **images** or a whole **folder**
+- JPG, PNG, BMP, TIFF, WebP
+- **Video → frames** with ffmpeg: MP4, AVI, MOV, MKV, **DAV (CCTV)**, H.264/H.265
+  - FPS: 1 · 2 · 5 · 10 · 15 · 24 · 30
+  - Size: original · 1080p · 720p · 480p · custom
+  - Output: JPG or PNG
+- **Duplicate handling**: skip, overwrite or rename
+- Each upload is a **batch / job** you can tag and **assign** to a teammate
+
+</td>
+<td width="33%" valign="top">
+
+### 📥 Import
+- Import an existing **YOLO dataset ZIP**
+- Preview before import: images, labels, classes, `data.yaml`
+- Detects **train / valid / test** folders and shows how many images have matching labels
+- Classes are read from `data.yaml`
+
+</td>
+<td width="33%" valign="top">
 
 ### 🗂️ Datasets & versions
-**Train / valid / test** splits, **immutable version snapshots** with `data.yaml`, and one-click export — ready for `yolo train`.
+- Move finished jobs into **Completed Datasets**
+- **Split** with train / valid / test sliders
+- **Tags** and filters on batches and datasets
+- **Dataset statistics** (images, objects, classes)
+- **Versions**: step-by-step wizard → immutable snapshot with `data.yaml` and a README
+- **Download** any version as a ZIP
 
 </td>
 </tr>
@@ -117,7 +339,7 @@ Upload images, or **MP4 / AVI / MOV / MKV / DAV (CCTV)** video and extract frame
 
 ## 🚀 Quick Start
 
-> **Prerequisites:** Python **3.10+** and [**ffmpeg**](https://ffmpeg.org/download.html) on your `PATH` (only needed for video).
+> **Prerequisites:** Python **3.10+** and [**ffmpeg**](https://ffmpeg.org/download.html) on your `PATH` (for video).
 
 ```bash
 # 1. Clone
@@ -139,25 +361,49 @@ cp .env.example .env           # set SECRET_KEY and JWT_SECRET
 python run.py
 ```
 
-🎉 Open **<http://localhost:5000>** and:
+🎉 Open **<http://localhost:5000>**, then:
 
 | Step | What to do |
 |:---:|---|
 | **1** | **Register** an account |
-| **2** | Create a **Workspace** on the dashboard |
-| **3** | Create a **Project** and upload images or a video |
-| **4** | Open the project and start labelling ✍️ |
+| **2** | Create a **Workspace** and invite your team |
+| **3** | Create a **Project** and upload images, a video or a YOLO ZIP |
+| **4** | Label by hand or turn on **Smart Detect / AI Annotate** |
+| **5** | Split into a **dataset**, create a **version**, download and train 🚀 |
 
 <details>
-<summary><b>⚠️ Login fails with <code>module 'jwt' has no attribute 'encode'</code>?</b></summary>
+<summary><b>🧠 AI model files</b></summary>
 <br/>
 
-You have the unrelated `jwt` package installed instead of **PyJWT**. Fix it with:
+| Model | Used for | How to get it |
+|---|---|---|
+| **Your YOLO `.pt`** | Smart Detect | Upload in the app or put it in `models/` |
+| **SAM3** (`sam3.pt`, ≈3.45 GB) | Text & box prompting | Place it in `models/` or next to `run.py` |
+| **DINOv2-small** (85 MB) | Box prompting — picks the class | Downloaded automatically on first use |
+| **OpenAI CLIP** | SAM3's text tokenizer | Installed by `requirements.txt` |
+
+Manual annotation needs **none** of these.
+</details>
+
+<details>
+<summary><b>🎮 GPU acceleration (NVIDIA)</b></summary>
+<br/>
+
+`requirements.txt` installs the CPU build of PyTorch. For an NVIDIA GPU, install the CUDA build **first**:
 
 ```bash
-pip uninstall jwt
-pip install PyJWT
+pip install torch==2.14.1+cu130 torchvision==0.29.1+cu130 --index-url https://download.pytorch.org/whl/cu130
 ```
+
+> **Windows:** *Smart App Control* must be off, or the CUDA build of PyTorch is blocked from loading.
+
+| Task (1920×1080 frame) | GPU — RTX 3050 6 GB | CPU |
+|---|:---:|:---:|
+| SAM3 text prompt | **~0.65 s** / phrase | ~15–20 s |
+| Box-prompt prediction | **~1 s** / image | ~22–40 s |
+| Smart Detect (YOLO) | **~0.02 s** | fast |
+
+The AI panel shows **“Runs on GPU (name)”** or **“Runs on CPU”**.
 </details>
 
 <details>
@@ -172,122 +418,43 @@ pip install PyJWT
 | `JWT_EXPIRY_HOURS` | `24` | How long a login lasts |
 | `APP_BASE_URL` | `http://localhost:5000` | Used in password-reset links |
 | `RESET_TOKEN_MINUTES` | `30` | Password-reset link lifetime |
-| `MAIL_SERVER` … `MAIL_FROM` | *(empty)* | SMTP settings. Empty = reset links are printed to the console |
+| `MAIL_SERVER` … `MAIL_FROM` | *(empty)* | SMTP settings; empty = reset links are printed to the console |
 | `AI_DEVICE` | `auto` | `auto` · `cpu` · `cuda` · `cuda:1` |
 | `AI_HALF` | `auto` | `auto` = fp16 on GPU · `0` = always fp32 |
 | `AI_APPEARANCE` | `dinov2` | Class judge for box prompts: `dinov2` · `sam3` |
 
 </details>
 
-<div align="right"><a href="#top">⬆ back to top</a></div>
-
-## 🧠 AI Models
-
-| Model | Used for | Where it comes from |
-|---|---|---|
-| **Your YOLO `.pt`** | Smart Detect | Put it in `models/` |
-| **SAM3** (`sam3.pt`, ≈3.45 GB) | Text & box prompting — *finds* objects | Place it in `models/` or next to `run.py` |
-| **DINOv2-small** (85 MB) | Box prompting — decides *which class* | Downloaded automatically on first use |
-| **OpenAI CLIP** | SAM3's text tokenizer | Installed by `requirements.txt` |
-
 <details>
-<summary><b>🎮 Enable GPU acceleration (NVIDIA)</b></summary>
+<summary><b>⚠️ Login fails with <code>module 'jwt' has no attribute 'encode'</code>?</b></summary>
 <br/>
 
-`requirements.txt` installs the CPU build of PyTorch. For an NVIDIA GPU, install the CUDA build **first**:
+The unrelated `jwt` package is installed instead of **PyJWT**:
 
 ```bash
-pip install torch==2.14.1+cu130 torchvision==0.29.1+cu130 --index-url https://download.pytorch.org/whl/cu130
+pip uninstall jwt
+pip install PyJWT
 ```
-
-> **Windows:** *Smart App Control* must be turned off, or the CUDA build of PyTorch is blocked from loading.
-
-The annotation panel shows **“Runs on GPU (name)”** or **“Runs on CPU”** so you always know which one is in use.
 </details>
-
-<details>
-<summary><b>📊 Performance (measured)</b></summary>
-<br/>
-
-Measured on a 1920×1080 frame, model already loaded:
-
-| Task | GPU — RTX 3050 6 GB, fp16 | CPU |
-|---|:---:|:---:|
-| SAM3 text prompt | **~0.65 s** per phrase | ~15–20 s |
-| Box-prompt prediction | **~1 s** per image | ~22–40 s |
-| Smart Detect (YOLO) | **~0.02 s** | fast |
-| First SAM3 request after a restart | ~15 s (model load) | longer |
-
-Box-prompting accuracy on a real *staff vs customer* project:
-
-| Example frames | Correct class |
-|:---:|:---:|
-| 3 | 76 % |
-| 6 | **86 %** |
-
-More examples → better classes. Add **“Not this”** examples to remove false positives.
-</details>
-
-<div align="right"><a href="#top">⬆ back to top</a></div>
-
-## 🔍 How It Works
-
-### The annotation lifecycle
-
-```mermaid
-flowchart LR
-    A["🖼️ Image opens"] --> B{"🤖 AI model"}
-    B -->|"Smart Detect · AI Annotate"| C["💭 Suggested<br/><i>dashed box</i>"]
-    C -->|"Accept · Enter<br/>or edit it"| D["✅ Confirmed"]
-    C -->|"Reject · Delete"| E["🚫 Rejected"]
-    D --> F[("labels/*.txt<br/>ground truth")]
-    E --> G[("remembered — never<br/>suggested again")]
-    F --> H["📦 Dataset export"]
-
-    style C fill:#fef3c7,stroke:#f59e0b,stroke-dasharray: 5 5,color:#78350f
-    style D fill:#d1fae5,stroke:#10b981,color:#064e3b
-    style E fill:#fee2e2,stroke:#ef4444,color:#7f1d1d
-    style H fill:#ede9fe,stroke:#8b5cf6,color:#4c1d95
-```
-
-- 🛡️ Only **confirmed** boxes are written to YOLO `.txt` files, so a dataset can never contain unreviewed AI output.
-- 🔁 Re-running a model is safe: it never duplicates boxes or overwrites a box a human confirmed.
-- 🚫 Rejected boxes are remembered, so the same wrong prediction doesn't come back.
-
-### Box prompting — teach by example
-
-```mermaid
-sequenceDiagram
-    actor You
-    participant Panel as AI Annotate panel
-    participant SAM3 as SAM3 (finds)
-    participant DINO as DINOv2 (classifies)
-
-    You->>Panel: Draw "This is" box → pick class "staff"
-    You->>Panel: Draw "This is" box → pick class "customer"
-    You->>Panel: Open the next image
-    Panel->>SAM3: Find objects like these examples
-    SAM3-->>DINO: Candidate boxes
-    DINO-->>Panel: Class of the nearest example for each box
-    Panel-->>You: Dashed suggestions → Enter to accept
-```
 
 <div align="right"><a href="#top">⬆ back to top</a></div>
 
 ## ⌨️ Keyboard Shortcuts
 
 <table>
-<tr><th>Drawing</th><th>Navigation & view</th><th>Review & edit</th></tr>
+<tr><th>🛠️ Tools</th><th>🧭 Navigate & view</th><th>✏️ Edit & review</th></tr>
 <tr valign="top">
 <td>
 
 | Key | Action |
 |---|---|
-| <kbd>B</kbd> | Draw boxes |
-| <kbd>P</kbd> | Draw polygons |
-| <kbd>V</kbd> | Select / edit mode |
+| <kbd>B</kbd> | Bounding box |
+| <kbd>P</kbd> | Polygon |
+| <kbd>V</kbd> | Select / edit |
+| <kbd>Space</kbd> | Pan (hold) |
 | <kbd>R</kbd> | Repeat last class |
-| <kbd>N</kbd> | Mark image as null |
+| <kbd>N</kbd> | Mark as null |
+| <kbd>C</kbd> | Change class |
 
 </td>
 <td>
@@ -296,8 +463,10 @@ sequenceDiagram
 |---|---|
 | <kbd>D</kbd> / <kbd>→</kbd> | Next image |
 | <kbd>A</kbd> / <kbd>←</kbd> | Previous image |
+| <kbd>Shift</kbd>+<kbd>→</kbd> / <kbd>←</kbd> | Next / previous page |
 | <kbd>+</kbd> / <kbd>-</kbd> | Zoom in / out |
-| <kbd>F</kbd> / <kbd>0</kbd> | Fit image |
+| <kbd>F</kbd> / <kbd>0</kbd> | Fit to screen |
+| <kbd>L</kbd> | Lock zoom |
 | <kbd>G</kbd> / <kbd>T</kbd> | Grid / labels |
 
 </td>
@@ -305,17 +474,36 @@ sequenceDiagram
 
 | Key | Action |
 |---|---|
-| <kbd>Enter</kbd> | Accept suggestion |
-| <kbd>Shift</kbd>+<kbd>Enter</kbd> | Accept all |
-| <kbd>Del</kbd> | Delete / reject |
-| <kbd>Shift</kbd>+<kbd>Del</kbd> | Reject all |
 | <kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Y</kbd> | Undo / redo |
+| <kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>V</kbd> | Copy / paste box |
+| <kbd>Ctrl</kbd>+<kbd>A</kbd> | Select all |
+| <kbd>Ctrl</kbd>+<kbd>S</kbd> | Save now |
+| <kbd>Del</kbd> | Delete / reject |
+| <kbd>Enter</kbd> | Accept suggestion |
+| <kbd>Shift</kbd>+<kbd>Enter</kbd> / <kbd>Del</kbd> | Accept / reject all |
 
 </td>
 </tr>
 </table>
 
-<sub>Also: <kbd>C</kbd> change class · <kbd>S</kbd> save · <kbd>L</kbd> lock zoom · <kbd>Ctrl</kbd>+<kbd>C</kbd>/<kbd>V</kbd> copy/paste box · <kbd>Ctrl</kbd>+<kbd>A</kbd> select all · <kbd>Shift</kbd>+<kbd>←</kbd>/<kbd>→</kbd> previous/next page</sub>
+<sub>Click the <b>Shortcuts</b> button in the toolbar to see this list inside the app.</sub>
+
+<div align="right"><a href="#top">⬆ back to top</a></div>
+
+## 👥 Workspaces & Roles
+
+Organise work as **Workspaces → Projects → Jobs**. Invite teammates by email, assign upload batches to them, and track every action in the audit log.
+
+| Action | Owner | Editor | Viewer |
+|---|:---:|:---:|:---:|
+| Annotate | ✅ | ✅ | 👁️ view only |
+| Upload / import | ✅ | ✅ | ❌ |
+| Manage classes | ✅ | ✅ | ❌ |
+| Invite members | ✅ | ❌ | ❌ |
+| Change roles | ✅ | ❌ | ❌ |
+| Delete workspace | ✅ | ❌ | ❌ |
+
+Projects can also be **renamed, duplicated, merged, moved** to another workspace, given a **cover photo**, or deleted.
 
 <div align="right"><a href="#top">⬆ back to top</a></div>
 
@@ -352,14 +540,17 @@ annomaster/
 ├── run.py                  Entry point
 ├── config.py               Settings (reads .env)
 ├── app/
-│   ├── api/                Thin HTTP route handlers
-│   ├── core/               Business logic — paths, YOLO I/O, datasets, AI models, devices
-│   ├── models/             SQLAlchemy models — users, workspaces, locks, audit
+│   ├── api/                HTTP routes — auth, workspaces, projects, uploads, media,
+│   │                       annotations, classes, datasets, versions, locks, audit, AI
+│   ├── core/               Business logic — paths, YOLO I/O, media, datasets, versions,
+│   │                       tags, suggestions, AI models, SAM3 prompting, GPU/CPU devices
+│   ├── models/             SQLAlchemy — users, workspaces, images, batches, locks,
+│   │                       assignments, audit log
 │   └── utils/              JWT security, errors, logging
 ├── static/
 │   ├── css/                Design tokens → base → layout → page sheets → modes
 │   └── js/                 main.js (annotation engine) + features/*
-├── templates/              Jinja pages — auth, dashboard, annotate app, settings
+├── templates/              Login, dashboard, members, annotate app, settings
 ├── models/                 YOLO / SAM3 weights
 ├── scripts/                Migration, backup and consistency-check tools
 └── workspace/              Your images and labels (not committed)
@@ -382,20 +573,6 @@ workspace/<WS-XXXXXX>/projects/<project>/
 ```
 
 Annotations stay on disk in standard **YOLO format**. The database stores only users, workspaces, membership, locks and audit history.
-</details>
-
-<details>
-<summary><b>👥 Roles & permissions</b></summary>
-<br/>
-
-| Action | Owner | Editor | Viewer |
-|---|:---:|:---:|:---:|
-| Annotate | ✅ | ✅ | 👁️ view only |
-| Upload / import | ✅ | ✅ | ❌ |
-| Manage classes | ✅ | ✅ | ❌ |
-| Invite members | ✅ | ❌ | ❌ |
-| Change roles | ✅ | ❌ | ❌ |
-| Delete workspace | ✅ | ❌ | ❌ |
 </details>
 
 <details>
@@ -425,12 +602,15 @@ python scripts/backup.py             # snapshot the database + workspace folder 
 
 ## 🗺️ Roadmap
 
+- [x] Manual box & polygon annotation with auto-save
+- [x] Video → frame extraction and YOLO ZIP import
+- [x] Dataset splits, tags and version snapshots
+- [x] Team workspaces, roles, assignment and locks
 - [x] Smart Detect with custom YOLO models
-- [x] SAM3 text prompting
-- [x] Box prompting with an example library
+- [x] SAM3 text prompting and box prompting with an example library
 - [x] Automatic GPU / CPU selection
-- [ ] Batch prediction over a whole job
-- [ ] Map a text prompt to a different class name
+- [ ] Batch AI prediction over a whole job
+- [ ] Per-user statistics dashboard in the UI
 - [ ] FastAPI + Postgres + React version (in progress in `annomaster-next/`)
 
 <br/>
