@@ -389,6 +389,39 @@ Manual annotation needs **none** of these.
 </details>
 
 <details>
+<summary><b>⬇️ Downloading SAM3 (one-time, ≈3.45 GB)</b></summary>
+<br/>
+
+SAM3 is published by Meta on Hugging Face as a **gated** model: anyone can use it, but you must accept its licence first. The app cannot download it for you without your approval.
+
+**1. Request access** (once per Hugging Face account)
+
+1. Sign in or create a free account at [huggingface.co](https://huggingface.co/join).
+2. Open **[huggingface.co/facebook/sam3](https://huggingface.co/facebook/sam3)**, read the licence and click **Agree and access repository**.
+3. Wait for approval. Meta reviews requests by hand, which can take from minutes to a few days; Hugging Face emails you, and the file list on the page becomes downloadable.
+
+**2. Download `sam3.pt`**
+
+*Option A: browser.* On the model page open **Files and versions**, click **`sam3.pt`** and then the download icon.
+
+*Option B: command line* (resumes if the connection drops, which is useful for a 3.45 GB file):
+
+```bash
+# create an access token at https://huggingface.co/settings/tokens (type: Read)
+hf auth login                                   # paste the token when asked
+hf download facebook/sam3 sam3.pt --local-dir models
+```
+
+> `hf` comes with `huggingface_hub`, which `requirements.txt` installs. On older versions the command is `huggingface-cli download …`.
+
+**3. Put it in place**
+
+Place `sam3.pt` in the `models/` folder (Option B already does this) or next to `run.py`. Refresh the annotate page: the AI Annotate panel's engine list changes from **“SAM3 (needs weights)”** to **“SAM3”**. No restart is needed; the app looks for the file on every request.
+
+> **Not committed:** `.gitignore` already excludes `*.pt` in the repo root and `models/` (GitHub rejects files over 100 MB), except small project models such as `models/blackshirt_*.pt`.
+</details>
+
+<details>
 <summary><b>🎮 GPU acceleration (NVIDIA)</b></summary>
 <br/>
 
