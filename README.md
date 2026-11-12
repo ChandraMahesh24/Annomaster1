@@ -182,7 +182,7 @@ The annotation canvas is a full labelling studio — fast enough to label thousa
 <td valign="top">
 
 ### 🖼️ Media library
-- Thumbnail sidebar with **paging** (100 / 200 per page)
+- Thumbnail sidebar with **paging** (50 / 100 / 200 per page)
 - Filter by **annotated / unannotated / null**, by **class** and by **tag**
 - **Annotation progress** bar for the job
 - Set any image as the **project cover photo**
@@ -238,7 +238,7 @@ Type what you want: `excavator, person, forklift` — **SAM3** finds them.
 
 Draw a few examples — **“This is”** or **“Not this”** — and pick the class.
 
-- Every image you open is labelled from your examples
+- Every image you open gets suggestions from your examples
 - Works for **look-alike classes** no word can describe (e.g. *staff* vs *customer*)
 - **SAM3 finds** objects, **DINOv2 decides** the class
 - 📥 *Use my boxes* turns your confirmed boxes into examples
@@ -267,6 +267,7 @@ flowchart LR
 
 - Accept one with <kbd>Enter</kbd>, all with <kbd>Shift</kbd>+<kbd>Enter</kbd>; reject with <kbd>Delete</kbd> / <kbd>Shift</kbd>+<kbd>Delete</kbd>.
 - **Moving, resizing or re-classing a suggestion accepts it.**
+- **AI Annotate suggestions are not kept until you decide:** leave the image or close the panel without accepting and they disappear; open the image again and you get a **fresh** prediction.
 - Only **confirmed** boxes reach the YOLO `.txt` files, so a dataset never contains unreviewed AI output.
 - Re-running a model never duplicates boxes or overwrites a box a human confirmed.
 
@@ -308,7 +309,7 @@ Accuracy on a real *staff vs customer* project: **76 %** correct class with 3 ex
   - FPS: 1 · 2 · 5 · 10 · 15 · 24 · 30
   - Size: original · 1080p · 720p · 480p · custom
   - Output: JPG or PNG
-- **Duplicate handling**: skip, overwrite or rename
+- **Identical files are skipped** automatically (MD5 check)
 - Each upload is a **batch / job** you can tag and **assign** to a teammate
 
 </td>
@@ -319,6 +320,8 @@ Accuracy on a real *staff vs customer* project: **76 %** correct class with 3 ex
 - Preview before import: images, labels, classes, `data.yaml`
 - Detects **train / valid / test** folders and shows how many images have matching labels
 - Classes are read from `data.yaml`
+- **Duplicate handling**: skip existing, rename new, or overwrite
+- Choose to import images, labels, or both, and split right after import
 
 </td>
 <td width="33%" valign="top">
@@ -378,7 +381,7 @@ python run.py
 | Model | Used for | How to get it |
 |---|---|---|
 | **Your YOLO `.pt`** | Smart Detect | Upload in the app or put it in `models/` |
-| **SAM3** (`sam3.pt`, ≈3.45 GB) | Text & box prompting | Place it in `models/` or next to `run.py` |
+| **SAM3** (`sam3.pt`, ≈3.45 GB) | Text & box prompting | Gated by Meta: request access at [huggingface.co/facebook/sam3](https://huggingface.co/facebook/sam3), download `sam3.pt`, then place it in `models/` or next to `run.py`. Without it, AI Annotate explains what's missing; everything else works |
 | **DINOv2-small** (85 MB) | Box prompting — picks the class | Downloaded automatically on first use |
 | **OpenAI CLIP** | SAM3's text tokenizer | Installed by `requirements.txt` |
 
@@ -416,7 +419,7 @@ The AI panel shows **“Runs on GPU (name)”** or **“Runs on CPU”**.
 | `JWT_SECRET` | — | Signs login tokens (**required**) |
 | `DATABASE_URL` | `sqlite:///annomaster.db` | Database location |
 | `JWT_EXPIRY_HOURS` | `24` | How long a login lasts |
-| `APP_BASE_URL` | `http://localhost:5000` | Used in password-reset links |
+| `APP_BASE_URL` | *(empty)* | Base of password-reset links, e.g. `https://annotate.example.com`. Empty = the address the browser used. Set it in production |
 | `RESET_TOKEN_MINUTES` | `30` | Password-reset link lifetime |
 | `MAIL_SERVER` … `MAIL_FROM` | *(empty)* | SMTP settings; empty = reset links are printed to the console |
 | `AI_DEVICE` | `auto` | `auto` · `cpu` · `cuda` · `cuda:1` |
@@ -477,7 +480,7 @@ pip install PyJWT
 | <kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Y</kbd> | Undo / redo |
 | <kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>V</kbd> | Copy / paste box |
 | <kbd>Ctrl</kbd>+<kbd>A</kbd> | Select all |
-| <kbd>Ctrl</kbd>+<kbd>S</kbd> | Save now |
+| <kbd>Ctrl</kbd>+<kbd>S</kbd> / <kbd>S</kbd> | Save now |
 | <kbd>Del</kbd> | Delete / reject |
 | <kbd>Enter</kbd> | Accept suggestion |
 | <kbd>Shift</kbd>+<kbd>Enter</kbd> / <kbd>Del</kbd> | Accept / reject all |

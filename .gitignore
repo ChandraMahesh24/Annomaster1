@@ -1,62 +1,81 @@
-# ── Python ──────────────────────────────────────────────
+# ════════════════════════════════════════════════════════════
+#  AnnoMaster — files that must NOT go to GitHub
+# ════════════════════════════════════════════════════════════
+
+# ── Python ──────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *.egg-info/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.ipynb_checkpoints/
+htmlcov/
+.coverage
 
 # Virtual environments
 venv/
 env/
 .venv/
 
-# ── Secrets / local config ──────────────────────────────
+# ── Secrets / local config ──────────────────────────────────
+# Real keys live in .env; only the template is committed.
 .env
 .env.*
 !.env.example
 
-# ── Databases (SQLite + WAL side files) ─────────────────
+# ── Database (SQLite + WAL side files) ──────────────────────
 *.db
 *.db-shm
 *.db-wal
+*.db-journal
 *.sqlite3
 
-# ── User data (images, labels, datasets) ────────────────
+# ── User data: images, labels, datasets, versions ──────────
+# The top-level workspace/ only — templates/workspace/ is code.
 /workspace/
 Active_Work/
 Completed_Datasets/
 uploads/
 backups/
 
-# ── Model weights ───────────────────────────────────────
-# Large / auto-downloaded weights are not tracked (GitHub limit is 100 MB).
-# Weights a project deliberately ships (models/blackshirt_*.pt) ARE committed.
+# ── AI model weights ────────────────────────────────────────
+# GitHub rejects files over 100 MB (sam3.pt is 3.45 GB), and most
+# weights are downloaded or supplied by the user. Ignore them all,
+# then re-include the small project model that the app ships with.
 /*.pt
-models/yoloe-*.pt
-models/yolov8*-world*.pt
-models/sam*.pt
-models/yolo11*.pt
+/*.pth
+models/*.pt
+models/*.pth
+!models/blackshirt_*.pt
+*.onnx
+*.engine
+*.safetensors
 mobileclip_*.ts
 weights/
 runs/
+.cache/
 
-# ── Node / frontend (annomaster-next) ───────────────────
+# ── Node / frontend (annomaster-next) ───────────────────────
 node_modules/
 dist/
 build/
 .vite/
+*.tsbuildinfo
 
-# ── Archives, temp files, logs ──────────────────────────
+# ── Archives, temp files, logs ──────────────────────────────
 *.zip
 *.tmp
+*.bak
 *.log
 3.5.0
 
-# ── Editor / OS ─────────────────────────────────────────
+# ── Editor / OS ─────────────────────────────────────────────
 .vscode/
 .idea/
+*.swp
 .claude/settings.local.json
 .DS_Store
 Thumbs.db
+ehthumbs.db
 desktop.ini
