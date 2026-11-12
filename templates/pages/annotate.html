@@ -2491,7 +2491,7 @@
               <i class="fas fa-ban" aria-hidden="true"></i> Not this
             </button>
           </div>
-          <span class="pa-ex-class" id="paExClass" title="Pick the class in the class list">—</span>
+          <span class="pa-ex-class" id="paExClass" title="After drawing an example box, a popup asks which class it shows">—</span>
         </div>
         <div class="pa-exemplar-row">
           <button type="button" class="pa-draw-toggle" id="paDrawToggle">
@@ -2506,17 +2506,21 @@
             <i class="fas fa-eraser" aria-hidden="true"></i></button>
         </div>
         <div class="pa-ex-list" id="paExList" aria-live="polite"></div>
-        <label class="pa-auto">
-          <input type="checkbox" id="paAutoRun" checked>
-          Predict automatically on each image
-        </label>
         <p class="pa-hint">
-          Pick a class, then draw a few boxes around examples of it — on this
-          image or any other. They are saved for the whole project and used to
-          predict every image. More examples, better results. Examples are
-          prompts, never annotations.
+          Draw a box around an example, then pick its class in the popup —
+          on this image or any other. While this panel is open, every image
+          you open is predicted from your examples; more examples, better
+          results. Closing the panel clears them. Examples are prompts,
+          never annotations.
         </p>
       </div>
+
+      <!-- Both tabs: suggestions are not kept until approved, so every image is
+           predicted fresh as it opens (unapproved ones vanish on leave/close). -->
+      <label class="pa-auto" title="Unapproved suggestions are not kept: each image you open gets a fresh prediction">
+        <input type="checkbox" id="paAutoRun" checked>
+        Predict automatically on each image
+      </label>
 
       <!-- CONFIDENCE — filters the last run, never re-runs it -->
       <div class="pa-ctrl">

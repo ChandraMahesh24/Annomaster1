@@ -223,11 +223,12 @@ const PromptAnnotate = (() => {
     const l = $('paDrawToggleLabel');
     if (l) l.textContent = state.mode === 'prompt' ? 'Drawing — click to stop'
                                                    : 'Draw example box';
-    const sc = _selectedClass();
+    // The class is chosen per box in the class popup after drawing, so this
+    // only says what kind of example the next box will be.
     const lab = $('paExClass');
     if (lab) {
-      lab.textContent = sc ? `${_exPositive ? '' : 'not '}${sc.name}` : 'Pick a class';
-      lab.classList.toggle('is-missing', !sc);
+      lab.textContent = _exPositive ? 'class: pick after drawing' : 'not this: pick class after drawing';
+      lab.classList.remove('is-missing');
     }
     [['paExPos', true], ['paExNeg', false]].forEach(([id, v]) => {
       const b = $(id);
@@ -241,10 +242,11 @@ const PromptAnnotate = (() => {
     if (state.mode === 'prompt') {
       app.setMode(_prevMode || 'bbox');
     } else {
-      if (!_selectedClass()) {
-        _setError('Pick the class to teach in the class list first.');
+      if (!state.classes.length) {
+        _setError('Add a class to the project first — examples are examples OF a class.');
         return;
       }
+      _setError('');
       _prevMode = state.mode;
       app.setMode('prompt');
     }
@@ -309,11 +311,19 @@ const PromptAnnotate = (() => {
     _syncExemplarUI();
   }
 
+  /* A save/delete that lands while a load is in flight makes that load's
+     answer stale: it would overwrite the list with one missing the new
+     example (seen in the real page — the first panel open after a server
+     start takes seconds, and a user can draw + save an example meanwhile).
+     Every write bumps this; a load applies only if nothing was written. */
+  let _exWrites = 0;
+
   async function _loadExamples() {
+    const writesAtStart = _exWrites;
     try {
       const r = await fetch(_p('/ai/examples'), { headers: _authH() });
       const d = await r.json().catch(() => ({}));
-      if (r.ok) _examples = d.examples || [];
+      if (r.ok && _exWrites === writesAtStart) _examples = d.examples || [];
     } catch (e) { /* keep what we had */ }
     _renderExamples();
     _showImageExamples();
@@ -327,6 +337,7 @@ const PromptAnnotate = (() => {
       });
       const d = await r.json().catch(() => ({ error: `HTTP ${r.status}` }));
       if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+      _exWrites++;
       _examples = d.examples || _examples;
       _setError('');
       if (okMsg && d.added) app._toast(okMsg(d.added.length), 'success');
@@ -348,6 +359,7 @@ const PromptAnnotate = (() => {
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+      _exWrites++;
       _examples = d.examples || [];
       if (d.removed) app._toast(`${d.removed} example(s) removed`, 'info');
     } catch (e) {
@@ -357,28 +369,33 @@ const PromptAnnotate = (() => {
     _showImageExamples();
   }
 
-  /* Canvas → panel: a box was just drawn in 'prompt' mode. Save every
-     not-yet-saved one as an example of the selected class, then (if auto
-     is on) re-predict this image right away so the user sees what the new
-     example taught — the Roboflow feedback loop. */
+  /* Canvas → panel: an example box was drawn in 'prompt' mode and its class
+     chosen in the class popup (the same popup annotation uses; main.js puts
+     the choice on the box as `cls`). Save every not-yet-saved one, then (if
+     auto is on) re-predict this image right away so the user sees what the
+     new example taught — the Roboflow feedback loop. */
   async function _onPromptBoxesChanged() {
     const fresh = (state.promptBoxes || []).filter(b => !b.exId);
     if (!fresh.length) { _syncExemplarUI(); return; }
     const item = _cur();
     const sc = _selectedClass();
-    if (!item || !sc || !state.imgW) {
+    // Each box carries the class picked for it; the selected class is only
+    // a fallback for a box that somehow arrived without one.
+    const clsOf = b => _cls(b.cls) || sc;
+    if (!item || !state.imgW || fresh.some(b => !clsOf(b))) {
       state.promptBoxes = state.promptBoxes.filter(b => b.exId);
       app._render();
-      _setError('Pick the class to teach in the class list, then draw the example.');
+      _setError('Choose the class for the example in the popup after drawing it.');
       return;
     }
     const W = state.imgW, H = state.imgH;
     const boxes = fresh.map(b => ({
       x1: b.x / W, y1: b.y / H, x2: (b.x + b.w) / W, y2: (b.y + b.h) / H,
-      class_id: sc.id, positive: _exPositive,
+      class_id: clsOf(b).id, positive: _exPositive,
     }));
+    const names = [...new Set(fresh.map(b => clsOf(b).name))].join(', ');
     const added = await _postExamples(item.path, boxes,
-      n => `${n} ${_exPositive ? '' : '"not" '}example${n === 1 ? '' : 's'} of ${sc.name} saved`);
+      n => `${n} ${_exPositive ? '' : '"not" '}example${n === 1 ? '' : 's'} of ${names} saved`);
     if (added && added.length && _auto) run();
   }
 
@@ -398,14 +415,16 @@ const PromptAnnotate = (() => {
     if (added && added.length === 0) app._toast('Those boxes are already examples', 'info');
   }
 
-  /* Auto-predict the image that just opened from the library. Idempotent —
-     results go through Boxes.reconcile, so confirmed work is never touched
-     and rejected boxes are never re-suggested. A run already in flight
-     finishes for ITS image (see _applyToOtherImage); this image is then
-     predicted when it ends. */
+  /* Auto-predict the image that just opened — from the example library (Box
+     tab) or the typed phrases (Text tab). Suggestions are transient, so this
+     is what gives a FRESH prediction every time an image is opened again.
+     Idempotent — results go through Boxes.reconcile, so confirmed work is
+     never touched and rejected boxes are never re-suggested. A run already
+     in flight is dropped if its image was left; this one runs when it ends. */
   function _maybeAutoRun() {
-    if (!_open || _mode !== BOX || !_auto) return;
-    if (!_examples.some(e => e.positive !== false)) return;
+    if (!_open || !_auto) return;
+    if (_mode === BOX && !_examples.some(e => e.positive !== false)) return;
+    if (_mode === TEXT && !_phrases.length) return;
     if (_busy) { _autoPending = true; return; }
     run();
   }
@@ -458,101 +477,29 @@ const PromptAnnotate = (() => {
     return new Set(failed.map(n => n.toLowerCase()));
   }
 
-  /* One server prediction → one canvas box in a W×H pixel space. W/H are
-     the open image's size, or VIRTUAL for an image that is not on screen
-     (see _applyToOtherImage). `owned` tags it `_prun` so the slider may
-     withdraw it later — only meaningful for the image on screen. */
-  function _toBox(p, W = state.imgW, H = state.imgH, owned = true) {
+  /* One server prediction → one canvas box on the image on screen.
+     `_prun` lets the slider withdraw it later; `_transient` keeps it off
+     disk until the user decides (Boxes.serialize skips undecided transient
+     suggestions) — leave the image or close the panel and it is gone,
+     come back and a fresh prediction runs, as in Roboflow. */
+  function _toBox(p) {
     // _ensureClasses() ran before any box is built, and predictions whose
     // class could not be created were dropped — so this resolves.
     const cls = _findClass(p.class_name);
     if (!cls) return null;
+    const W = state.imgW, H = state.imgH;
     const ix = (p.x_center - p.width / 2) * W;
     const iy = (p.y_center - p.height / 2) * H;
-    const box = {
+    return {
       id: Math.random().toString(36).slice(2),
       cls: cls.id, type: 'bbox',
       x: Math.max(0, ix), y: Math.max(0, iy),
       w: Math.min(p.width * W, W - ix),
       h: Math.min(p.height * H, H - iy),
       conf: p.conf,
+      _prun: _runId,
+      _transient: true,
     };
-    if (owned) box._prun = _runId;   // this run owns the box, so the slider may drop it
-    return box;
-  }
-
-  /* A run finished for an image the user has since navigated away from.
-
-     Users keep working during a ~20-40 s CPU run — the audit log showed
-     exactly that: start a prompt, move on through the next frames. The
-     results must neither be painted on the wrong image nor thrown away, so
-     they are committed to the image they were run FOR, on the server:
-
-       GET its saved boxes → Boxes.reconcile (same rules as on-canvas: a
-       confirmed box is never touched, a rejected one never re-suggested) →
-       POST them back.
-
-     Without the image's pixel size, boxes live on a VIRTUAL square canvas.
-     That is exact for this purpose: IoU is invariant under independent x/y
-     scaling. _convertBboxes rounds to whole pixels, so the canvas is 1e9
-     wide: the round-trip error (1e-9) is far below the 6 decimals the
-     label file stores, so the image's CONFIRMED boxes — which this save
-     rewrites — come back byte-identical rather than drifting by 1e-6. The
-     new boxes land as SUGGESTIONS in the sidecar, waiting for review. */
-  const VIRTUAL = 1e9;
-
-  async function _applyToOtherImage(path, preds) {
-    const name = String(path).split(/[\\/]/).pop();
-    const keep = preds.filter(p => p.conf >= _conf);
-    if (!keep.length) {
-      const msg = `Prompt finished for ${name}: nothing above ${Math.round(_conf * 100)}%.`;
-      app._toast(msg, 'info');
-      return msg;
-    }
-    try {
-      const r = await fetch(_p('/annotations?path=' + encodeURIComponent(path)),
-                            { headers: _authH() });
-      const d = await r.json().catch(() => null);
-      if (!r.ok || !d) throw new Error(`could not read its annotations (HTTP ${r.status})`);
-      if (d.is_null) {
-        // Saving suggestions would rewrite the label file and silently undo
-        // the user's "nothing to annotate here" decision.
-        const msg = `Prompt finished for ${name}, but it is marked Null — ` +
-                    'results not added. Unmark it and run again.';
-        app._toast(msg, 'info');
-        return msg;
-      }
-      const existing = app._convertBboxes(
-        [...(d.bboxes || []), ...(d.suggestions || [])], VIRTUAL, VIRTUAL);
-      const detections = keep.map(p => _toBox(p, VIRTUAL, VIRTUAL, false)).filter(Boolean);
-      const { boxes, summary } = Boxes.reconcile(existing, detections);
-      if (!summary.added && !summary.refreshed) {
-        const msg = `Prompt finished for ${name}: no new suggestions.`;
-        app._toast(msg, 'info');
-        return msg;
-      }
-      const s = await fetch(_p('/annotations'), {
-        method: 'POST', headers: _authH(),
-        body: JSON.stringify({ path, bboxes: Boxes.serialize(boxes, VIRTUAL, VIRTUAL) }),
-      });
-      if (!s.ok) {
-        const e = await s.json().catch(() => ({}));
-        throw new Error(e.error || e.message || `save failed (HTTP ${s.status})`);
-      }
-      const msg = `${summary.added + summary.refreshed} suggestion(s) saved to ${name} — ` +
-                  'open it to review.';
-      app._toast(msg, 'success');
-      // The user may have navigated BACK to it while this was in flight; the
-      // canvas then shows the pre-save state, and its next auto-save would
-      // overwrite the sidecar. Reload it from disk instead.
-      const cur = state.currentIdx >= 0 ? state.media[state.currentIdx] : null;
-      if (cur && cur.path === path) app.loadImage(state.currentIdx, true);
-      return msg;
-    } catch (e) {
-      const msg = `Prompt results for ${name} could not be saved: ${e.message}`;
-      app._toast(msg, 'error');
-      return msg;
-    }
   }
 
   /* Make the canvas agree with (last run ∩ current threshold).
@@ -679,14 +626,12 @@ const PromptAnnotate = (() => {
       const failed = await _ensureClasses(preds.map(p => p.class_name));
       if (failed.size) preds = preds.filter(p => !failed.has(String(p.class_name).toLowerCase()));
       // The run belongs to the image it started on. If the user moved on
-      // while it ran (normal — a CPU run takes tens of seconds), commit the
-      // results to THAT image on the server instead of the one on screen.
+      // while it ran, its results are simply dropped: suggestions are
+      // transient, and that image gets a FRESH prediction when it is opened
+      // again (auto-predict). Never painted onto the image now on screen.
       // Checked after _ensureClasses, which also awaited the network.
       const now = state.currentIdx >= 0 ? state.media[state.currentIdx] : null;
-      if (!now || now.path !== runPath) {
-        _setMeta(await _applyToOtherImage(runPath, preds));
-        return;
-      }
+      if (!now || now.path !== runPath) return;
       _raw = preds;
       _runId = 'pr' + Date.now().toString(36);
       app._pushHistory();
@@ -805,6 +750,24 @@ const PromptAnnotate = (() => {
     _raw = [];
     _runId = null;
     _syncExemplarUI();
+    // Unapproved AI Annotate suggestions don't outlive the panel. They were
+    // never saved (transient), so this only clears the screen; accepted and
+    // rejected boxes are decisions and stay.
+    const before = state.bboxes.length;
+    state.bboxes = state.bboxes.filter(b => !(b._transient && Boxes.isSuggested(b)));
+    if (state.bboxes.length !== before) {
+      if (state.selectedId && !state.bboxes.some(b => b.id === state.selectedId)) state.selectedId = null;
+      app._render();
+      app._updateAnnoList();
+      app._updateClassCounts();
+      app._statusObjects();
+      app._updateReviewBanner();
+    }
+    // Examples live for ONE panel session (user's choice): closing the panel
+    // clears the library — file and the server's cached encodings — so old
+    // classes from an earlier task are never suggested again and nothing
+    // piles up. Suggestions already placed on images are kept.
+    if (_examples.length) _removeExamples({ all: true });
   }
 
   // ── Drag + collapse ─────────────────────────────────────────────────────

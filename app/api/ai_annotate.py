@@ -596,6 +596,10 @@ def api_ai_examples(workspace_id, project):
             wsf, project, ids=data.get('ids'), image=data.get('image'),
             class_id=int(cid) if cid is not None else None,
             everything=bool(data.get('all')))
+        if data.get('all'):
+            # The panel clears the library when it closes: drop the encoded
+            # examples from memory too, not just the file.
+            prompt_models.clear_example_cache()
         return jsonify({**listing(), 'removed': n})
     except box_examples.ExampleError as e:
         return jsonify({'error': str(e)}), 422

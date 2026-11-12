@@ -304,6 +304,12 @@ const Boxes = {
   serialize(list, W, H) {
     if (!(W > 0 && H > 0)) return [];
     return (list || [])
+      // AI Annotate suggestions are TRANSIENT (Roboflow-style): shown until the
+      // user decides, never written to disk while still undecided. Leave the
+      // image or close the panel without approving and they are gone; come
+      // back and a FRESH prediction runs. Accepting makes them confirmed and
+      // rejecting makes them rejected — both of those ARE saved.
+      .filter(b => !(b._transient && this.isSuggested(b)))
       .filter(b => b.type === 'polygon' || (b.w > 0 && b.h > 0))
       .map(b => {
         const base = { class_id: b.cls, state: this.stateOf(b) };
@@ -2109,13 +2115,20 @@ const app = {
       const pb = state.pendingBox;
       state.pendingBox = null;
       if (pb.w > 5 && pb.h > 5) {
-        state.promptBoxes.push({
+        const box = {
           x: Math.max(0, pb.x), y: Math.max(0, pb.y),
           w: Math.min(pb.w, state.imgW - pb.x),
           h: Math.min(pb.h, state.imgH - pb.y),
-          label: (state.classes.find(c => c.id === state.selectedCls) || {}).name || 'object',
-        });
-        if (typeof this._onPromptBoxesChanged === 'function') this._onPromptBoxesChanged();
+          _prompt: true,    // routes _confirmPopup to _commitPromptBox, never to bboxes
+        };
+        // Same rule as annotation: Repeat mode reuses the last class, otherwise
+        // the class is chosen per box in the SAME popup annotation uses.
+        if (state.repeatMode && state.lastUsedCls !== null && state.lastUsedCls !== undefined) {
+          this._commitPromptBox(box, state.lastUsedCls);
+        } else {
+          this._showClassPopup(box, e);
+          return;
+        }
       }
       this._render();
       return;
@@ -2511,6 +2524,13 @@ const app = {
     this.closePopup();
     state.lastUsedCls = state.selectedCls;
 
+    // A box-prompt EXAMPLE, not an annotation: hand it to AI Annotate with the
+    // chosen class. It must never reach state.bboxes, history or auto-save.
+    if (pb._prompt) {
+      this._commitPromptBox(pb, state.selectedCls);
+      return;
+    }
+
     if (pb._editId) {
       const box = state.bboxes.find(b => b.id === pb._editId);
       if (box) {
@@ -2550,6 +2570,18 @@ const app = {
     // (stays in bbox mode; next click on empty space will start a new box)
   },
 
+  /* A box-prompt example whose class is now known (popup or Repeat mode).
+     AI Annotate's _onPromptBoxesChanged saves it to the example library. */
+  _commitPromptBox(box, clsId) {
+    const cls = state.classes.find(c => c.id === clsId);
+    state.promptBoxes.push({
+      x: box.x, y: box.y, w: box.w, h: box.h,
+      cls: clsId, label: cls ? cls.name : 'object',
+    });
+    if (typeof this._onPromptBoxesChanged === 'function') this._onPromptBoxesChanged();
+    this._render();
+  },
+
   closePopup() {
     const popup = document.getElementById('clsPopup');
     if (popup) popup.style.display = 'none';
@@ -2561,6 +2593,10 @@ const app = {
   // Delete the annotation referenced by the popup (new OR existing), then close
   _deleteFromPopup() {
     const pb = state.pendingBox;
+    if (pb && pb._prompt) {          // an unsaved box-prompt example: just drop it
+      this.closePopup();
+      return;
+    }
     if (pb) {
       if (pb._editId) {
         // existing box — remove it

@@ -8,13 +8,32 @@ Pillow>=10.0.0
 pyyaml>=6.0
 python-dotenv>=1.0.0
 werkzeug>=3.0.0
-PyJWT>=2.8.0
+itsdangerous>=2.1.0  # password-reset links (also comes with Flask; imported directly)
+PyJWT>=2.8.0         # NOT the unrelated "jwt" package — see CLAUDE.md
 
-# AI Smart Detect — YOLO inference
-ultralytics>=8.0.0
+# ── AI: Smart Detect (YOLO) + AI Annotate (SAM3 text/box prompting) ─────────
+ultralytics>=8.4.0
+numpy>=1.26
+opencv-python>=4.8.0 # AI Annotate decodes images with cv2 (required, not optional)
 
-# Optional: for video frame extraction fallback (ffmpeg is preferred)
-# opencv-python>=4.8.0
+# PyTorch. The line below installs the normal build, which runs on CPU.
+# For an NVIDIA GPU, install the CUDA build INSTEAD, before this file:
+#   pip install torch==2.14.1+cu130 torchvision==0.29.1+cu130 --index-url https://download.pytorch.org/whl/cu130
+# (Windows: Smart App Control must be off for the CUDA build — see CLAUDE.md.)
+torch>=2.4.0
+torchvision>=0.19.0
+
+# SAM3's text encoder needs a CLIP tokenizer — for text AND box prompts.
+# This is OpenAI's CLIP (what this app is tested with); prompt_models.py
+# bridges the one API difference. Not on PyPI, so it installs from GitHub.
+clip @ git+https://github.com/openai/CLIP.git
+
+# Box prompting's "which class?" judge (DINOv2-small, 85 MB, downloaded once
+# from Hugging Face on first use). Optional: without it, the app falls back to
+# SAM3's own features (less accurate for look-alike classes).
+timm>=1.0.0
+
+# SAM3 weights are NOT a package: put sam3.pt (3.45 GB) in models/ or beside run.py.
 
 # System dependency — install separately:
 # Windows: https://ffmpeg.org/download.html  → add to PATH

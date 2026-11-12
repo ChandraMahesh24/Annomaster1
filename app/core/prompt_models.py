@@ -630,6 +630,15 @@ _ex_cache = {}                # (id(inst), image, mtime, boxes) -> encoded
 _EX_CACHE_MAX = 256
 
 
+def clear_example_cache() -> int:
+    """Free every cached example encoding (SAM3 prompt tokens + fingerprints).
+    Called when a project's whole example library is cleared — the panel does
+    that on close — so stale encodings don't sit in RAM/VRAM until evicted."""
+    n = len(_ex_cache)
+    _ex_cache.clear()
+    return n
+
+
 def _sam3_internals():
     try:
         from ultralytics.models.sam.sam3.sam3_image import SAM2Model
@@ -658,7 +667,118 @@ def _fingerprints(inst, boxes_px, W, H):
     return F.normalize(r, dim=1).cpu()
 
 
-def _encode_image_examples(inst, image_path, rows):
+# ── The "which class?" judge: DINOv2, with SAM3's fingerprint as fallback ─────
+#
+# SAM3 is excellent at FINDING objects but its features are tuned for
+# boundaries, not for "does this person look like that one". DINOv2 is a
+# self-supervised image-feature model built for exactly that comparison
+# (uniform vs casual clothes). It only ever sees CROPS of boxes SAM3 found
+# plus the example crops — it never searches the image.
+#
+# AI_APPEARANCE=dinov2 (default) | sam3. Any failure to load DINOv2 (timm
+# missing, no cached weights and no network, ...) falls back to the SAM3
+# fingerprint with one warning — box prompting never errors because of it.
+# Which judge produced a fingerprint is part of the example cache key, so
+# vectors from different judges (different sizes) are never compared.
+
+DINO_MODEL = 'vit_small_patch14_dinov2.lvd142m'   # 22M params, 85 MB, via timm/HF hub
+DINO_SIZE = 224                                   # 16 x 16 patches of 14 px
+DINO_CROP = 'squash'                              # 'squash' | 'letterbox'
+MAX_JUDGED_HITS = 150
+# Chosen by measurement (project `m`, 8 unseen frames, staff vs customer, full
+# pipeline at thr 0.6): SAM3 judge R 0.54-0.57 / P 0.38-0.41; DINOv2-small
+# squash R 0.70-0.72 / P 0.50-0.51 (best); small letterbox and base (either
+# crop) lower in the full pipeline, base 3x slower (140 vs 42 ms/box on CPU).
+_dino = {}                                        # device -> model
+_dino_failed = [False]
+_dino_lock = threading.Lock()
+
+
+def appearance_backend() -> str:
+    """'dinov2' when wanted and loadable, else 'sam3'."""
+    import os
+    want = (os.environ.get('AI_APPEARANCE') or 'dinov2').strip().lower()
+    if want != 'dinov2' or _dino_failed[0]:
+        return 'sam3'
+    try:
+        import timm  # noqa: F401
+    except ImportError:
+        _dino_failed[0] = True
+        import logging
+        logging.getLogger(__name__).warning(
+            'AI Annotate: timm is not installed — using the SAM3 judge for box prompting')
+        return 'sam3'
+    return 'dinov2'
+
+
+def _dino_model(device):
+    with _dino_lock:
+        m = _dino.get(device)
+        if m is None:
+            import timm
+            m = timm.create_model(DINO_MODEL, pretrained=True, num_classes=0,
+                                  img_size=DINO_SIZE).eval().to(device)
+            _dino[device] = m
+        return m
+
+
+def _dino_fingerprints(img_bgr, boxes_px, device):
+    import cv2
+    import numpy as np
+    import torch
+    import torch.nn.functional as F
+    H, W = img_bgr.shape[:2]
+    rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+    crops = []
+    for b in boxes_px:
+        x1, y1 = max(0, int(round(b[0]))), max(0, int(round(b[1])))
+        x2, y2 = min(W, max(int(round(b[2])), x1 + 2)), min(H, max(int(round(b[3])), y1 + 2))
+        c = rgb[y1:y2, x1:x2]
+        if DINO_CROP == 'letterbox':
+            s = DINO_SIZE / max(c.shape[:2])
+            r = cv2.resize(c, (max(1, int(c.shape[1] * s)), max(1, int(c.shape[0] * s))),
+                           interpolation=cv2.INTER_AREA)
+            c = np.full((DINO_SIZE, DINO_SIZE, 3), 124, np.uint8)
+            oy, ox = (DINO_SIZE - r.shape[0]) // 2, (DINO_SIZE - r.shape[1]) // 2
+            c[oy:oy + r.shape[0], ox:ox + r.shape[1]] = r
+        else:
+            c = cv2.resize(c, (DINO_SIZE, DINO_SIZE), interpolation=cv2.INTER_AREA)
+        crops.append(c)
+    x = torch.from_numpy(np.stack(crops)).permute(0, 3, 1, 2).float().div_(255)
+    mean = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
+    std = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
+    x = ((x - mean) / std).to(device)
+    m = _dino_model(device)
+    with torch.inference_mode():
+        emb = torch.cat([m(x[i:i + 32]) for i in range(0, len(x), 32)])
+    return F.normalize(emb.float(), dim=1).cpu()
+
+
+def _appearance(backend, inst, img_bgr, boxes_px, W, H):
+    """Fingerprint per box from the chosen judge; falls back to SAM3, never raises for DINOv2."""
+    if backend == 'dinov2':
+        try:
+            return _dino_fingerprints(img_bgr, boxes_px, str(inst.device))
+        except Exception as e:
+            # Out of GPU memory is transient (same rule as devices.run): let it
+            # propagate so devices.run frees VRAM and retries on the next device,
+            # instead of switching DINOv2 off for the rest of the process.
+            if devices.is_oom(e):
+                raise
+            _dino_failed[0] = True
+            import logging
+            logging.getLogger(__name__).warning(
+                'AI Annotate: DINOv2 unavailable (%s) — using the SAM3 judge for box prompting', e)
+            raise _JudgeFallback() from e
+    return _fingerprints(inst, boxes_px, W, H)
+
+
+class _JudgeFallback(Exception):
+    """DINOv2 failed mid-request: redo the request with the SAM3 judge, so
+    examples and hits are always fingerprinted by the same judge."""
+
+
+def _encode_image_examples(inst, image_path, rows, backend='sam3'):
     """
     Encode every example drawn on one image: SAM3 prompt tokens (positives
     labelled 1, negatives 0) + fingerprints. Cached — the image and boxes
@@ -669,7 +789,7 @@ def _encode_image_examples(inst, image_path, rows):
         mtime = Path(image_path).stat().st_mtime_ns
     except OSError:
         return None                               # example's image was deleted
-    key = (id(inst), str(image_path), mtime,
+    key = (id(inst), backend, str(image_path), mtime,
            tuple((tuple(r['box']), bool(r['positive']), int(r['class_id'])) for r in rows))
     hit = _ex_cache.get(key)
     if hit is not None:
@@ -690,7 +810,7 @@ def _encode_image_examples(inst, image_path, rows):
                 gp.append_boxes(bb[[i]], ll[[i]])
             _, img_feats, pos, sizes = _prep_features(inst)
             tok, msk = inst.model._encode_prompt(img_feats, pos, sizes, gp)
-            fps = _fingerprints(inst, boxes, W, H)
+        fps = _appearance(backend, inst, img, boxes, W, H)
     finally:
         inst.reset_image()
     enc = {'tok': tok.clone(), 'msk': msk.clone(), 'fps': fps,
@@ -731,9 +851,9 @@ def _ground_with_tokens(inst, H, W, tok, msk, conf, iou):
     return bx.cpu().tolist(), sc.cpu().tolist()
 
 
-def _predict_from_examples(inst, image_path, groups, class_names, conf, iou):
+def _predict_from_examples(inst, image_path, groups, class_names, conf, iou, backend='sam3'):
     import torch
-    encs = [e for e in (_encode_image_examples(inst, p, rows) for p, rows in groups) if e]
+    encs = [e for e in (_encode_image_examples(inst, p, rows, backend) for p, rows in groups) if e]
     if not encs or not any(any(e['pos']) for e in encs):
         raise ModelError('None of the saved examples could be used — their images '
                          'may have been deleted. Draw a new example.')
@@ -751,7 +871,13 @@ def _predict_from_examples(inst, image_path, groups, class_names, conf, iou):
         boxes, scores = _ground_with_tokens(inst, H, W, tok, msk, conf, iou)
         if not boxes:
             return []
-        sims = _fingerprints(inst, boxes, W, H) @ fps.T          # (hits, examples)
+        # Judge only the strongest hits: DINOv2 costs ~42 ms/box on CPU and
+        # SAM3 returns everything above the 5 % floor (100+ on a busy frame);
+        # the tail is far below any slider setting a user would pick.
+        if len(boxes) > MAX_JUDGED_HITS:
+            order = sorted(range(len(boxes)), key=lambda i: -scores[i])[:MAX_JUDGED_HITS]
+            boxes, scores = [boxes[i] for i in order], [scores[i] for i in order]
+        sims = _appearance(backend, inst, img, boxes, W, H) @ fps.T   # (hits, examples)
     finally:
         inst.reset_image()
 
@@ -817,14 +943,22 @@ def predict_examples(image_path, examples, project_root, class_names,
             inst = load(eid, device, half)
             if inst.model is None:                 # SAM3 builds lazily on first image
                 inst.setup_model()
+            judge = appearance_backend()
             try:
-                out = _predict_from_examples(inst, image_path, list(groups.items()),
-                                             class_names, conf, iou)
+                try:
+                    out = _predict_from_examples(inst, image_path, list(groups.items()),
+                                                 class_names, conf, iou, judge)
+                except _JudgeFallback:
+                    # DINOv2 failed (logged once): redo the whole request with
+                    # the SAM3 judge so examples and hits match.
+                    judge = 'sam3'
+                    out = _predict_from_examples(inst, image_path, list(groups.items()),
+                                                 class_names, conf, iou, judge)
             except Exception:
                 if device != 'cpu':
                     _evict(eid, device, half)
                 raise
-        used.update(device=device, half=half)
+        used.update(device=device, half=half, judge=judge)
         return out
 
     try:
@@ -835,4 +969,5 @@ def predict_examples(image_path, examples, project_root, class_names,
         raise ModelError(f'{spec["label"]} example prompt failed: {e}') from e
     labels = sorted({class_names[int(r['class_id'])] for r in rows if r.get('positive', True)})
     return {'predictions': preds, 'engine': eid, 'labels': labels,
-            'examples_used': len(rows), 'device': used.get('device'), 'half': used.get('half')}
+            'examples_used': len(rows), 'device': used.get('device'), 'half': used.get('half'),
+            'judge': used.get('judge')}

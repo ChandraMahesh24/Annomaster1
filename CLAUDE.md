@@ -53,6 +53,13 @@ with app.app_context():
 External runtime dependency: **ffmpeg** must be on PATH for video frame extraction.
 `ultralytics` (YOLO) powers AI Smart Detect; model weights live in `models/`.
 
+`requirements.txt` lists every third-party package the code imports (checked
+2026-11-12 against the imports and this machine's versions). Non-obvious entries:
+`clip` is **OpenAI's CLIP from GitHub** (not on PyPI) and is required by SAM3 for
+both text and box prompts; `opencv-python` is required (AI Annotate decodes with
+cv2); `timm` is optional (DINOv2 judge, falls back to SAM3); `torch` installs the
+CPU build — the GPU build is a separate command in the file's comments.
+
 ⚠️ The auth code needs **`PyJWT`** (`import jwt` → `jwt.encode`). The unrelated PyPI package
 named `jwt` installs the same module name without `encode`, and every login/register then 500s
 with `module 'jwt' has no attribute 'encode'`. The global Python on this machine had `jwt 1.4.0`
@@ -306,23 +313,25 @@ phrases go through `_boxes_only()` (boxes, no masks) **one phrase per pass**
     (`_ensureClasses`). They used to be pushed only into `state.classes`, so after
     a reload the saved boxes pointed at a class the project didn't have. A class the
     server refuses → its predictions are dropped with an error toast.
-  - **A run belongs to the image it started on — and users DO move on during it.**
-    The audit log showed it: start "person", keep labelling the next frames for the
-    ~20–40 s CPU wait. An early fix that *discarded* results on navigation made the
-    feature look broken ("it found nothing") while the server had returned 72 people.
-    Now, if the image changed, `_applyToOtherImage()` GETs that image's saved boxes,
-    runs the same `Boxes.reconcile`, and POSTs them back — results wait there as
-    suggestions, with a toast + panel line naming the image. Not painted on the
-    image on screen; skipped (with a message) if that image is marked Null; image
-    reloaded (`loadImage(idx, true)`) if the user navigated back mid-save so its
-    auto-save can't drop them. **Closing the panel mid-run = cancel.**
-  - That path works on a **virtual 1e9×1e9 canvas** (IoU is scale-invariant). It
-    must stay ≥1e9: the save rewrites the image's *confirmed* boxes, and
-    `_convertBboxes` rounds to whole pixels — at 1e6, `0.623775` came back as
-    `0.6237745` (a test pins this byte-for-byte).
-  - `_toBox(p, W, H, owned)` has optional params — call it as
-    `list.map(p => _toBox(p))`, never `list.map(_toBox)` (map's index/array land in
-    W/H; this shipped briefly and produced garbage boxes).
+  - **AI Annotate suggestions are TRANSIENT (user's choice, 2026-11-12, "like
+    Roboflow").** Every box `_toBox` makes carries `_transient: true`, and
+    `Boxes.serialize` skips undecided transient suggestions — so they are NEVER
+    written to the sidecar. Leave the image → gone; come back → a FRESH
+    prediction (auto-predict now runs in BOTH tabs: Box from the library, Text from
+    the typed phrases; the "Predict automatically" toggle sits above the slider);
+    close the panel → `close()` removes them from the canvas. Accepting
+    (→ confirmed) and rejecting (→ rejected) are decisions and ARE saved; a
+    rejection still blocks re-suggesting. Suggestions from elsewhere (Smart Detect
+    review mode) are not transient and still persist as before.
+  - **A run belongs to the image it started on.** If the user left that image
+    while it ran, the result is DROPPED (not painted here, not saved there); the
+    image that is now open is predicted when the run ends (`_autoPending`).
+    History: results used to be saved to the left image via `_applyToOtherImage`
+    on a 1e9 virtual canvas — removed with the transient change. **Closing the
+    panel mid-run = cancel.**
+  - 2026-11-12: the 9 old unapproved suggestions persisted in project `m`
+    before this change (5 sidecars, all AI Annotate) were deleted at the user's
+    request; backup in that session's scratchpad (`old_suggestions_backup/`).
   - The Run button shows a live `Running… N s` counter; a non-JSON reply (proxy
     502 page) shows "unexpected response (HTTP 502)" instead of a JSON parse error.
   - Debug "it shows nothing" from the **audit log** first: `ai.prompt` rows carry the
@@ -391,20 +400,39 @@ on another port.
   warm-up in `run.py` was tried and **rolled back by the user** — don't re-add it
   without asking. If it comes back: warm only the reloader *child*
   (`WERKZEUG_RUN_MAIN == 'true'`), or the 6 GB GPU holds two copies.
-- Leaving an image with unreviewed suggestions keeps them (sidecar) — they show
-  again on return, by design, until accepted (Enter / Shift+Enter) or rejected
-  (Delete / Shift+Delete). Never exported either way.
+- Leaving an image with unreviewed **AI Annotate** suggestions DISCARDS them
+  (transient, see above) — the user asked for Roboflow behaviour after seeing old
+  suggestions reappear. Smart Detect review-mode suggestions still persist in the
+  sidecar until accepted (Enter / Shift+Enter) or rejected (Delete / Shift+Delete).
+  Never exported either way.
 
 ### Box prompting — a per-project example library (Roboflow-style), BUILT 2026-11-12
 
-**What the user does:** Box tab → pick a class in the class list → **This is /
-Not this** → draw a box around one (or **📥 Use my boxes** = this image's
-CONFIRMED boxes become examples). Examples are saved for the whole project and
-predict EVERY image: each image is auto-predicted as it opens (toggle, persisted
-as `settings.ai_prompt.auto`, default on), and adding an example re-predicts the
-current image at once. The panel lists examples per class with remove buttons; the
-eraser removes the current image's. Results are ordinary suggestions (sidecar,
-slider, review, confirmed-only export) — nothing new in the lifecycle.
+**What the user does:** Box tab → **This is / Not this** → **Draw example box**
+→ drag around one → **the same class popup annotation uses** opens → pick the
+class (or **📥 Use my boxes** = this image's CONFIRMED boxes become examples, each
+with its own class). Repeat mode skips the popup and reuses the last class, as
+for annotation. Implementation: main.js `_onMouseUp` prompt branch builds the
+box with `_prompt: true` and calls `_showClassPopup`; `_confirmPopup` routes a
+`_prompt` box to `_commitPromptBox(box, cls)` (→ `state.promptBoxes` with `cls`
+→ `_onPromptBoxesChanged` saves it) **before** the annotation branches, so an
+example never reaches `state.bboxes`, history or auto-save; `_deleteFromPopup`
+and Escape just discard it. The panel no longer requires a pre-selected class.
+
+**Examples last ONE panel session (user's choice, 2026-11-12).** While the panel
+is open they predict EVERY image: each image is auto-predicted as it opens
+(toggle, persisted as `settings.ai_prompt.auto`, default on), and adding an
+example re-predicts the current image at once. **Closing the panel clears the
+library** — `close()` sends `DELETE /ai/examples {all:true}`, which empties
+`prompt_examples.json` and calls `prompt_models.clear_example_cache()` to free
+the encoded examples from RAM/VRAM — so old classes from an earlier task are
+never suggested again and nothing accumulates. Suggestions already placed on
+images are kept. A page reload WITHOUT closing the panel keeps the library (it
+is still on disk). The file is shared per project, so closing clears it for
+every user of that project. The panel lists examples per class with remove
+buttons; the eraser removes the current image's. Results are ordinary
+suggestions (sidecar, slider, review, confirmed-only export) — nothing new in
+the lifecycle.
 
 **Why this design** — measured on project `m`, whose `1_staff` (3,445 boxes) vs
 `customer` (2,245) over 1,251 frames of `job_2026-11-11_15-26-09_954` can't be
@@ -420,6 +448,33 @@ described by a word (read-only experiments; 8–10 unseen frames):
 Staff-vs-customer on the TRUE boxes: 0.76 (3 example frames) → 0.86 (6): more
 examples, better classes. Precision is held down mostly by people the user
 doesn't label (mall corridor); "Not this" examples are the remedy.
+
+**The "which class?" judge is DINOv2-small (since 2026-11-12), SAM3 still FINDS.**
+SAM3's features are tuned for boundaries, not "does this person look like that
+one". Measured on 8 other unseen frames (judge alone on true boxes, 3 → 6
+example frames): SAM3 fingerprint 0.48 → 0.61; **DINOv2-small, squashed 224
+crop 0.65 → 0.80**; small letterbox 0.61 → 0.76; base squash 0.80 → 0.85;
+base letterbox 0.67 → 0.80. Full pipeline at thr 0.6 (what users see): SAM3
+judge R 0.54–0.57 P 0.38–0.41 vs **DINOv2-small squash R 0.70–0.72 P 0.50–0.51**
+— the best; base was lower in the full pipeline and 3× slower. GPU cost: ~0.85
+s/image vs 0.68 s, same 3.17 GB peak VRAM; CPU: +42 ms per judged box.
+- `prompt_models.appearance_backend()` → `'dinov2'` | `'sam3'`
+  (`AI_APPEARANCE` env, default dinov2). `_dino_fingerprints` crops each box,
+  resizes to 224², runs timm `vit_small_patch14_dinov2.lvd142m` (created with
+  `img_size=224` — its default is 518 and a 224 input asserts otherwise).
+  Weights download once to `~/.cache/huggingface/hub` (85 MB).
+- **Never errors because of DINOv2.** No `timm`, failed download, any
+  non-OOM error → `_JudgeFallback` redoes the WHOLE request with the SAM3 judge
+  (examples and hits must use the same judge — different vector sizes), logs
+  once, and `_dino_failed` makes later requests skip it until restart. **CUDA
+  OOM is re-raised instead** (transient; `devices.run` frees VRAM and retries) —
+  an early version switched DINOv2 off for good on one OOM.
+- The judge name is in the example cache key; only the top `MAX_JUDGED_HITS`
+  (150) hits by score are judged (the tail is below any useful slider value).
+- Tests (scratchpad): 7/7 judge tests (default used, `sam3` switch, broken
+  model → SAM3 with results, no retry storm, no-timm, timm back); box-by-box
+  the two judges disagreed on 25 of 63 hits of one frame — so a tie in a small
+  aggregate is not "DINOv2 unused".
 
 **Pieces:**
 - `core/box_examples.py` — `prompt_examples.json` (path via
@@ -446,6 +501,14 @@ doesn't label (mall corridor); "Not this" examples are the remedy.
 - **Tab race (fixed):** `open()` loads settings async; applying the saved `mode`
   there overwrote a "Box prompt" click made meanwhile, so the Box tab showed while
   runs were TEXT. Saved mode is now `_savedMode`, applied only if `!_modeTouched`.
+- **Library-load race (fixed):** the first panel open after a server start
+  takes seconds (`/ai/prompt/engines` imports torch); an example saved meanwhile
+  was wiped from the screen by the late, stale `GET /ai/examples`. Every
+  save/delete bumps `_exWrites`; `_loadExamples` applies its answer only if no
+  write happened while it was in flight. Found with a real-page CDP test whose
+  writes are intercepted in the page (`Page.addScriptToEvaluateOnNewDocument`
+  fetch stub) — the safe way to e2e-test while the user is building their
+  library. Note the popup's class items react to **mousedown**, not `click()`.
 
 Tests (scratchpad, re-creatable): API 14 checks, browser logic 37 (Edge
 headless, incl. the race), and a real-page CDP end-to-end (teach on frame
