@@ -79,7 +79,7 @@ Boxes and polygons, nested boxes, class popup, repeat mode, copy/paste, undo/red
 
 #### ✅ Safe by design
 AI output is a suggestion until a person accepts it. Exports contain only human-confirmed labels.
-<br/><sub><a href="docs/ai-labelling.md#reviewing-suggestions">Learn more →</a></sub>
+<br/><sub><a href="docs/ai-labelling.md#6-reviewing-suggestions">Learn more →</a></sub>
 
 </td>
 </tr>

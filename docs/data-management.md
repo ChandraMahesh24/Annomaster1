@@ -51,7 +51,7 @@ A step-by-step wizard creates an **immutable snapshot** of the project's labelle
 Each version contains `images/` and `labels/` per split, a `data.yaml` and a `README.md` with statistics. **Download** any version as a ZIP, ready for `yolo train`.
 
 - Only **annotated and Null images** are included; images nobody has labelled yet are left out.
-- Only **human-confirmed** labels are included; see [Reviewing suggestions](ai-labelling.md#reviewing-suggestions).
+- Only **human-confirmed** labels are included; see [Reviewing suggestions](ai-labelling.md#6-reviewing-suggestions).
 
 > **Note:** the wizard also offers preprocessing (resize, auto-orient, normalize) and augmentation options. These are currently **recorded in the version's README only**; images are exported at their original size and unmodified.
 
