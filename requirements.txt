@@ -1,4 +1,7 @@
-# Python packages (pip install -r requirements.txt)
+# Python packages:  pip install -r requirements.txt
+# Grouped by feature. Manual annotation needs only the first group.
+
+# ── 1. Core app (always needed) ─────────────────────────────────────────────
 flask>=3.0.0
 flask-sqlalchemy>=3.1.0
 flask-migrate>=4.0.5
@@ -11,32 +14,40 @@ werkzeug>=3.0.0
 itsdangerous>=2.1.0  # password-reset links (also comes with Flask; imported directly)
 PyJWT>=2.8.0         # NOT the unrelated "jwt" package — see CLAUDE.md
 
-# ── AI: Smart Detect (YOLO) + AI Annotate (SAM3 text/box prompting) ─────────
-ultralytics>=8.4.0
+# ── 2. AI base: Smart Detect (your YOLO models) + everything below ──────────
+# Pinned to the version tested with this app's SAM3 code, which uses some
+# ultralytics SAM3 internals that can change between releases.
+ultralytics>=8.4.193
 numpy>=1.26
-opencv-python>=4.8.0 # AI Annotate decodes images with cv2 (required, not optional)
+opencv-python>=4.8.0  # AI Annotate decodes images with cv2
 
-# PyTorch. The line below installs the normal build, which runs on CPU.
+# PyTorch. The two lines below install the normal build, which runs on CPU.
 # For an NVIDIA GPU, install the CUDA build INSTEAD, before this file:
 #   pip install torch==2.14.1+cu130 torchvision==0.29.1+cu130 --index-url https://download.pytorch.org/whl/cu130
-# (Windows: Smart App Control must be off for the CUDA build — see CLAUDE.md.)
+# (Windows: Smart App Control must be off for the CUDA build — see README.)
 torch>=2.4.0
-torchvision>=0.19.0
+torchvision>=0.19.0   # also used directly: box NMS + ROI-align for AI Annotate
 
-# SAM3's text encoder needs a CLIP tokenizer — for text AND box prompts.
-# This is OpenAI's CLIP (what this app is tested with); prompt_models.py
-# bridges the one API difference. Not on PyPI, so it installs from GitHub.
-clip @ git+https://github.com/openai/CLIP.git
-
-# Box prompting's "which class?" judge (DINOv2-small, 85 MB, downloaded once
-# from Hugging Face on first use). Optional: without it, the app falls back to
-# SAM3's own features (less accurate for look-alike classes).
+# ── 3. SAM3 — AI Annotate text prompts + box prompts ───────────────────────
+# The model file sam3.pt (3.45 GB) is NOT a package: see "Downloading SAM3"
+# in README.md (gated by Meta on Hugging Face).
+#
+# timm: REQUIRED by SAM3 — every block of its image backbone is built from
+#   timm layers (ultralytics' vitdet.py). Missing → ultralytics tries to
+#   pip-install it in the middle of the first prompt. Also runs the DINOv2
+#   "which class?" judge for box prompts (85 MB, downloaded once on first use).
 timm>=1.0.0
+# clip: SAM3's text encoder — needed for text AND box prompts. OpenAI's CLIP
+#   from GitHub (not on PyPI); brings ftfy + regex with it. prompt_models.py
+#   bridges its one API difference from ultralytics' CLIP fork. Missing →
+#   ultralytics tries to install its own fork mid-request.
+clip @ git+https://github.com/openai/CLIP.git
+# huggingface_hub comes with timm: provides the `hf` command used to download
+#   sam3.pt, and fetches the DINOv2 weights.
 
-# SAM3 weights are NOT a package: put sam3.pt (3.45 GB) in models/ or beside run.py.
-
-# System dependency — install separately:
-# Windows: https://ffmpeg.org/download.html  → add to PATH
-# Linux:   sudo apt install ffmpeg
-# Mac:     brew install ffmpeg
+# ── System dependency — install separately ─────────────────────────────────
+# ffmpeg (video → frames):
+#   Windows: https://ffmpeg.org/download.html  → add to PATH
+#   Linux:   sudo apt install ffmpeg
+#   Mac:     brew install ffmpeg
 # Supports: mp4, avi, mov, mkv, dav (CCTV/Dahua), h264, h265, ts, and all ffmpeg formats

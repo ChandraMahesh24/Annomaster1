@@ -53,12 +53,19 @@ with app.app_context():
 External runtime dependency: **ffmpeg** must be on PATH for video frame extraction.
 `ultralytics` (YOLO) powers AI Smart Detect; model weights live in `models/`.
 
-`requirements.txt` lists every third-party package the code imports (checked
-2026-11-12 against the imports and this machine's versions). Non-obvious entries:
-`clip` is **OpenAI's CLIP from GitHub** (not on PyPI) and is required by SAM3 for
-both text and box prompts; `opencv-python` is required (AI Annotate decodes with
-cv2); `timm` is optional (DINOv2 judge, falls back to SAM3); `torch` installs the
-CPU build — the GPU build is a separate command in the file's comments.
+`requirements.txt` lists every third-party package the code imports, grouped by
+feature (1 core · 2 AI base · 3 SAM3; checked 2026-11-12 against the imports, the
+SAM3 code inside ultralytics, and this machine's versions). Non-obvious entries:
+- **`timm` is REQUIRED by SAM3 itself** — ultralytics' `sam3/vitdet.py` builds
+  every backbone block from timm layers and calls `check_requirements("timm")`,
+  which pip-installs mid-request if missing. It also runs the DINOv2 judge.
+- `clip` is **OpenAI's CLIP from GitHub** (not on PyPI; brings `ftfy` + `regex`),
+  required by SAM3 for text AND box prompts. Missing → ultralytics'
+  `build_sam3.py` pip-installs its own CLIP fork mid-request.
+- `ultralytics>=8.4.193` — the tested version; our SAM3 code uses internals
+  (`_prepare_geometric_prompts`, `_encode_prompt`, `_run_encoder/_decoder`, …).
+- `opencv-python` is required (AI Annotate decodes with cv2); `torch` installs
+  the CPU build — the GPU build is a separate command in the file's comments.
 
 ⚠️ The auth code needs **`PyJWT`** (`import jwt` → `jwt.encode`). The unrelated PyPI package
 named `jwt` installs the same module name without `encode`, and every login/register then 500s
