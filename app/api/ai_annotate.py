@@ -17,6 +17,8 @@ from app.core.storage import load_project_meta, save_project_meta
 from app.core import ai_models
 from app.core.ai_models import ModelError, MODELS_DIR
 from app.core import prompt_models
+from app.core import box_examples
+from app.core import devices
 from app.models.workspace import Workspace
 
 ai_annotate_bp = Blueprint('ai_annotate', __name__)
@@ -29,6 +31,33 @@ DEFAULT_AI_SETTINGS = {
     'iou':   0.5,           # duplicate-match threshold
 }
 VALID_MODES = ('review', 'autosave')
+
+
+def _resolve_image(wsf, project, rel_path):
+    """
+    Project-relative image path → (absolute Path, None) or (None, error response).
+
+    The client sends a path relative to the project. Without this check
+    `project_dir / rel_path` accepts "../.." and, on Windows, an absolute
+    path ("D:/…") — which REPLACES the base — so a request could run a model
+    over any image on the server's disk. Resolve, then require the result
+    to stay inside the project and be an image file.
+    """
+    base = project_dir(wsf, project).resolve()
+    rel = str(rel_path).replace('\\', '/')
+    if Path(rel).is_absolute() or Path(rel).drive or rel.startswith('/'):
+        return None, (jsonify({'error': 'path must be relative to the project'}), 400)
+    try:
+        p = (base / rel).resolve()
+    except (OSError, ValueError):
+        return None, (jsonify({'error': 'Invalid image path'}), 400)
+    if not p.is_relative_to(base):
+        return None, (jsonify({'error': 'path must stay inside the project'}), 400)
+    if p.suffix.lower() not in prompt_models.IMAGE_EXTS:
+        return None, (jsonify({'error': f'Not an image file: {rel_path}'}), 400)
+    if not p.is_file():
+        return None, (jsonify({'error': f'Image not found: {rel_path}'}), 404)
+    return p, None
 
 
 def _wsf(wid):
@@ -184,7 +213,9 @@ def api_ai_predict(workspace_id, project):
     Detections below `conf` are dropped by ultralytics itself, so they never
     reach the client in either Smart Detect mode.
     """
-    data     = request.json or {}
+    data     = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Request body must be a JSON object'}), 400
     rel_path = data.get('path', '')
     if not rel_path:
         return jsonify({'error': 'path is required'}), 400
@@ -205,9 +236,9 @@ def api_ai_predict(workspace_id, project):
         conf = 0.45
     conf = max(0.01, min(0.99, conf))
 
-    img_path = project_dir(wsf, project) / rel_path
-    if not img_path.exists():
-        return jsonify({'error': f'Image not found: {rel_path}'}), 404
+    img_path, err = _resolve_image(wsf, project, rel_path)
+    if err:
+        return err
 
     # Cached instance — no per-request checkpoint deserialisation.
     try:
@@ -215,8 +246,23 @@ def api_ai_predict(workspace_id, project):
     except ModelError as e:
         return jsonify({'error': str(e)}), 422
 
+    # GPU when available, CPU otherwise, with automatic fallback (see
+    # core/devices.py). The predictor binds the model to a device the first
+    # time it runs, so a retry on a different device must start a fresh one.
+    def _attempt(device, half):
+        if getattr(model, '_am_device', None) != (device, half):
+            model.predictor = None
+            model._am_device = (device, half)
+        try:
+            return model.predict(str(img_path), conf=conf, verbose=False,
+                                 device=device, half=half)
+        except Exception:
+            model.predictor = None
+            model._am_device = None
+            raise
+
     try:
-        results = model.predict(str(img_path), conf=conf, verbose=False)
+        results = devices.run(f'detect:{model_name}', _attempt)
     except Exception as e:
         return jsonify({'error': f'Detection failed on this image: {e}'}), 500
 
@@ -306,6 +352,7 @@ DEFAULT_PROMPT_SETTINGS = {
     'conf':    0.4,         # DISPLAY threshold — applied in the browser
     'mode':    'text',      # 'text' | 'box'
     'phrases': [],          # last prompt, so it survives a reload
+    'auto':    True,        # box tab: predict from the example library on each image
 }
 
 
@@ -378,6 +425,9 @@ def api_ai_prompt_settings(workspace_id, project):
             return jsonify({'error': 'mode must be "text" or "box"'}), 400
         current['mode'] = data['mode']
 
+    if 'auto' in data:
+        current['auto'] = bool(data['auto'])
+
     if 'phrases' in data:
         try:
             current['phrases'] = [str(p)[:64] for p in (data['phrases'] or [])
@@ -411,7 +461,9 @@ def api_ai_prompt(workspace_id, project):
     """
     import time
 
-    data = request.json or {}
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Request body must be a JSON object'}), 400
     rel_path = data.get('path', '')
     if not rel_path:
         return jsonify({'error': 'path is required'}), 400
@@ -420,27 +472,42 @@ def api_ai_prompt(workspace_id, project):
     settings = _read_prompt_settings(wsf, project)
     engine = data.get('engine') or settings.get('engine')
     mode = data.get('mode') or settings.get('mode') or prompt_models.TEXT
+    if mode not in (prompt_models.TEXT, prompt_models.BOX, 'examples'):
+        return jsonify({'error': 'mode must be "text", "box" or "examples"'}), 400
 
-    img_path = project_dir(wsf, project) / rel_path
-    if not img_path.exists():
-        return jsonify({'error': f'Image not found: {rel_path}'}), 404
+    img_path, err = _resolve_image(wsf, project, rel_path)
+    if err:
+        return err
 
-    try:
-        conf = float(data.get('conf', prompt_models.CONF_FLOOR))
-    except (TypeError, ValueError):
-        conf = prompt_models.CONF_FLOOR
+    nums = {}
+    for key, default in (('conf', prompt_models.CONF_FLOOR), ('iou', 0.5)):
+        raw = data.get(key)
+        try:
+            nums[key] = default if raw is None else float(raw)
+        except (TypeError, ValueError):
+            return jsonify({'error': f'{key} must be a number between 0 and 1'}), 400
+    conf, iou = nums['conf'], nums['iou']
 
     started = time.time()
     try:
-        out = prompt_models.predict(
-            img_path,
-            engine=engine,
-            mode=mode,
-            phrases=data.get('phrases'),
-            boxes=data.get('boxes'),
-            conf=conf,
-            iou=float(data.get('iou', 0.5) or 0.5),
-        )
+        if mode == 'examples':
+            # Roboflow-style: predict from the project's saved example library
+            # (core/box_examples.py), whatever image those examples were drawn on.
+            meta = load_project_meta(wsf, project) or {}
+            class_names = {int(c['id']): c['name'] for c in meta.get('classes', [])}
+            out = prompt_models.predict_examples(
+                img_path, box_examples.load(wsf, project), project_dir(wsf, project),
+                class_names, engine=engine, conf=conf, iou=iou)
+        else:
+            out = prompt_models.predict(
+                img_path,
+                engine=engine,
+                mode=mode,
+                phrases=data.get('phrases'),
+                boxes=data.get('boxes'),
+                conf=conf,
+                iou=iou,
+            )
     except ModelError as e:
         # 422: the request is fine, the model or the prompt is the problem.
         return jsonify({'error': str(e)}), 422
@@ -474,3 +541,63 @@ def api_ai_prompt(workspace_id, project):
         pass
 
     return jsonify(out)
+
+
+# ── Box-prompt example library (Roboflow-style "teach by example") ─────────────
+
+@ai_annotate_bp.route(
+    '/api/workspaces/<int:workspace_id>/projects/<project>/ai/examples',
+    methods=['GET', 'POST', 'DELETE'])
+@login_required
+@workspace_role_required('owner', 'editor', 'viewer')
+def api_ai_examples(workspace_id, project):
+    """
+    The project's saved box-prompt examples (core/box_examples.py).
+
+    GET    → {"examples": [...], "counts": {class_id: {"positive": n, "negative": n}}}
+    POST   {"image": "<rel path>", "boxes": [{"x1","y1","x2","y2" (0-1),
+                                              "class_id", "positive"}]}
+    DELETE {"ids": [...]} | {"image": "..."} | {"class_id": n} | {"all": true}
+
+    Examples are prompts, never annotations: they don't touch any label file.
+    """
+    wsf = _wsf(workspace_id)
+
+    def listing():
+        rows = box_examples.load(wsf, project)
+        counts = {}
+        for r in rows:
+            c = counts.setdefault(str(r['class_id']), {'positive': 0, 'negative': 0})
+            c['positive' if r.get('positive', True) else 'negative'] += 1
+        return {'examples': rows, 'counts': counts, 'max': box_examples.MAX_EXAMPLES}
+
+    if request.method == 'GET':
+        return jsonify(listing())
+
+    if g.member_role not in ('owner', 'editor'):
+        return jsonify({'error': 'Viewers cannot change the example library'}), 403
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Request body must be a JSON object'}), 400
+
+    try:
+        if request.method == 'POST':
+            img_path, err = _resolve_image(wsf, project, data.get('image', ''))
+            if err:
+                return err
+            meta = load_project_meta(wsf, project) or {}
+            valid = {int(c['id']) for c in meta.get('classes', [])}
+            added = box_examples.add(wsf, project, data.get('image'), data.get('boxes'),
+                                     user_id=g.current_user.id, valid_class_ids=valid)
+            return jsonify({**listing(), 'added': added})
+
+        cid = data.get('class_id')
+        n = box_examples.remove(
+            wsf, project, ids=data.get('ids'), image=data.get('image'),
+            class_id=int(cid) if cid is not None else None,
+            everything=bool(data.get('all')))
+        return jsonify({**listing(), 'removed': n})
+    except box_examples.ExampleError as e:
+        return jsonify({'error': str(e)}), 422
+    except (TypeError, ValueError) as e:
+        return jsonify({'error': f'Bad request: {e}'}), 400

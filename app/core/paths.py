@@ -71,6 +71,17 @@ def uploads_meta_file(ws_folder: str, project: str) -> Path:
     return project_dir(ws_folder, project) / '_uploads.json'
 
 
+def prompt_examples_file(ws_folder: str, project: str) -> Path:
+    """
+    The project's box-prompt example library (AI Annotate → Box prompt).
+
+    Example boxes are PROMPTS, not annotations: they live here, never in a
+    label file, so they cannot reach an export. Per project, because each
+    project teaches its own classes. See core/box_examples.py.
+    """
+    return project_dir(ws_folder, project) / 'prompt_examples.json'
+
+
 def tags_meta_file(ws_folder: str, project: str) -> Path:
     """
     Tags that have no record of their own to live on.

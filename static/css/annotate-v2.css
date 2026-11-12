@@ -1631,6 +1631,58 @@ button.tb-btn.accent:hover,
   font-size: 10px; color: var(--v2-text-muted); font-variant-numeric: tabular-nums;
   margin-left: auto;
 }
+#paUseMine { margin-left: auto; }
+
+/* Example library: "This is / Not this" switch + the class being taught */
+.pa-ex-head { display: flex; align-items: center; gap: 8px; }
+.pa-seg {
+  display: inline-flex;
+  border: 1px solid var(--v2-border-md);
+  border-radius: var(--r-xs);
+  overflow: hidden;
+}
+.pa-seg-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 9px;
+  border: none; background: var(--v2-surface-low);
+  color: var(--v2-text-muted);
+  font-family: inherit; font-size: 10px; font-weight: var(--fw-semibold);
+  cursor: pointer;
+}
+.pa-seg-btn + .pa-seg-btn { border-left: 1px solid var(--v2-border-md); }
+.pa-seg-btn:focus-visible { box-shadow: var(--focus-ring); }
+.pa-seg-btn.is-active { background: var(--accent-a10); color: var(--accent); }
+/* "Not this" armed: negative examples are drawn in the danger colour too */
+#paExNeg.is-active { background: var(--danger-bg); color: var(--danger); }
+.pa-ex-class {
+  margin-left: auto; max-width: 45%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 10px; font-weight: var(--fw-bold); color: var(--v2-text);
+}
+.pa-ex-class.is-missing { color: var(--danger); }
+
+.pa-ex-list { display: flex; flex-direction: column; gap: 3px; }
+.pa-ex-item {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 6px;
+  border-radius: var(--r-xs);
+  background: var(--v2-surface-low);
+  font-size: 10px; color: var(--v2-text);
+}
+.pa-ex-dot { width: 8px; height: 8px; border-radius: var(--r-full); flex: none; }
+.pa-ex-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--fw-semibold); }
+.pa-ex-n { font-variant-numeric: tabular-nums; color: var(--v2-text-muted); }
+.pa-ex-n .neg { color: var(--danger); }
+.pa-ex-item button {
+  background: none; border: none; cursor: pointer;
+  color: var(--v2-text-muted); padding: 0 2px; font-size: 9px; line-height: 1;
+}
+.pa-ex-item button:hover { color: var(--danger); }
+.pa-ex-empty { font-size: 10px; color: var(--v2-text-muted); }
+.pa-auto {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 10px; color: var(--v2-text); cursor: pointer;
+}
 
 /* ── Confidence ────────────────────────────────────────────────── */
 .pa-ctrl { display: flex; flex-direction: column; gap: 3px; }

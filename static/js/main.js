@@ -78,6 +78,7 @@ const ThemeColors = {
       grid:   v('--ink-a15', 'rgba(255,255,255,0.15)'),
       onFill: v('--on-fill', '#000'),
       text:   v('--tx',      '#f0f0f8'),
+      danger: v('--danger',  '#ff5c7a'),
     };
   },
 
@@ -1353,6 +1354,12 @@ const app = {
       // Surface any suggestions that were rehydrated from the sidecar, so a
       // frame with pending review shows the banner immediately on load.
       this._updateReviewBanner();
+      // This path (image first, annotations second — the usual one for a
+      // cached image) must notify onImageLoaded subscribers too. It used to
+      // fire only from _applyPendingBboxes (annotations first), so AI
+      // Annotate silently missed most image changes: no per-image reset, no
+      // example display, no auto-predict from the box-prompt library.
+      this._fireImageLoaded();
     } else {
       // ── Case A: image not loaded yet — buffer for img.onload ──────────────
       // _applyPendingBboxes() will be called from img.onload once imgW/H are set
@@ -1510,27 +1517,31 @@ const app = {
   _drawPromptBoxes() {
     const ctx = this.ctx;
     ctx.save();
-    ctx.setLineDash([7, 5]);
     ctx.lineWidth = 2;
-    ctx.strokeStyle = ThemeColors.accentAlpha(0.95);
-    ctx.fillStyle = ThemeColors.accentAlpha(0.10);
 
     state.promptBoxes.forEach((b, i) => {
       const p = this._toCanvas(b.x, b.y);
       const w = b.w * state.zoom, h = b.h * state.zoom;
+      // A "Not this" example (positive === false) is drawn in the danger
+      // colour so it can't be mistaken for one of the class to find.
+      const neg = b.positive === false;
+      const solid = neg ? ThemeColors.get().danger : ThemeColors.accentAlpha(0.95);
+      ctx.setLineDash([7, 5]);
+      ctx.strokeStyle = solid;
+      ctx.globalAlpha = 0.12;
+      ctx.fillStyle = solid;
       ctx.fillRect(p.x, p.y, w, h);
+      ctx.globalAlpha = 1;
       ctx.strokeRect(p.x, p.y, w, h);
 
-      const tag = `example ${i + 1}`;
+      const tag = b.tag || `example ${i + 1}`;
       ctx.setLineDash([]);
       ctx.font = '600 11px system-ui, sans-serif';
       const tw = ctx.measureText(tag).width + 10;
-      ctx.fillStyle = ThemeColors.accentAlpha(0.95);
+      ctx.fillStyle = solid;
       ctx.fillRect(p.x, p.y - 17, tw, 17);
       ctx.fillStyle = ThemeColors.get().onFill;
       ctx.fillText(tag, p.x + 5, p.y - 5);
-      ctx.fillStyle = ThemeColors.accentAlpha(0.10);
-      ctx.setLineDash([7, 5]);
     });
     ctx.restore();
   },
@@ -3158,6 +3169,8 @@ const app = {
     document.querySelectorAll('.cls-row').forEach(r => {
       r.classList.toggle('sel', parseInt(r.dataset.id) === id);
     });
+    // AI Annotate's box tab shows which class the next example will teach.
+    if (typeof this._onClassSelected === 'function') this._onClassSelected(id);
     // update selected box class
     if (state.selectedId) {
       const box = state.bboxes.find(b => b.id === state.selectedId);

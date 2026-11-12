@@ -249,17 +249,103 @@ shape as `/ai/predict`, so predictions commit through `Boxes.reconcile()` and la
 as suggestions with the same sidecar, review and confirmed-only-export guarantees.
 Everything in "Model-assisted labeling" above applies unchanged.
 
-| Engine | Prompts | Weights | Measured on this CPU-only box |
+**SAM3 is the only engine.** YOLOE and YOLO-World were removed on request (the
+`ENGINES` registry keeps its shape, so adding one back is a data change). Ignore
+any older notes that call YOLOE the default.
+
+| Engine | Prompts | Weights | Measured (2026-11, this machine) |
 |---|---|---|---|
-| `yoloe` (default) | text + box | `yoloe-11s-seg.pt`, 28 MB, auto-downloaded | ~5 s cold, **~1.6 s** warm |
-| `world` | text only | `yolov8s-worldv2.pt`, 26 MB | untested (needs its CLIP download) |
-| `sam3` | text + box | user-supplied `sam3*.pt`, 3.45 GB — **not** an ultralytics asset | **~3 min/image**, but far more accurate |
+| `sam3` | text + box | user-supplied `sam3*.pt`, 3.45 GB — **not** an ultralytics asset, never auto-downloaded | text, **GPU (RTX 3050, fp16): ~0.65 s/phrase** warm, ~15 s model load on first use · CPU: ~20–30 s for 1–4 phrases |
 
 Weights are searched through `ai_models.SEARCH_DIRS` (models/, then the repo root),
-so the existing `sam3.pt` beside `run.py` is found without moving 3.45 GB. Same
-verified numbers on one frame with the same exemplar: YOLOE 0.77, SAM3 0.96 — SAM3
-is the better answer and the worse experience, which is why `speed: 'slow'` is in
-the registry and surfaced in the panel before the user clicks Run.
+so the existing `sam3.pt` beside `run.py` is found without moving 3.45 GB. On one
+frame with the same exemplar SAM3 scored 0.96 vs the old YOLOE's 0.77 — better
+answers, slower runs. `speed: 'slow'` is reported by `list_engines()` **only when
+running on CPU** and surfaced in the panel before the user clicks Run.
+
+Verified text-prompt result (project `m`, `IMG_9619_MP4-0001`): "excavator" →
+one box at 0.94 on the actual excavator; "tree" → ~100 raw hits, 15 above the
+default 40% threshold. Broad nouns over-fire; the slider is what makes them usable.
+
+Known gaps vs Roboflow (not yet built): no "prompt → different class name" mapping
+for TEXT (a phrase reuses a project class only when the names match
+case-insensitively); no apply-to-whole-job batch run (both tabs predict the image
+that is open — the Box tab auto-predicts each image as it opens). The Box tab is
+now a per-project example library — see "Box prompting" below.
+
+### Text prompting — how it runs, and the rules its tests pin down
+
+**Pipeline (`prompt_models._predict_text`).** `read_image()` decodes once (cv2
+`imdecode`, so corrupt/empty files are a readable 422 and grayscale/RGBA/16-bit
+become 3-channel) → `predictor.set_image()` runs the backbone **once** →
+phrases go through `_boxes_only()` (boxes, no masks) **one phrase per pass**
+(`PHRASE_BATCH` = 1) → `reset_image()`. Box mode still uses the old single
+`predictor(source=…, bboxes=…)` call.
+
+> ⚠️ **Never send many phrases in one forward pass.** SAM3's memory grows steeply
+> per phrase: 25 at once tried to allocate **13.7 GB** on CPU, and 4 at once fills a
+> 6 GB GPU. One per pass keeps the peak flat and is fastest — the backbone still
+> runs only once per image.
+
+- **`_run_lock` serialises all SAM3 inference.** The predictor holds per-image
+  state (`features`, its last text classes); two interleaved requests would mix one
+  image's features with another's prompt.
+- **Input rules (`clean_phrases`)** — errors, never silent truncation: a list or a
+  comma-separated string is accepted; dict / nested list → 422; > `MAX_PHRASES`
+  (20) → 422; a phrase > `MAX_PHRASE_LEN` (64) → 422; whitespace collapsed;
+  case-insensitive de-dup.
+- **`ai_annotate._resolve_image()` guards BOTH `/ai/predict` and `/ai/prompt`.**
+  Previously `project_dir / rel_path` accepted `../..` and, on Windows, an absolute
+  `D:/…` path (which *replaces* the base) — a request could run a model on any
+  image on disk. It now requires a relative path that resolves inside the project,
+  with an extension in `media.ALLOWED_IMG`. Other endpoints (annotations, media)
+  still use the raw join — worth the same fix.
+- Bad `conf`/`iou` → 400 (was a 500); non-JSON body → 400 (was Flask's 415).
+- **Browser (`prompt-annotate.js`):**
+  - **New classes are POSTed to `/classes` before any box uses them**
+    (`_ensureClasses`). They used to be pushed only into `state.classes`, so after
+    a reload the saved boxes pointed at a class the project didn't have. A class the
+    server refuses → its predictions are dropped with an error toast.
+  - **A run belongs to the image it started on — and users DO move on during it.**
+    The audit log showed it: start "person", keep labelling the next frames for the
+    ~20–40 s CPU wait. An early fix that *discarded* results on navigation made the
+    feature look broken ("it found nothing") while the server had returned 72 people.
+    Now, if the image changed, `_applyToOtherImage()` GETs that image's saved boxes,
+    runs the same `Boxes.reconcile`, and POSTs them back — results wait there as
+    suggestions, with a toast + panel line naming the image. Not painted on the
+    image on screen; skipped (with a message) if that image is marked Null; image
+    reloaded (`loadImage(idx, true)`) if the user navigated back mid-save so its
+    auto-save can't drop them. **Closing the panel mid-run = cancel.**
+  - That path works on a **virtual 1e9×1e9 canvas** (IoU is scale-invariant). It
+    must stay ≥1e9: the save rewrites the image's *confirmed* boxes, and
+    `_convertBboxes` rounds to whole pixels — at 1e6, `0.623775` came back as
+    `0.6237745` (a test pins this byte-for-byte).
+  - `_toBox(p, W, H, owned)` has optional params — call it as
+    `list.map(p => _toBox(p))`, never `list.map(_toBox)` (map's index/array land in
+    W/H; this shipped briefly and produced garbage boxes).
+  - The Run button shows a live `Running… N s` counter; a non-JSON reply (proxy
+    502 page) shows "unexpected response (HTTP 502)" instead of a JSON parse error.
+  - Debug "it shows nothing" from the **audit log** first: `ai.prompt` rows carry the
+    image, labels and `count`; the `annotation.save` rows around them (by
+    `ip_address`) show where the user was when the answer arrived.
+
+**Testing it without a browser or Node.** There is no Node on this machine;
+headless Edge runs the real JS instead:
+`msedge --headless=new --virtual-time-budget=15000 --dump-dom file:///…/test.html`,
+where the page inlines `main.js`'s `Boxes` slice (+ `app._convertBboxes`) +
+`prompt-annotate.js` through `new Function(...stubNames, src)` with stubbed
+`document`/`state`/`app`/`fetch`, and writes results into a `<pre id="out">`.
+Backend cases go through `app.test_client()` with `generate_token(1)`; model runs
+are ~20 s each on CPU, so run that suite in the background and write results to a
+file. For true end-to-end, drive the real annotate page over CDP
+(`msedge --remote-debugging-port`, `websocket-client` installed to a scratch
+`--target` dir, cookie `token` + `localStorage.am_token`) against a second server
+on another port.
+
+> ⚠️ **End-to-end tests write into the real `workspace/`** (auto-save writes
+> sidecars). The user labels on the same project in parallel. Clean up ONLY the
+> exact files your test created — a time-window `find -newermt … -delete` once
+> wiped the user's own pending suggestions.
 
 > ⚠️ **SAM3 + OpenAI `clip` = "'SimpleTokenizer' object is not callable".** ultralytics
 > builds SAM3's text encoder with `clip.simple_tokenizer.SimpleTokenizer()` and then
@@ -270,16 +356,13 @@ the registry and surfaced in the panel before the user clicks Run.
 > delegate to `clip.tokenize`, guarded so installing the fork later is a no-op. Don't
 > "clean up" that shim without checking which `clip` is on the machine.
 
-- **Text prompting is the expensive path, box prompting is not.** YOLOE text needs
-  a ~600 MB MobileCLIP encoder (YOLO-World: ~340 MB CLIP ViT-B/32) downloaded once;
-  box prompting derives its embedding from the drawn region and needs no encoder at
-  all. `list_engines()` reports `installed` per engine so the UI can warn before a
-  first run instead of parking on a spinner. Auto-downloaded weights are gitignored;
-  weights a project ships deliberately are not.
+- SAM3's text encoder lives **inside** the checkpoint — no separate encoder
+  download. `list_engines()` reports `installed` per engine so the UI can explain a
+  missing checkpoint instead of failing at prompt time.
 - **The confidence slider filters, it does not re-run.** The server runs once at
   `CONF_FLOOR` (0.05) and returns everything above it; the panel keeps that list and
   re-filters locally, so "higher confidence = fewer predictions" responds per tick
-  where a re-run costs seconds on CPU (measured: ~5 s cold, ~1.6 s warm).
+  where a re-run costs ~20 s on CPU.
 - **Raising the threshold is a removal, and that rule is narrow.** A box may be
   withdrawn only if it is still `suggested` *and* carries `_prun` — the session-only
   tag saying this panel added it in this session. `_prun` is deliberately never
@@ -287,16 +370,145 @@ the registry and surfaced in the panel before the user clicks Run.
   accepted box is never withdrawn**: accepting is a human decision and a slider must
   not reverse one.
 - **Exemplars are prompts, not annotations.** `state.promptBoxes` + canvas mode
-  `'prompt'`; drawn in accent, never serialised, never exported, never counted as
-  objects. `_onMouseUp` checks for prompt mode *before* the normal draw path so no
-  class popup, history entry or auto-save can see them.
+  `'prompt'`; never serialised, never exported, never counted as objects.
+  `_onMouseUp` checks for prompt mode *before* the normal draw path so no class
+  popup, history entry or auto-save can see them. On the Box tab, every on-screen
+  exemplar is a SAVED library example of the current image (`exId`, `tag`,
+  `positive`); accent = "this is", `--danger` = "not this" (`ThemeColors.danger`).
 - **Do not monkey-patch `app.loadImage` again.** Smart Detect already wraps it;
   a second wrapper makes effect order depend on script load order. Register with
-  `app.onImageLoaded(fn)`, fired from `_applyPendingBboxes()` where both load paths
-  converge.
-- YOLOE's visual-prompt mode names its classes `object0…objectN` in the order the
-  exemplar labels were first seen, so `prompt_models` remaps them back to the labels
-  the user actually drew. SAM3 wants `imgsz=1008` (72 × its stride of 14).
+  `app.onImageLoaded(fn)`. It fires from BOTH load paths: `_applyPendingBboxes()`
+  (annotations arrived first) and the "Case B" branch at the end of `loadImage`
+  (image arrived first — the usual case for a cached image). ⚠️ Until 2026-11-12
+  only the first fired, so AI Annotate silently missed most image changes; found
+  only by the real-browser end-to-end test.
+- With box prompts and no text, SAM3 labels hits as the generic concept `"visual"`,
+  so `prompt_models` relabels them from the exemplars the user drew. SAM3 wants
+  `imgsz=1008` (72 × its stride of 14).
+- **First prompt after every server (re)start is slow** (~15–22 s on the GPU): the
+  3.4 GB SAM3 checkpoint loads lazily on first use, and `debug=True`'s reloader
+  restarts the server on each code change. Later prompts are ~0.65 s. A background
+  warm-up in `run.py` was tried and **rolled back by the user** — don't re-add it
+  without asking. If it comes back: warm only the reloader *child*
+  (`WERKZEUG_RUN_MAIN == 'true'`), or the 6 GB GPU holds two copies.
+- Leaving an image with unreviewed suggestions keeps them (sidecar) — they show
+  again on return, by design, until accepted (Enter / Shift+Enter) or rejected
+  (Delete / Shift+Delete). Never exported either way.
+
+### Box prompting — a per-project example library (Roboflow-style), BUILT 2026-11-12
+
+**What the user does:** Box tab → pick a class in the class list → **This is /
+Not this** → draw a box around one (or **📥 Use my boxes** = this image's
+CONFIRMED boxes become examples). Examples are saved for the whole project and
+predict EVERY image: each image is auto-predicted as it opens (toggle, persisted
+as `settings.ai_prompt.auto`, default on), and adding an example re-predicts the
+current image at once. The panel lists examples per class with remove buttons; the
+eraser removes the current image's. Results are ordinary suggestions (sidecar,
+slider, review, confirmed-only export) — nothing new in the lifecycle.
+
+**Why this design** — measured on project `m`, whose `1_staff` (3,445 boxes) vs
+`customer` (2,245) over 1,251 frames of `job_2026-11-11_15-26-09_954` can't be
+described by a word (read-only experiments; 8–10 unseen frames):
+
+| Approach | People found | Right class (thr 0.6) |
+|---|---|---|
+| Paste example crops into a strip under the target, box-prompt the crops | 38 % (thr 0.2) | P 0.13–0.20 ❌ |
+| Text "person" + fingerprint class | 49 % | R 0.35 P 0.11 |
+| **Example tokens encoded on their own image, reused on the target + fingerprint class** (shipped) | **92–95 %** | **R 0.78 P 0.53** (6 example frames); R 0.59 P 0.42 with 3 |
+| Same, one grounding pass per class | 95–97 % | R 0.78 P 0.48 — lower precision, N× cost |
+
+Staff-vs-customer on the TRUE boxes: 0.76 (3 example frames) → 0.86 (6): more
+examples, better classes. Precision is held down mostly by people the user
+doesn't label (mall corridor); "Not this" examples are the remedy.
+
+**Pieces:**
+- `core/box_examples.py` — `prompt_examples.json` (path via
+  `paths.prompt_examples_file`), atomic writes, `MAX_EXAMPLES` 200, box stored
+  normalised xyxy + project-relative image with `/`, dedup of identical boxes.
+  Examples are NEVER annotations — not in `.txt`, not in the sidecar.
+- `/api/workspaces/<id>/projects/<p>/ai/examples` GET/POST/DELETE (by `ids`,
+  `image`, `class_id`, or `all`); unknown class → 422; image goes through
+  `_resolve_image`. `/ai/prompt` with `mode: "examples"` predicts from the library.
+- `prompt_models.predict_examples` → `_encode_image_examples` (SAM3 geometry
+  encoder ON THE EXAMPLE'S OWN IMAGE → prompt tokens, positives label 1 /
+  negatives 0, + 4×2 ROI-aligned `backbone_fpn[1]` fingerprints; cached in memory
+  per (predictor, image, mtime, boxes)) → `_ground_with_tokens` on the target
+  (SAM3's `forward_grounding` re-implemented so the "visual" concept + foreign
+  tokens can be fed in) → each hit takes the class of its nearest POSITIVE
+  example; a nearer NEGATIVE of that class drops it. Uses ultralytics internals
+  (`_prepare_geometric_prompts`, `_get_dummy_prompt`, `_encode_prompt`,
+  `_run_encoder`, `_run_decoder`, `SAM2Model._prepare_backbone_features`) —
+  re-test after any ultralytics upgrade. `inst.model` is None until SAM3's first
+  image → `setup_model()` first.
+- Cost: first use after a restart encodes each example image once (CPU: ~2.5
+  min for model + 6 images; GPU: a few s); then one grounding pass per image
+  (CPU ~22–40 s, GPU ~1 s).
+- **Tab race (fixed):** `open()` loads settings async; applying the saved `mode`
+  there overwrote a "Box prompt" click made meanwhile, so the Box tab showed while
+  runs were TEXT. Saved mode is now `_savedMode`, applied only if `!_modeTouched`.
+
+Tests (scratchpad, re-creatable): API 14 checks, browser logic 37 (Edge
+headless, incl. the race), and a real-page CDP end-to-end (teach on frame
+`…0006`, auto-predict `…0000`/`…0009`) that snapshots and byte-restores every
+file it can write. Unlabeled frames are rare in project `m` — pick a target
+without confirmed boxes of the taught classes, and mind the user's saved slider
+(it was 0.9 on 2026-11-12), or the e2e sees no suggestions and looks broken.
+
+## AI compute device — GPU or CPU, never an error
+
+**`app/core/devices.py`** is the only place that decides where a model runs, for
+both Smart Detect and AI Annotate. The same code must run unchanged on a GPU box, a
+CPU-only box, and a GPU too small for the model.
+
+- `devices.info()` resolves once per process: `cuda:0` if `torch.cuda.is_available()`,
+  else `cpu`, with a `reason` (e.g. "torch is a CPU-only build").
+- `devices.run(key, fn, reraise=…)` calls `fn(device, half)` down
+  `('cuda', fp16) → ('cuda', fp32) → ('cpu', fp32)` until one succeeds. A non-memory
+  failure (e.g. fp16 unsupported) is remembered per `key` so later requests skip it;
+  **CUDA out-of-memory is not remembered** (it can be transient). `reraise` exceptions
+  (`ModelError` — bad prompt, missing weights) are about the input and are never
+  retried on another device.
+- **Put the device in the cache key.** An ultralytics predictor binds its model to a
+  device on first run. `prompt_models.load()` caches per `(…, device, half)` and
+  evicts a GPU predictor that failed so its VRAM is freed; Smart Detect resets
+  `model.predictor = None` before retrying on another device.
+- Overrides in `.env`: `AI_DEVICE=auto|cpu|cuda|cuda:N`, `AI_HALF=auto|0`. Forcing
+  `cuda` without one logs a warning and uses CPU.
+- `/api/ai/prompt` returns `device` + `half`; `/api/ai/prompt/engines` returns
+  `device`/`device_name`; the panel shows "Runs on CPU/GPU (name)".
+
+**This machine runs AI on its GPU** (since 2026-11-11): RTX 3050 Laptop 6 GB,
+driver CUDA 13.0, `torch 2.14.1+cu130` + `torchvision 0.29.1+cu130`, fp16.
+Measured (1920×1080 frame, warm): SAM3 text prompt **0.65 s per phrase**
+(CPU: 15–20 s), 8 phrases 1.9 s, 20 phrases 3.9 s, model load ~15 s on the
+first request; two simultaneous requests queue (1.35 s); Smart Detect YOLO 0.02 s.
+
+- **Windows Smart App Control had to be turned OFF** for this (the user did it).
+  With it on, `import torch` fails: `WinError 4551 … Application Control policy
+  has blocked … torch\lib\c10.dll` (CodeIntegrity event 3077 — the CUDA build's
+  DLLs are unsigned; the `+cpu` wheel's are reputation-allowed). On another
+  Windows machine, check `(Get-MpComputerStatus).SmartAppControlState` first.
+  Uninstalling McAfee is irrelevant — SAC is Windows itself.
+- Wheel pair: `torch==2.14.1+cu130` + `torchvision==0.29.1+cu130` (**no
+  `0.29.2+cu130` exists**; no `cu128` for 2.14.1/cp310). Pin the `+cu130` local
+  version — plain `torch==2.14.1` is already "satisfied" by `+cpu`. `pip
+  download` first (1.9 GB), then install with `--no-deps` so numpy etc. stay put.
+- **`PHRASE_BATCH = 1`** — measured, batching phrases never helps SAM3: on the
+  6 GB card batch 4 hits 5.2 GB, WDDM spills VRAM to system RAM and 8 phrases take
+  11 s vs 1.9 s; on CPU it is a wash. Peak VRAM stays at 2.75 GB.
+- **`_boxes_only()` replaces `inference_features()`** for text prompts: the public
+  call upsamples a full-res mask per hit (hundreds per frame) that we discard. It
+  also fixes an ultralytics fp16 bug we'd otherwise inherit — its class-offset NMS
+  adds `cls*7680` in half precision, which collapses every box of class ≥1 to a
+  point (IoU 0/0), so **no NMS happens for phrase 2+** (186 vs 171 boxes on the
+  test frame). Ours runs NMS in float32. Class 0 results are identical.
+- **Stop `run.py` before swapping torch.** With the server running, pip can't
+  delete loaded DLLs and leaves them in `site-packages/~orch*` (2.9 GB, plus
+  "Ignoring invalid distribution -orch" warnings) — delete those afterwards.
+- Revert = `pip install --no-deps --force-reinstall torch==2.14.1+cpu
+  torchvision==0.29.2+cpu --index-url https://download.pytorch.org/whl/cpu`.
+- Assistant sessions here are not allowed to stop the user's `run.py` (blocked as
+  workload interference) — ask the user to Ctrl+C it.
 
 ## Theming — read before touching any CSS
 

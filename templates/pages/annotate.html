@@ -2477,21 +2477,44 @@
         </p>
       </div>
 
-      <!-- BOX PROMPTING -->
+      <!-- BOX PROMPTING — a per-project example library (Roboflow-style):
+           examples drawn on any image predict on every image. -->
       <div class="pa-pane" id="paPaneBox" hidden>
+        <div class="pa-ex-head">
+          <div class="pa-seg" role="group" aria-label="Example type">
+            <button type="button" class="pa-seg-btn is-active" id="paExPos"
+                    aria-pressed="true" title="The box shows the class to find">
+              <i class="fas fa-check" aria-hidden="true"></i> This is
+            </button>
+            <button type="button" class="pa-seg-btn" id="paExNeg"
+                    aria-pressed="false" title="The box shows something that is NOT that class">
+              <i class="fas fa-ban" aria-hidden="true"></i> Not this
+            </button>
+          </div>
+          <span class="pa-ex-class" id="paExClass" title="Pick the class in the class list">—</span>
+        </div>
         <div class="pa-exemplar-row">
           <button type="button" class="pa-draw-toggle" id="paDrawToggle">
             <i class="fas fa-crosshairs" aria-hidden="true"></i>
             <span id="paDrawToggleLabel">Draw example box</span>
           </button>
-          <span class="pa-exemplar-count" id="paExemplarCount">0 examples</span>
+          <button type="button" class="pa-icon-btn" id="paUseMine"
+                  title="Use my confirmed boxes on this image as examples">
+            <i class="fas fa-file-import" aria-hidden="true"></i></button>
           <button type="button" class="pa-icon-btn" id="paExemplarClear"
-                  title="Clear example boxes"><i class="fas fa-eraser"></i></button>
+                  title="Remove the examples drawn on this image">
+            <i class="fas fa-eraser" aria-hidden="true"></i></button>
         </div>
+        <div class="pa-ex-list" id="paExList" aria-live="polite"></div>
+        <label class="pa-auto">
+          <input type="checkbox" id="paAutoRun" checked>
+          Predict automatically on each image
+        </label>
         <p class="pa-hint">
-          Draw one box around an object; the model finds the rest like it.
-          The example boxes are prompts — they are never saved as
-          annotations.
+          Pick a class, then draw a few boxes around examples of it — on this
+          image or any other. They are saved for the whole project and used to
+          predict every image. More examples, better results. Examples are
+          prompts, never annotations.
         </p>
       </div>
 
