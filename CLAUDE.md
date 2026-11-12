@@ -580,6 +580,21 @@ first request; two simultaneous requests queue (1.35 s); Smart Detect YOLO 0.02 
 - Assistant sessions here are not allowed to stop the user's `run.py` (blocked as
   workload interference) — ask the user to Ctrl+C it.
 
+## Versions — what the wizard really does
+
+`core/versions.py::create_version` copies **annotated + Null** images and their
+`<stem>.txt` labels unchanged (`shutil.copy2`), split train/valid/test (default
+70/20/10, shuffled), and writes `data.yaml` + `README.md`. ⚠️ The wizard's
+**resize / auto-orient / normalize / augmentation** options (`vwResize*`,
+`vwAutoOrient`, `vwNormalize`, `vwAug*`) are only **written into that README** —
+no image is resized or augmented (found 2026-11-12 while documenting; `docs/`
+says so). Implementing them must also transform the YOLO labels (letterbox/
+reflect padding shifts normalised coordinates; only stretch leaves them valid).
+
+The user-facing documentation lives in `docs/` (one page per topic, linked from
+`README.md`). Keep it in step with behaviour changes; a link check (all relative
+links + GitHub heading anchors) passed with 76 links on 2026-11-12.
+
 ## Theming — read before touching any CSS
 
 The design-token layer is the single source of truth and the cascade order is a **contract**:
