@@ -1,7 +1,7 @@
 from pathlib import Path
-from flask import Blueprint, request, jsonify, send_file, g
+from flask import Blueprint, request, jsonify, send_file, g, current_app
 from app.utils.security import login_required, workspace_role_required
-from app.core.versions import create_version, download_version_zip
+from app.core.versions import create_version, download_version_zip, stored_version_folder
 from app.core.storage import load_versions, save_versions
 from app.models.workspace import Workspace
 
@@ -24,21 +24,33 @@ def api_versions(workspace_id, project):
     if request.method == 'POST':
         if g.member_role not in ('owner', 'editor'):
             return jsonify({'error': 'Forbidden'}), 403
-        data = request.json or {}
-        ver  = create_version(wsf, project, data)
+        data = request.get_json(silent=True)
+        try:
+            ver = create_version(wsf, project, data)
+        except ValueError as exc:
+            return jsonify({'error': str(exc)}), 400
+        except Exception:
+            current_app.logger.exception('Version creation failed')
+            return jsonify({'error': 'Could not create version. Check available disk space and server logs.'}), 500
         return jsonify({'success': True, 'version': ver})
 
     # DELETE
     if g.member_role not in ('owner', 'editor'):
         return jsonify({'error': 'Forbidden'}), 403
-    vid      = (request.json or {}).get('id')
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or not isinstance(data.get('id'), str):
+        return jsonify({'error': 'Version id is required'}), 400
+    vid = data['id']
     versions = load_versions(wsf, project)
     for v in versions:
         if v['id'] == vid and v.get('folder_path'):
             import shutil
-            fp = Path(v['folder_path'])
-            if fp.exists() and fp.is_dir():
-                shutil.rmtree(fp, ignore_errors=True)
+            fp = stored_version_folder(wsf, project, v)
+            if fp is not None:
+                try:
+                    shutil.rmtree(fp)
+                except OSError:
+                    return jsonify({'error': 'Could not delete version files; try again after closing open files.'}), 500
     save_versions(wsf, project, [v for v in versions if v['id'] != vid])
     return jsonify({'success': True})
 
@@ -69,8 +81,8 @@ def api_version_info(workspace_id, project, version_id):
     ver      = next((v for v in versions if v['id'] == version_id), None)
     if not ver:
         return jsonify({'error': 'Not found'}), 404
-    folder     = Path(ver.get('folder_path', ''))
-    exists     = folder.exists()
+    folder     = stored_version_folder(wsf, project, ver)
+    exists     = folder is not None
     size_mb    = 0
     file_count = 0
     if exists:
@@ -81,6 +93,6 @@ def api_version_info(workspace_id, project, version_id):
         size_mb = round(size_mb / 1024 / 1024, 1)
     return jsonify({
         'id': ver['id'], 'name': ver['name'],
-        'folder_path': str(folder), 'folder_name': folder.name,
+        'folder_path': str(folder) if exists else '', 'folder_name': folder.name if exists else '',
         'exists': exists, 'size_mb': size_mb, 'file_count': file_count,
     })

@@ -124,9 +124,10 @@ const WorkspaceFeature = (() => {
   // ── Delete workspace ──────────────────────────────────────────────────────
 
   async function deleteWorkspace(id, name) {
-    if (!confirm(`Delete workspace "${name}" and ALL its projects?\nThis cannot be undone.`)) return;
+    if (!await UI.confirm({ title: 'Delete workspace?', danger: true, confirmText: 'Delete workspace',
+      message: `Delete workspace "${name}" and ALL its projects?\nThis cannot be undone.` })) return;
     const res = await API.del(`/api/workspaces/${id}`, { workspace_id: id });
-    if (!res || !res.ok) { alert('Failed to delete workspace.'); return; }
+    if (!res || !res.ok) { UI.toast('Failed to delete workspace.', 'error'); return; }
     await loadAll();
   }
 
@@ -256,7 +257,8 @@ const SharePanel = (() => {
   }
 
   async function remove(userId, name) {
-    if (!confirm(`Remove ${name} from this workspace?`)) return;
+    if (!await UI.confirm({ title: 'Remove member?', danger: true, confirmText: 'Remove',
+      message: `Remove ${name} from this workspace?` })) return;
     await API.del(`/api/workspaces/${_ws.id}/members/${userId}`,
                   { workspace_id: _ws.id });
     await _renderMembers();
@@ -338,7 +340,8 @@ const MembersFeature = (() => {
   }
 
   async function remove(userId, name) {
-    if (!confirm(`Remove ${name} from this workspace?`)) return;
+    if (!await UI.confirm({ title: 'Remove member?', danger: true, confirmText: 'Remove',
+      message: `Remove ${name} from this workspace?` })) return;
     await API.del(`/api/workspaces/${_wsId}/members/${userId}`, { workspace_id: _wsId });
     await _renderMembers(_wsId, State.get('user'));
   }

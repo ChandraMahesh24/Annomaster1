@@ -4,17 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Members – AnnoMaster</title>
-  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <!-- Font Awesome was missing here, but navbar.html (included on
-       this page) renders <i class="fas …"> icons — so the account
-       dropdown showed blank boxes instead of glyphs. -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <link rel="stylesheet" href="/static/css/tokens.css">
-  <link rel="stylesheet" href="/static/css/base.css">
-  <link rel="stylesheet" href="/static/css/layout.css">
-  <link rel="stylesheet" href="/static/css/workspace.css">
-  <link rel="stylesheet" href="/static/css/modes.css">
-  <script src="/static/js/theme.js"></script>
+  {% set page_css = ['css/layout.css', 'css/workspace.css'] %}
+  {% include 'layout/head_assets.html' %}
 </head>
 <body>
 {% include 'layout/navbar.html' %}
@@ -25,8 +16,8 @@
     <div class="members-header">
       <a href="/" class="btn btn-secondary btn-sm">← Dashboard</a>
       <div>
-        <h1 id="ws-members-title" style="font-size:1.4rem;font-weight:800">Members</h1>
-        <p class="text-muted" id="ws-members-subtitle" style="margin-top:.2rem"></p>
+        <h1 id="ws-members-title" class="ui-page-title">Members</h1>
+        <p class="ui-page-subtitle" id="ws-members-subtitle"></p>
       </div>
     </div>
 
@@ -56,11 +47,11 @@
   </div>
 </div>
 
-<script src="/static/js/core/api.js"></script>
-<script src="/static/js/core/state.js"></script>
-<script src="/static/js/core/utils.js"></script>
-<script src="/static/js/features/auth.js"></script>
-<script src="/static/js/features/workspace.js"></script>
+<script src="{{ asset('js/core/api.js') }}"></script>
+<script src="{{ asset('js/core/state.js') }}"></script>
+<script src="{{ asset('js/core/utils.js') }}"></script>
+<script src="{{ asset('js/features/auth.js') }}"></script>
+<script src="{{ asset('js/features/workspace.js') }}"></script>
 <script>
   document.addEventListener('DOMContentLoaded', async () => {
     const user = await AuthFeature.requireAuth();
@@ -72,7 +63,7 @@
     // Get workspace_id from URL — works for both /workspace/123/members and ?workspace_id=123
     const parts  = location.pathname.split('/').filter(Boolean);
     const wsId   = parts[1] || new URLSearchParams(location.search).get('workspace_id') || '';
-    if (!wsId) { document.body.innerHTML += '<p style="padding:2rem;color:red">No workspace ID in URL.</p>'; return; }
+    if (!wsId) { document.body.innerHTML += '<p style="padding:calc(2rem * var(--space-scale));color:red">No workspace ID in URL.</p>'; return; }
     await MembersFeature.load(wsId, user);
   });
 </script>

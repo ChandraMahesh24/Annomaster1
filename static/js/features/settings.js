@@ -4,12 +4,6 @@
 
 const SettingsPage = (() => {
   let currentUser = null;
-  let activeSessions = [
-    { id: 'sess-1', current: true, device: 'Windows 11 Pro • Chrome Browser', location: 'New York City, USA', ip: '192.168.1.45', time: 'Active now' },
-    { id: 'sess-2', current: false, device: 'iPhone 15 Pro • Safari Mobile', location: 'San Francisco, USA', ip: '172.56.21.90', time: 'Active 2 hours ago' },
-    { id: 'sess-3', current: false, device: 'macOS Sonoma • Firefox Browser', location: 'London, United Kingdom', ip: '82.165.92.12', time: 'Active 3 days ago' }
-  ];
-
   // Professional translations dictionary to dynamically change panel titles
   const translations = {
     en: {
@@ -239,8 +233,8 @@ const SettingsPage = (() => {
       showToast('Passwords cannot be empty.', true);
       return;
     }
-    if (nw.length < 6) {
-      errEl.textContent = 'New password must be at least 6 characters.';
+    if (nw.length < 8) {
+      errEl.textContent = 'New password must be at least 8 characters.';
       showToast('Password is too short.', true);
       return;
     }
@@ -289,7 +283,9 @@ const SettingsPage = (() => {
   }
 
   // Theme Modes & Styling variables
-  function setThemeMode(mode) {
+  // `silent` = applying the already-saved mode on page load: no toast and
+  // no "unsaved changes" marker (both used to fire on every Settings visit).
+  function setThemeMode(mode, silent = false) {
     document.querySelectorAll('.theme-mode-card').forEach(c => c.classList.remove('active'));
     const targetCard = document.getElementById('theme-mode-' + mode);
     if (targetCard) targetCard.classList.add('active');
@@ -309,8 +305,38 @@ const SettingsPage = (() => {
 
     localStorage.setItem(`am_theme_mode_${currentUser.id}`, mode);
     localStorage.setItem('am_theme_mode', mode);
+    const darkRow = document.getElementById('dark-style-row');
+    if (darkRow) darkRow.style.display = mode === 'dark' ? '' : 'none';
+    if (silent) return;
     markThemeUnsaved();
     showToast(`Interface mode → ${mode.toUpperCase()}`, false);
+  }
+
+  // Dark style = a variant of Dark Mode (Classic / Midnight Blue / Navy /
+  // Carbon), defined once in tokens.css. Choosing one switches to Dark Mode
+  // and drops a previously picked accent so the style's own accent shows;
+  // the accent picker still works afterwards.
+  const DARK_STYLE_NAMES = { classic: 'Classic', midnight: 'Midnight Blue', navy: 'Navy', carbon: 'Carbon' };
+  function markDarkStyle(name) {
+    document.querySelectorAll('.dsty-opt').forEach(b => {
+      const on = b.dataset.style === name;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-checked', on ? 'true' : 'false');
+    });
+  }
+  function setDarkStyle(name, silent = false) {
+    if (!DARK_STYLE_NAMES[name]) name = 'classic';
+    ThemeEngine.setDarkStyle(name);
+    localStorage.setItem(`am_dark_style_${currentUser.id}`, name);
+    localStorage.setItem('am_dark_style', name);
+    markDarkStyle(name);
+    if (silent) return;
+    ['am_accent_color', `am_accent_color_${currentUser.id}`].forEach(k => localStorage.removeItem(k));
+    ThemeEngine.clearAccent();
+    document.querySelectorAll('.color-circle').forEach(c => c.classList.remove('active'));
+    if ((localStorage.getItem('am_theme_mode') || 'dark') !== 'dark') setThemeMode('dark', true);
+    markThemeUnsaved();
+    showToast(`Dark style → ${DARK_STYLE_NAMES[name]}`, false);
   }
 
   function onCustomThemeChange() {
@@ -350,84 +376,13 @@ const SettingsPage = (() => {
   }
 
   // Interactive 2FA Mock Setup
-  function toggleTwoFactor(enabled) {
-    const setupBox = document.getElementById('twofa-setup-box');
-    const badge = document.getElementById('twofa-status-badge');
-
-    if (enabled) {
-      setupBox.style.display = 'block';
-      document.getElementById('twofa-code-input').focus();
-    } else {
-      setupBox.style.display = 'none';
-      badge.textContent = 'Inactive';
-      badge.className = 'badge badge-inactive';
-      localStorage.setItem(`am_2fa_${currentUser.id}`, 'disabled');
-      showToast("Two-Factor Authentication disabled.", false);
-    }
-  }
-
-  function verifyTwoFactor() {
-    const code = document.getElementById('twofa-code-input').value.trim();
-    const errorEl = document.getElementById('twofa-verify-error');
-    const badge = document.getElementById('twofa-status-badge');
-    const setupBox = document.getElementById('twofa-setup-box');
-    const toggle = document.getElementById('twofa-switch');
-
-    errorEl.textContent = '';
-    
-    if (code.length !== 6 || isNaN(code)) {
-      errorEl.textContent = 'Please enter a valid 6-digit confirmation code.';
-      showToast('Invalid setup code.', true);
-      return;
-    }
-
-    // Success simulation!
-    localStorage.setItem(`am_2fa_${currentUser.id}`, 'enabled');
-    badge.textContent = 'Active';
-    badge.className = 'badge badge-owner'; // matches glowing green owner badge styling
-    setupBox.style.display = 'none';
-    toggle.checked = true;
-    showToast("🛡️ 2FA successfully configured!", false);
-  }
-
-  // Render Login Sessions List
+  // Retained for old callers; these controls never provided server security.
+  function toggleTwoFactor() { showToast('Two-factor authentication is not available.', true); }
+  function verifyTwoFactor() { showToast('Two-factor authentication is not available.', true); }
+  function revokeSession() { showToast('Remote session revocation is not available.', true); }
   function renderSessions() {
     const container = document.getElementById('sessions-list');
-    if (!container) return;
-
-    container.innerHTML = activeSessions.map(sess => `
-      <div class="session-item" id="${sess.id}">
-        <div class="session-icon ${sess.current ? 'active' : ''}">
-          <i class="fas ${sess.device.includes('iPhone') ? 'fa-mobile-alt' : 'fa-laptop'}"></i>
-        </div>
-        <div class="session-details">
-          <div class="session-meta-row">
-            <span class="session-device">${sess.device}</span>
-            ${sess.current ? '<span class="session-current-badge">Current</span>' : ''}
-          </div>
-          <p class="session-location">${sess.location} • IP: ${sess.ip} • <span style="opacity:0.7">${sess.time}</span></p>
-        </div>
-        ${!sess.current ? `
-          <button class="btn btn-secondary btn-sm" onclick="SettingsPage.revokeSession('${sess.id}')">
-            Revoke
-          </button>
-        ` : ''}
-      </div>
-    `).join('');
-  }
-
-  function revokeSession(id) {
-    const element = document.getElementById(id);
-    if (!element) return;
-
-    // Trigger revoke scale-exit animation
-    element.classList.add('revoking');
-    showToast("Session credentials revoked.", false);
-
-    setTimeout(() => {
-      activeSessions = activeSessions.filter(s => s.id !== id);
-      renderSessions();
-    }, 300);
+    if (container) container.innerHTML = '<p>You are signed in on this browser.</p><button class="btn btn-secondary btn-sm" onclick="AuthFeature.logout()">Sign out this browser</button>';
   }
 
   // Save localized configuration variables
@@ -501,8 +456,9 @@ const SettingsPage = (() => {
   }
 
   // Reset Storage back to default system values
-  function restoreSystemDefaults() {
-    if (!confirm("Are you sure you want to restore default settings? All custom colors, layout density, and notification selections will be reset.")) return;
+  async function restoreSystemDefaults() {
+    if (!await UI.confirm({ title: 'Restore default settings?', confirmText: 'Restore defaults',
+      message: 'All custom colors, layout density, and notification selections will be reset.' })) return;
 
     // Clear local storage keys
     const keysToRemove = [
@@ -521,6 +477,8 @@ const SettingsPage = (() => {
       `am_custom_text`,
       'am_theme_mode',
       'am_accent_color',
+      'am_dark_style',
+      `am_dark_style_${currentUser.id}`,
       'am_layout_mode',
       `am_card_bg_${currentUser.id}`,
       `am_card_bg`,
@@ -542,6 +500,8 @@ const SettingsPage = (() => {
     keysToRemove.forEach(k => localStorage.removeItem(k));
 
     // Reset default visuals
+    ThemeEngine.setDarkStyle('classic');
+    markDarkStyle('classic');
     ThemeEngine.applyAccentColor('#00e5b0');
     ThemeEngine.setThemeMode('dark');
     ThemeEngine.setLayoutMode('expanded');
@@ -566,7 +526,7 @@ const SettingsPage = (() => {
     // Reset 2FA
     const twofaSwitch = document.getElementById('twofa-switch');
     if (twofaSwitch) twofaSwitch.checked = false;
-    toggleTwoFactor(false);
+
 
     // Reset Language
     const langSelect = document.getElementById('language-select');
@@ -617,8 +577,10 @@ const SettingsPage = (() => {
 
   // Account Termination API Hook
   async function deleteAccount() {
-    if (!confirm('🚨 Delete your account permanently?\n\nThis wipes your profile, owned workspaces, datasets and annotations. THIS CANNOT BE UNDONE!')) return;
-    if (!confirm('Are you ABSOLUTELY sure? This is your final confirmation.')) return;
+    if (!await UI.confirm({ title: 'Delete your account permanently?', danger: true, confirmText: 'Continue',
+      message: 'This wipes your profile, owned workspaces, datasets and annotations. This cannot be undone.' })) return;
+    if (!await UI.confirm({ title: 'Final confirmation', danger: true, confirmText: 'Delete my account',
+      message: 'Are you absolutely sure? Your account and its data will be deleted now.' })) return;
 
     try {
       const token = localStorage.getItem('am_token') || sessionStorage.getItem('am_token');
@@ -646,48 +608,37 @@ const SettingsPage = (() => {
     }
   }
 
-  // Dynamic self-cleaning Toasts notifications
+  // Toasts come from the shared UI.toast (static/js/core/ui.js, styled in
+  // components.css). It inserts text, never HTML.
   function showToast(msg, isError) {
-    const stack = document.getElementById('toast-stack');
-    if (!stack) return;
-
-    const toast = document.createElement('div');
-    toast.className = `toast ${isError ? 'error-toast' : ''}`;
-    toast.innerHTML = `
-      <i class="fas ${isError ? 'fa-exclamation-circle' : 'fa-check-circle'}"></i>
-      <span>${msg}</span>
-    `;
-
-    stack.appendChild(toast);
-
-    // Fade out and remove toast after 3s
-    setTimeout(() => {
-      toast.classList.add('fade-out');
-      setTimeout(() => {
-        toast.remove();
-      }, 300);
-    }, 2700);
+    UI.toast(msg, isError ? 'error' : 'success');
   }
 
   // Loading preferences from localstorage on initialization
   function loadSavedPreferences() {
     const uid = currentUser.id;
 
-    // Theme Mode
-    const savedTheme = localStorage.getItem(`am_theme_mode_${uid}`) || localStorage.getItem('am_theme_mode');
+    // Theme Mode — same precedence as theme.js (global key first). Reading
+    // the per-user key first re-applied a stale mode and, because
+    // setThemeMode writes both keys, flipped the whole app back to it.
+    const savedTheme = localStorage.getItem('am_theme_mode') || localStorage.getItem(`am_theme_mode_${uid}`);
     if (savedTheme) {
-      setThemeMode(savedTheme);
+      setThemeMode(savedTheme, true);
     }
 
-    const customBg = localStorage.getItem(`am_custom_bg_${uid}`) || localStorage.getItem('am_custom_bg');
-    const customText = localStorage.getItem(`am_custom_text_${uid}`) || localStorage.getItem('am_custom_text');
+    const savedStyle = localStorage.getItem('am_dark_style') || localStorage.getItem(`am_dark_style_${uid}`) || 'classic';
+    markDarkStyle(savedStyle);
+    if (!savedTheme) { const r = document.getElementById('dark-style-row'); if (r) r.style.display = ''; }
+
+    const customBg = localStorage.getItem('am_custom_bg') || localStorage.getItem(`am_custom_bg_${uid}`);
+    const customText = localStorage.getItem('am_custom_text') || localStorage.getItem(`am_custom_text_${uid}`);
     const bgPicker = document.getElementById('custom-theme-bg');
     const textPicker = document.getElementById('custom-theme-text');
     if (bgPicker && customBg) bgPicker.value = customBg;
     if (textPicker && customText) textPicker.value = customText;
 
     // Color picker
-    const savedAccent = localStorage.getItem(`am_accent_color_${uid}`) || localStorage.getItem('am_accent_color');
+    const savedAccent = localStorage.getItem('am_accent_color') || localStorage.getItem(`am_accent_color_${uid}`);
     if (savedAccent) {
       // set active circle class
       document.querySelectorAll('.color-circle').forEach(c => {
@@ -706,17 +657,8 @@ const SettingsPage = (() => {
       applyAvatarDisplay(savedAvatar);
     }
 
-    // 2FA Badge status
-    const saved2fa = localStorage.getItem(`am_2fa_${uid}`);
-    const twofaToggle = document.getElementById('twofa-switch');
-    const badge = document.getElementById('twofa-status-badge');
-    if (saved2fa === 'enabled') {
-      if (twofaToggle) twofaToggle.checked = true;
-      if (badge) {
-        badge.textContent = 'Active';
-        badge.className = 'badge badge-owner';
-      }
-    }
+    // Clear the obsolete simulated flag; it never enabled server-side 2FA.
+    localStorage.removeItem(`am_2fa_${uid}`);
 
     // Notification Toggles
     const savedNotifs = localStorage.getItem(`am_notif_${uid}`);
@@ -746,20 +688,20 @@ const SettingsPage = (() => {
     }
 
     // Layout compact preference
-    const savedLayout = localStorage.getItem(`am_layout_mode_${uid}`) || localStorage.getItem('am_layout_mode');
+    const savedLayout = localStorage.getItem('am_layout_mode') || localStorage.getItem(`am_layout_mode_${uid}`);
     if (savedLayout) {
       setLayoutMode(savedLayout);
     }
 
     // Card Customizations
-    const cardBg = localStorage.getItem(`am_card_bg_${uid}`) || localStorage.getItem('am_card_bg');
-    const cardTx = localStorage.getItem(`am_card_tx_${uid}`) || localStorage.getItem('am_card_tx');
-    const cardBorder = localStorage.getItem(`am_card_border_${uid}`) || localStorage.getItem('am_card_border');
-    const cardRadius = localStorage.getItem(`am_card_radius_${uid}`) || localStorage.getItem('am_card_radius');
-    const cardShadow = localStorage.getItem(`am_card_shadow_${uid}`) || localStorage.getItem('am_card_shadow');
-    const cardPadding = localStorage.getItem(`am_card_padding_${uid}`) || localStorage.getItem('am_card_padding');
-    const cardHover = localStorage.getItem(`am_card_hover_${uid}`) || localStorage.getItem('am_card_hover');
-    const cardOpacity = localStorage.getItem(`am_card_opacity_${uid}`) || localStorage.getItem('am_card_opacity');
+    const cardBg = localStorage.getItem('am_card_bg') || localStorage.getItem(`am_card_bg_${uid}`);
+    const cardTx = localStorage.getItem('am_card_tx') || localStorage.getItem(`am_card_tx_${uid}`);
+    const cardBorder = localStorage.getItem('am_card_border') || localStorage.getItem(`am_card_border_${uid}`);
+    const cardRadius = localStorage.getItem('am_card_radius') || localStorage.getItem(`am_card_radius_${uid}`);
+    const cardShadow = localStorage.getItem('am_card_shadow') || localStorage.getItem(`am_card_shadow_${uid}`);
+    const cardPadding = localStorage.getItem('am_card_padding') || localStorage.getItem(`am_card_padding_${uid}`);
+    const cardHover = localStorage.getItem('am_card_hover') || localStorage.getItem(`am_card_hover_${uid}`);
+    const cardOpacity = localStorage.getItem('am_card_opacity') || localStorage.getItem(`am_card_opacity_${uid}`);
 
     const cardBgEl = document.getElementById('card-custom-bg');
     const cardTxEl = document.getElementById('card-custom-tx');
@@ -878,6 +820,7 @@ const SettingsPage = (() => {
     // Re-persist all theme keys under user ID
     localStorage.setItem(`am_theme_mode_${uid}`, mode);
     localStorage.setItem(`am_accent_color_${uid}`, accent);
+    localStorage.setItem(`am_dark_style_${uid}`, localStorage.getItem('am_dark_style') || 'classic');
     if (bg) localStorage.setItem(`am_custom_bg_${uid}`, bg);
     if (text) localStorage.setItem(`am_custom_text_${uid}`, text);
 
@@ -893,12 +836,13 @@ const SettingsPage = (() => {
   }
 
   // Reset only theme/color without touching profile/notif/security
-  function restoreThemeDefaults() {
-    if (!confirm('Reset theme to default Dark Mode + Teal accent?\nCard customizations will also reset.')) return;
+  async function restoreThemeDefaults() {
+    if (!await UI.confirm({ title: 'Reset theme?', confirmText: 'Reset theme',
+      message: 'Reset theme to default Dark Mode + Teal accent?\nCard customizations will also reset.' })) return;
     const uid = currentUser.id;
 
     // Clear theme keys
-    ['am_theme_mode','am_accent_color','am_custom_bg','am_custom_text',
+    ['am_theme_mode','am_accent_color','am_custom_bg','am_custom_text','am_dark_style',`am_dark_style_${uid}`,
      `am_theme_mode_${uid}`,`am_accent_color_${uid}`,`am_custom_bg_${uid}`,`am_custom_text_${uid}`,
      'am_card_bg','am_card_tx','am_card_border','am_card_radius','am_card_shadow','am_card_padding','am_card_hover','am_card_opacity',
      `am_card_bg_${uid}`,`am_card_tx_${uid}`,`am_card_border_${uid}`,`am_card_radius_${uid}`,
@@ -906,6 +850,8 @@ const SettingsPage = (() => {
     ].forEach(k => localStorage.removeItem(k));
 
     // Apply defaults
+    ThemeEngine.setDarkStyle('classic');
+    markDarkStyle('classic');
     ThemeEngine.applyAccentColor('#00e5b0');
     ThemeEngine.setThemeMode('dark');
     ThemeEngine.clearCardCustomization();
@@ -1120,7 +1066,8 @@ const SettingsPage = (() => {
 
   async function removeMember(userId, name) {
     if (!_wsCur) return;
-    if (!confirm('Remove ' + name + ' from "' + _wsCur.name + '"?')) return;
+    if (!await UI.confirm({ title: 'Remove member?', danger: true, confirmText: 'Remove',
+      message: 'Remove ' + name + ' from "' + _wsCur.name + '"?' })) return;
     await API.del('/api/workspaces/' + _wsCur.id + '/members/' + userId,
                   { workspace_id: _wsCur.id });
     _renderMembers(_wsCur);
@@ -1134,9 +1081,9 @@ const SettingsPage = (() => {
       'This deletes "' + _wsCur.name + '" and ALL its projects, images and annotations.\n' +
       'This cannot be undone.\n\nType the workspace name to confirm:');
     if (typed === null) return;
-    if (typed.trim() !== _wsCur.name) { alert('Name did not match \u2014 nothing was deleted.'); return; }
+    if (typed.trim() !== _wsCur.name) { UI.toast('Name did not match \u2014 nothing was deleted.', 'error'); return; }
     const r = await API.del('/api/workspaces/' + _wsCur.id, { workspace_id: _wsCur.id });
-    if (!r || !r.ok) { alert('Failed to delete workspace.'); return; }
+    if (!r || !r.ok) { UI.toast('Failed to delete workspace.', 'error'); return; }
     try {
       if (parseInt(localStorage.getItem('am_last_ws')) === _wsCur.id) {
         localStorage.removeItem('am_last_ws');
@@ -1155,6 +1102,7 @@ const SettingsPage = (() => {
     saveProfile,
     changePassword,
     setThemeMode,
+    setDarkStyle,
     setAccentColor,
     onCustomColorPick,
     onCustomThemeChange,

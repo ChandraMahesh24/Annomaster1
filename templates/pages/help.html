@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Help &amp; data information | AnnoMaster</title>
+  {% set no_icons = true %}
+  {% set page_css = ['css/help.css'] %}
+  {% include 'layout/head_assets.html' %}
+</head>
+<body>
+  <main class="help-page">
+    <nav aria-label="Help navigation"><a href="/">Workspace</a> · <a href="/login">Sign in</a> · <a href="/health">Server health</a></nav>
+    <h1>AnnoMaster help</h1>
+    <p>A self-hosted workspace for image annotation and YOLO datasets.</p>
+    <section aria-labelledby="workflow"><h2 id="workflow">From upload to dataset</h2>
+      <ol><li>Create a workspace and project.</li><li>Upload images, extract video frames, or import a YOLO ZIP.</li><li>Draw labels or review AI suggestions. Accept suggestions to include them in ground truth.</li><li>Review images and add them to your dataset.</li><li>Create a version snapshot and download the YOLO ZIP for external training.</li></ol>
+      <p>Model weights are configured by your administrator. Managed model training, deployment and social sign-in are not currently provided by this application.</p>
+    </section>
+    <section aria-labelledby="data"><h2 id="data">Where your data lives</h2>
+      <p>Your installation stores account and tracking information in SQLite, and images, annotations and versions in its workspace folder. Workspace owners control team access. Backups must include both the database and workspace folder.</p>
+      <p>Account sessions use an authentication cookie and browser storage. Signing out clears the browser session. Password-reset delivery depends on your administrator's mail configuration; without a mail server, reset links are written to server logs.</p>
+      <p>Fonts and the optional sign-in animation load from external providers. Contact your installation administrator for its privacy policy, retention rules and access requests. This application does not claim compliance certification.</p>
+    </section>
+    <section aria-labelledby="usage"><h2 id="usage">Installation and usage</h2>
+      <p>Use only data you are authorized to upload. Your installation administrator is responsible for configuring access, backups, deployment and any applicable usage terms.</p>
+      <p>The repository's <code>docs/</code> folder contains installation, annotation, AI labeling, datasets, team management and keyboard shortcut guides. Development status and known limitations are recorded in <code>PROJECT_AUDIT_AND_PROGRESS.md</code>.</p>
+      <p>Need assistance? Contact the administrator who provided this installation. The <a href="/health">health endpoint</a> reports database and workspace availability; it does not certify AI models or email delivery.</p>
+    </section>
+  </main>
+</body>
+</html>

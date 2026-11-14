@@ -179,3 +179,53 @@ def api_classes_sync(workspace_id, project):
         yaml.dump({'names': names, 'nc': len(classes)}, f,
                   default_flow_style=False, allow_unicode=True)
     return jsonify({'success': True, 'nc': len(classes), 'names': names})
+
+
+@classes_bp.route('/api/workspaces/<int:workspace_id>/projects/<project>/classes/reindex',
+                   methods=['POST'])
+@login_required
+@workspace_role_required('owner', 'editor')
+def api_classes_reindex(workspace_id, project):
+    """
+    Change class IDs project-wide. Body: {"mapping": {"<old_id>": <new_id>, ...},
+    "dry_run": true|false}. Dry run returns the preview (classes before/after,
+    files and boxes affected) and writes nothing. Logic: core/class_reindex.py.
+
+    Refused (409) while ANOTHER user holds a live annotation lock in this
+    project: their open image still has the old IDs in memory and its autosave
+    would write them back after the renumbering.
+    """
+    from datetime import datetime
+    from app.core import class_reindex
+    from app.models.annotation_lock import AnnotationLock
+    data    = request.get_json(silent=True) or {}
+    mapping = data.get('mapping')
+    if not isinstance(mapping, dict) or not mapping:
+        return jsonify({'error': 'mapping {old_id: new_id} required'}), 400
+    wsf = _wsf(workspace_id)
+    try:
+        if data.get('dry_run'):
+            return jsonify({'success': True, 'dry_run': True,
+                            **class_reindex.plan(wsf, project, mapping)})
+        others = AnnotationLock.query.filter(
+            AnnotationLock.workspace_id == workspace_id,
+            AnnotationLock.project == project,
+            AnnotationLock.expires_at > datetime.utcnow(),
+            AnnotationLock.locked_by != g.current_user.id,
+        ).all()
+        if others:
+            who = sorted({(l.locker.username if l.locker else 'another user') for l in others})
+            return jsonify({'error': 'Someone is annotating in this project right now ('
+                            + ', '.join(who) + '). Ask them to close their images, then try again.',
+                            'locked_by': who}), 409
+        result = class_reindex.apply(wsf, project, mapping)
+    except class_reindex.ReindexError as e:
+        return jsonify({'error': str(e)}), 422
+    try:
+        from app.models.audit_log import log_action
+        log_action('classes.reindex', user_id=g.current_user.id, workspace_id=workspace_id,
+                   project=project, detail={k: result[k] for k in ('mapping', 'files', 'boxes', 'backup')},
+                   ip=request.remote_addr)
+    except Exception:
+        pass
+    return jsonify({'success': True, **result})

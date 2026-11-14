@@ -268,7 +268,7 @@ function initScene() {
 
   // small wireframe core, split into two hemispheres
   const shellR = R * 0.3;
-  const icoG = new THREE.IcosahedronGeometry(shellR, 2).toNonIndexed();
+  const icoG = new THREE.IcosahedronGeometry(shellR, 2);
   const srcPos = icoG.attributes.position.array;
   const topA = [], botA = [];
   for (let f = 0; f < srcPos.length; f += 9) {

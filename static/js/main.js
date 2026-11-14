@@ -79,6 +79,9 @@ const ThemeColors = {
       onFill: v('--on-fill', '#000'),
       text:   v('--tx',      '#f0f0f8'),
       danger: v('--danger',  '#ff5c7a'),
+      // Canvas text can't read CSS vars, so labels take the family from
+      // the --font-sans token here (tokens.css is the one place to change it).
+      font:   v('--font-sans', 'sans-serif'),
     };
   },
 
@@ -104,6 +107,24 @@ const ThemeColors = {
     return `color-mix(in srgb, ${c} ${Math.round(a * 100)}%, transparent)`;
   },
 };
+
+/* Train/Val/Test split rebalance, shared by BOTH "Add to Dataset" cards
+   (Upload dialog #uspModal and Annotate panel #atdPanel), so they behave
+   identically: the slider the user moved keeps its value and the other two
+   share the remainder proportionally, in 5% steps; the total is always 100. */
+function rebalanceSplit(t, v, s, changed) {
+  const step = 5;
+  t = Math.min(100, Math.max(0, t)); v = Math.min(100, Math.max(0, v)); s = Math.min(100, Math.max(0, s));
+  if (changed === 'train') {
+    const total = v + s || 1; v = Math.round((100 - t) * v / total / step) * step; s = 100 - t - v;
+  } else if (changed === 'val') {
+    const total = t + s || 1; t = Math.round((100 - v) * t / total / step) * step; s = 100 - t - v;
+  } else {
+    const total = t + v || 1; t = Math.round((100 - s) * t / total / step) * step; v = 100 - t - s;
+  }
+  t = Math.min(100, Math.max(0, t)); v = Math.min(100, Math.max(0, v)); s = Math.max(0, 100 - t - v);
+  return [t, v, s];
+}
 
 /* Repaint on theme switch. ThemeEngine.setThemeMode toggles classes on
    <html> and writes custom-mode tokens to its style attribute, so
@@ -167,6 +188,7 @@ const Boxes = {
   visible(list)   { return (list || []).filter(b => !this.isRejected(b)); },
   suggested(list) { return (list || []).filter(b => this.isSuggested(b)); },
   confirmed(list) { return (list || []).filter(b => this.isConfirmed(b)); },
+  preservesNull(isNull, list) { return !!isNull && this.confirmed(list).length === 0; },
 
   /* Axis-aligned IoU in image pixel space. Polygons fall back to their
      bounding box, which is accurate enough for a duplicate check. */
@@ -420,7 +442,7 @@ const state = {
   dsAnnoFilter: 'all',
   dsSearch:  '',
   dsPage:    1,
-  dsPerPage: 40,
+  dsPerPage: 50,
   dsSearch:  '',
   dsFilter:  'all',
   dsAnnoFilter: 'all',
@@ -570,6 +592,10 @@ const app = {
     const VALID_PAGES = new Set(['upload','annotate','dataset','versions','classes','projects']);
     const hashPage = location.hash.replace('#', '');
     if (VALID_PAGES.has(hashPage)) this.showPage(hashPage);
+    window.addEventListener('hashchange', () => {
+      const page = location.hash.slice(1);
+      if (VALID_PAGES.has(page) && page !== state.currentPage) this.showPage(page);
+    });
   },
 
   /* ── MEDIA LOADING (paginated) ─────────────────────────────────────────────
@@ -589,7 +615,8 @@ const app = {
       const prevW       = state.imgW;
       const prevH       = state.imgH;
       const prevBboxes  = state.bboxes.slice();
-      if (prevPath && state.autoSave && prevW > 0 && prevH > 0) {
+      if (prevPath && state.autoSave && prevW > 0 && prevH > 0 &&
+          !Boxes.preservesNull(state.isCurrentNull, prevBboxes)) {
         clearTimeout(state.saveTimer);
         (async () => {
           // Shared serialiser — carries review state so the server can keep
@@ -750,6 +777,7 @@ const app = {
   // it can save before state.media is replaced with a new list.
   async _saveToPath(path, project) {
     if (!path || !project) return;
+    if (Boxes.preservesNull(state.isCurrentNull, state.bboxes)) return;
     const W = state.imgW || 0;
     const H = state.imgH || 0;
     if (W <= 0 || H <= 0) return;
@@ -1091,7 +1119,8 @@ const app = {
     // ── Guard: save annotations for the image we're LEAVING ──────────────────
     // IMPORTANT: capture path/bboxes/dimensions NOW before state is cleared.
     // Then fire save non-blocking so navigation feels instant.
-    if (!skipSave && state.currentIdx >= 0 && state.autoSave &&
+    if (!skipSave && !Boxes.preservesNull(state.isCurrentNull, state.bboxes) &&
+        state.currentIdx >= 0 && state.autoSave &&
         state.imgW > 0 && state.imgH > 0) {
       clearTimeout(state.saveTimer);
       // Snapshot everything needed for the save BEFORE we clear state
@@ -1542,7 +1571,7 @@ const app = {
 
       const tag = b.tag || `example ${i + 1}`;
       ctx.setLineDash([]);
-      ctx.font = '600 11px system-ui, sans-serif';
+      ctx.font = `600 11px ${ThemeColors.get().font}`;
       const tw = ctx.measureText(tag).width + 10;
       ctx.fillStyle = solid;
       ctx.fillRect(p.x, p.y - 17, tw, 17);
@@ -1676,7 +1705,7 @@ const app = {
     if (isSuggested && box.conf != null && state.showLabels) {
       const pct = `${Math.round(box.conf * 100)}%`;
       const fs  = Math.max(9, Math.min(12, 11 * state.zoom));
-      ctx.font  = `700 ${fs}px 'Outfit', sans-serif`;
+      ctx.font  = `700 ${fs}px ${ThemeColors.get().font}`;
       const bw  = ctx.measureText(pct).width + 8;
       const bh  = fs + 5;
       // top-right corner, clamped into the canvas
@@ -1692,7 +1721,7 @@ const app = {
     if (state.showLabels) {
       const label    = `${cls.name} #${state.bboxes.indexOf(box)+1}`;
       const fontSize = Math.max(10, Math.min(14, 13 * state.zoom));
-      ctx.font = `600 ${fontSize}px 'Outfit', sans-serif`;
+      ctx.font = `600 ${fontSize}px ${ThemeColors.get().font}`;
       const tw = ctx.measureText(label).width;
       const lh = fontSize + 6;
 
@@ -1792,7 +1821,7 @@ const app = {
     if (state.showLabels && !isPending) {
       const label = `${cls.name} #${state.bboxes.indexOf(box)+1}`;
       const fontSize = Math.max(10, Math.min(14, 13 * state.zoom));
-      ctx.font = `600 ${fontSize}px 'Outfit', sans-serif`;
+      ctx.font = `600 ${fontSize}px ${ThemeColors.get().font}`;
       const tw = ctx.measureText(label).width;
       const lh = fontSize + 6;
       const cx2 = first.x, cy2 = first.y - lh;
@@ -1850,7 +1879,7 @@ const app = {
     // Hint: count + instruction
     if (pts.length >= 3) {
       ctx.fillStyle = `rgba(${r},${g},${b},0.9)`;
-      ctx.font = `500 11px 'Outfit', sans-serif`;
+      ctx.font = `500 11px ${ThemeColors.get().font}`;
       const hint = `${pts.length} pts · DblClick or Enter to finish`;
       const tw = ctx.measureText(hint).width + 12;
       const hx = f.x, hy = f.y - 24;
@@ -2397,28 +2426,42 @@ const app = {
     popup.style.display = 'flex';   // must be visible to measure
 
     const area   = document.getElementById('canvasArea').getBoundingClientRect();
-    const me     = mouseEvent || {};
     const popW   = popup.offsetWidth  || 264;
     const popH   = popup.offsetHeight || 320;
 
-    let px = (me.clientX != null ? me.clientX : area.left + area.width  / 2) - area.left;
-    let py = (me.clientY != null ? me.clientY : area.top  + area.height / 2) - area.top;
-
-    // Prefer appearing to the RIGHT of cursor, flip left if it would overflow
-    const OFFSET = 12;
-    if (px + OFFSET + popW > area.width)  px = px - popW - OFFSET;
-    else                                   px = px + OFFSET;
-
-    // Prefer BELOW cursor, flip above if overflow
-    if (py + OFFSET + popH > area.height) py = py - popH - OFFSET;
-    else                                   py = py + OFFSET;
-
-    // Hard clamp to canvas bounds
-    px = Math.max(4, Math.min(px, area.width  - popW - 4));
-    py = Math.max(4, Math.min(py, area.height - popH - 4));
-
-    popup.style.left = px + 'px';
-    popup.style.top  = py + 'px';
+    // Place beside the entire annotation, rather than beside the mouse release
+    // point (which could put the picker directly over the object).
+    const canvasRect = this.canvas.getBoundingClientRect();
+    const target = {x: canvasRect.left - area.left + state.panX + box.x * state.zoom,
+      y: canvasRect.top - area.top + state.panY + box.y * state.zoom,
+      w: box.w * state.zoom, h: box.h * state.zoom};
+    const gap = 12;
+    const clamp = ([x,y]) => [Math.max(4, Math.min(x, area.width-popW-4)), Math.max(4, Math.min(y, area.height-popH-4))];
+    const candidates = [[target.x+target.w+gap,target.y], [target.x-popW-gap,target.y],
+      [target.x,target.y+target.h+gap], [target.x,target.y-popH-gap],
+      [4,4], [area.width-popW-4,area.height-popH-4]].map(clamp);
+    const overlap = ([x,y]) => Math.max(0,Math.min(x+popW,target.x+target.w)-Math.max(x,target.x)) *
+      Math.max(0,Math.min(y+popH,target.y+target.h)-Math.max(y,target.y));
+    candidates.sort((a,b) => overlap(a)-overlap(b));
+    popup.style.left = candidates[0][0] + 'px';
+    popup.style.top = candidates[0][1] + 'px';
+    const header = popup.querySelector('.cp-header');
+    if (!header.dataset.dragBound) {
+      header.dataset.dragBound = '1';
+      header.addEventListener('pointerdown', event => {
+        if (event.target.closest('button')) return;
+        event.preventDefault(); event.stopPropagation();
+        const startX=event.clientX, startY=event.clientY, left=popup.offsetLeft, top=popup.offsetTop;
+        header.setPointerCapture(event.pointerId);
+        const move = e => {
+          const bounds=document.getElementById('canvasArea').getBoundingClientRect();
+          popup.style.left=Math.max(4,Math.min(left+e.clientX-startX,bounds.width-popup.offsetWidth-4))+'px';
+          popup.style.top=Math.max(4,Math.min(top+e.clientY-startY,bounds.height-popup.offsetHeight-4))+'px';
+        };
+        const end = () => { header.removeEventListener('pointermove',move); header.removeEventListener('pointerup',end); header.removeEventListener('pointercancel',end); };
+        header.addEventListener('pointermove',move); header.addEventListener('pointerup',end); header.addEventListener('pointercancel',end);
+      });
+    }
 
     // Pre-select last-used class or first in list
     const firstSel = popup.querySelector('.cp-item.sel') || popup.querySelector('.cp-item');
@@ -2446,7 +2489,7 @@ const app = {
     const filtered = state.classes.filter(c => !q || c.name.toLowerCase().includes(q));
 
     if (!filtered.length) {
-      list.innerHTML = '<div style="padding:14px;color:var(--tx3);text-align:center;font-size:12px"><i class="fas fa-search" style="display:block;margin-bottom:6px;font-size:18px;opacity:.3"></i>No matches</div>';
+      list.innerHTML = '<div style="padding:14px;color:var(--tx3);text-align:center;font-size:var(--fs-12)"><i class="fas fa-search" style="display:block;margin-bottom:6px;font-size:var(--fs-18);opacity:.3"></i>No matches</div>';
       this._cpKbdIdx = -1;
       return;
     }
@@ -2550,6 +2593,7 @@ const app = {
         }
       }
     } else {
+      if (pb.type === 'polygon') this._pushHistory();
       pb.id  = Math.random().toString(36).slice(2);
       pb.cls = state.selectedCls;
       pb.st  = BoxState.CONFIRMED;   // human-drawn → ground truth
@@ -2637,6 +2681,9 @@ const app = {
 
   async _saveCurrentAnnotations() {
     if (state.currentIdx < 0) return;
+    // An explicit background label is an intentional empty .txt. Posting an
+    // empty ordinary annotation deletes that file and silently unmarks Null.
+    if (Boxes.preservesNull(state.isCurrentNull, state.bboxes)) return true;
     const item = state.media[state.currentIdx];
     if (!item) return;
 
@@ -2678,6 +2725,7 @@ const app = {
         })
       });
       const rd = await resp.json();
+      if (!resp.ok || rd.error) throw new Error(rd.error || 'Annotation save failed');
 
       // Only update state if we're still on the same image
       if (state.currentIdx !== capturedIdx) return;
@@ -2698,7 +2746,8 @@ const app = {
       const curItem = state.media[state.currentIdx];
       if (curItem) this._updateImageStatusBadge(curItem);
       this._setSaveStatus('saved');
-    } catch(e) { this._setSaveStatus('error'); }
+      return true;
+    } catch(e) { this._setSaveStatus('error'); return false; }
   },
 
   _setSaveStatus(s) {
@@ -3246,21 +3295,29 @@ const app = {
   },
 
   async deleteClass(id) {
-    if (!confirm(`Delete class ${state.classes.find(c=>c.id===id)?.name}? Annotations with this class will be deleted.`)) return;
+    const cls = state.classes.find(c => c.id === id);
+    if (!cls) return;
+    const n = (state.clsPageStats && state.clsPageStats[id]?.count) || 0;
+    const ok = await UI.confirm({
+      title: `Delete class "${cls.name}"?`, danger: true, confirmText: 'Delete class',
+      message: n ? `${n} annotation${n === 1 ? '' : 's'} using this class will be deleted from every image.\nThis cannot be undone.`
+                 : 'No annotations use this class. This cannot be undone.' });
+    if (!ok) return;
     try {
-      await fetch(_p('/classes'), {
-        method: 'DELETE',
-        headers: _authH(),
-        body: JSON.stringify({id})
-      });
+      const r = await fetch(_p('/classes'), { method: 'DELETE', headers: _authH(), body: JSON.stringify({id}) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d.success) throw new Error(d.error || `HTTP ${r.status}`);
       state.classes = state.classes.filter(c => c.id !== id);
       state.bboxes  = state.bboxes.filter(b => b.cls !== id);
+      if (state.clsPageStats) delete state.clsPageStats[id];
       this._populateClassList();
+      this._renderClassesTable && this._renderClassesTable();
+      this._updateNavBadges && this._updateNavBadges();
       this._render();
       this._updateAnnoList();
       this._triggerSave();
-      this._toast('Class deleted', 'success');
-    } catch(e) { this._toast('Failed to delete class', 'error'); }
+      this._toast(`Class "${cls.name}" deleted`, 'success');
+    } catch (e) { this._toast('Failed to delete class: ' + e.message, 'error'); }
   },
 
   _populateClassList() {
@@ -3446,14 +3503,23 @@ const app = {
   applyProps() {
     const box = state.bboxes.find(b => b.id === state.selectedId);
     if (!box) return;
+    const oldGeometry = {x: box.x, y: box.y, w: box.w, h: box.h};
     this._pushHistory();
     box.x = Math.max(0, parseFloat(document.getElementById('propX').value)||0);
     box.y = Math.max(0, parseFloat(document.getElementById('propY').value)||0);
     box.w = Math.max(1, parseFloat(document.getElementById('propW').value)||1);
     box.h = Math.max(1, parseFloat(document.getElementById('propH').value)||1);
+    box.x = Math.min(box.x, Math.max(0, state.imgW - 1));
+    box.y = Math.min(box.y, Math.max(0, state.imgH - 1));
+    box.w = Math.min(box.w, state.imgW - box.x);
+    box.h = Math.min(box.h, state.imgH - box.y);
+    if (box.type === 'polygon' && box.points && oldGeometry.w > 0 && oldGeometry.h > 0) {
+      box.points = box.points.map(p => ({x: box.x + (p.x - oldGeometry.x) * box.w / oldGeometry.w,
+        y: box.y + (p.y - oldGeometry.y) * box.h / oldGeometry.h}));
+    }
     Boxes.accept(box);              // editing geometry is review
     this._updateReviewBanner();
-    this._render(); this._triggerSave();
+    this._render(); this._updateProps(); this._updateAnnoList(); this._triggerSave();
   },
 
   /* ── STATUS BAR ── */
@@ -3677,7 +3743,7 @@ const app = {
   },
 
   /* ── EXPORT ── */
-  async startExport() {
+  async startExport(datasetId = null) {
     this.openModal('progressModal');
     document.getElementById('progTitle').textContent = 'Exporting Dataset…';
     document.getElementById('progText').textContent  = 'Building YOLO dataset ZIP…';
@@ -3686,7 +3752,7 @@ const app = {
       const r = await fetch(_p('/export'), {
         method: 'POST',
         headers: _authH(),
-        body: JSON.stringify({format:'yolov8'})
+        body: JSON.stringify({format:'yolov8', dataset_id: datasetId})
       });
       if (!r.ok) throw new Error();
       const blob = await r.blob();
@@ -3716,12 +3782,12 @@ const app = {
   },
 
   async startSplit() {
-    const train = parseFloat(document.getElementById('trainNum').value) || 0.7;
-    const val   = parseFloat(document.getElementById('valNum').value)   || 0.15;
-    const test  = parseFloat(document.getElementById('testNum').value)  || 0.15;
+    const train = Number(document.getElementById('trainNum').value);
+    const val   = Number(document.getElementById('valNum').value);
+    const test  = Number(document.getElementById('testNum').value);
     const sum   = train + val + test;
 
-    if (Math.abs(sum - 1.0) > 0.01) {
+    if (![train,val,test].every(n => Number.isFinite(n) && n >= 0 && n <= 1) || Math.abs(sum - 1.0) > 0.000001) {
       document.getElementById('ratioErr').style.display = '';
       return;
     }
@@ -3731,7 +3797,7 @@ const app = {
     document.getElementById('progTitle').textContent = 'Splitting Dataset…';
 
     try {
-      const r = await fetch(_p('/export'), {
+      const r = await fetch(_p('/split'), {
         method:'POST',
         headers:_authH(),
         body: JSON.stringify({
@@ -3817,9 +3883,10 @@ const app = {
       if (e.key === 'Escape') {
         if (document.getElementById('clsPopup').style.display !== 'none') { this.closePopup(); return; }
         // close topmost modal
-        const modals = ['shortcutsModal','newProjModal','resultModal','splitModal','progressModal','importModal','uploadModal'];
+        const modals = ['clsReindexModal','clsRenameModal','settingsModal','statsModal','shortcutsModal','newProjModal','resultModal','splitModal','progressModal','importModal','uploadModal'];
         for (const m of modals) {
-          if (document.getElementById(m).style.display !== 'none') { this.closeModal(m); return; }
+          const modal = document.getElementById(m);
+          if (modal && modal.style.display !== 'none') { this.closeModal(m); return; }
         }
         state.selectedId = null; state.pendingBox = null; state.drawing = false;
         this._render(); this._updateAnnoList(); this._updateProps();
@@ -3958,6 +4025,23 @@ const app = {
   },
 
   showPage(page) {
+    // The rename popup belongs to Classes; the block below only closes dialogs
+    // for non-Annotate destinations, so Classes → Annotate needs this.
+    if (page !== 'classes') {
+      for (const id of ['clsRenameModal', 'clsReindexModal'])
+        if (document.getElementById(id)) this.closeModal(id);
+    }
+    if (page !== 'annotate') {
+      this.closePopup();
+      for (const modal of document.querySelectorAll('.modal-overlay')) modal.style.display = 'none';
+      const datasetPanel = document.getElementById('atdPanel');
+      if (datasetPanel) datasetPanel.style.display = 'none';
+      // Use each panel's close handler to clean up mode and transient state.
+      for (const [barId, closeId] of [['sdBar', 'sdBarClose'], ['paBar', 'paBarClose']]) {
+        const bar = document.getElementById(barId);
+        if (bar && bar.style.display !== 'none') document.getElementById(closeId)?.click();
+      }
+    }
     state.currentPage = page;
     // Keep URL hash in sync so the section survives a refresh / can be bookmarked
     const url = new URL(location.href);
@@ -4074,18 +4158,29 @@ const app = {
         const panel = document.getElementById(`rpt-${key}`);
         if (panel) panel.classList.add('active');
         if (key === 'raw')      this._updateRawData();
+        if (key === 'props')    this._updateProps();
         if (key === 'comments') this._renderComments();
       });
     });
-    document.getElementById('copyRawBtn')?.addEventListener('click', () => {
-      const text = state.bboxes.map(b => {
+    document.getElementById('copyRawBtn')?.addEventListener('click', async () => {
+      const text = Boxes.confirmed(state.bboxes).map(b => {
         const xc = ((b.x + b.w/2) / state.imgW).toFixed(6);
         const yc = ((b.y + b.h/2) / state.imgH).toFixed(6);
         const w  = (b.w / state.imgW).toFixed(6);
         const h  = (b.h / state.imgH).toFixed(6);
         return `${b.cls} ${xc} ${yc} ${w} ${h}`;
       }).join('\n');
-      navigator.clipboard?.writeText(text).then(() => this._toast('Copied to clipboard', 'success'));
+      try {
+        if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(text);
+        else {
+          const input = document.createElement('textarea');
+          input.value = text; input.style.position = 'fixed'; input.style.opacity = '0';
+          document.body.appendChild(input); input.select();
+          try { if (!document.execCommand('copy')) throw new Error('Clipboard unavailable'); }
+          finally { input.remove(); }
+        }
+        this._toast('Copied confirmed annotations to clipboard', 'success');
+      } catch (_) { this._toast('Clipboard unavailable. Select and copy the raw text manually.', 'error'); }
     });
     document.getElementById('commentSendBtn')?.addEventListener('click', () => this._addComment());
     document.getElementById('commentInput')?.addEventListener('keydown', e => { if (e.key === 'Enter') this._addComment(); });
@@ -4131,8 +4226,8 @@ const app = {
     const item     = state.media[state.currentIdx];
     const comments = (item && state.imageComments[item.path]) || [];
     list.innerHTML = !comments.length
-      ? '<div style="text-align:center;padding:20px;color:var(--tx3);font-size:12px;">No notes for this image</div>'
-      : comments.map(c => `<div class="comment-item"><div class="ci-text">${c.text}</div><div class="ci-time">${c.time}</div></div>`).join('');
+      ? '<div style="text-align:center;padding:20px;color:var(--tx3);font-size:var(--fs-12);">No notes for this image</div>'
+      : comments.map(c => { const text = document.createElement('span'); text.textContent = c.text; return `<div class="comment-item"><div class="ci-text">${text.innerHTML}</div><div class="ci-time">${c.time}</div></div>`; }).join('');
     list.scrollTop = list.scrollHeight;
   },
 
@@ -4155,6 +4250,8 @@ const app = {
     state.dsPage = 1;
     state.dsSelectedPaths = new Set();
     state.dsSelectMode = false;
+    document.getElementById('dsSelToggle')?.classList.remove('active');
+    this._dsUpdateSelToolbar();
     this._fetchDatasetImages();
     this._dsPopulateClassFilter();
     if (!this._datasetBound) {
@@ -4162,7 +4259,9 @@ const app = {
 
       // Search
       document.getElementById('dsSearch')?.addEventListener('input', e => {
-        state.dsSearch = e.target.value; state.dsPage = 1; this._fetchDatasetImages();
+        state.dsSearch = e.target.value; state.dsPage = 1;
+        clearTimeout(this._dsSearchTimer);
+        this._dsSearchTimer = setTimeout(() => this._fetchDatasetImages(), 220);
       });
 
       // Split pills
@@ -4199,9 +4298,43 @@ const app = {
         if (this._dsCurrentItems) this._renderDatasetGrid(this._dsCurrentItems, this._dsLastPg || {});
       });
 
+      document.getElementById('dsSelectPage')?.addEventListener('click', () => {
+        state.dsSelectMode = true;
+        (this._dsCurrentItems || []).forEach(item => state.dsSelectedPaths.add(item.path));
+        document.getElementById('dsSelToggle').classList.add('active');
+        this._renderDatasetGrid(this._dsCurrentItems || [], this._dsLastPg || {});
+        this._dsUpdateSelToolbar();
+      });
+      document.getElementById('dsDensity')?.addEventListener('change', e => {
+        document.getElementById('dsGrid').dataset.density = e.target.value;
+        document.querySelectorAll('#dsGrid img.ds-thumb').forEach(img => { if (img.complete) this._dsDrawBboxes(img); });
+      });
+      document.getElementById('dsShowAnnotations')?.addEventListener('change', e => {
+        document.getElementById('dsGrid').classList.toggle('ds-hide-annotations', !e.target.checked);
+      });
+      document.getElementById('dsResetFilters')?.addEventListener('click', () => this._dsResetFilters());
+      document.getElementById('dsEmptyAction')?.addEventListener('click', () => {
+        if (this._dsHasFilters()) this._dsResetFilters();
+        else this.showPage('upload');
+      });
+      document.getElementById('dsCreateVersionBtn')?.addEventListener('click', () => {
+        this.showPage('versions');
+        this._vwOpen();
+      });
+      document.getElementById('dsGrid')?.addEventListener('keydown', e => {
+        if (e.target.matches('.ds-card') && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault(); this._dsCardClick(e.target.dataset.path, e);
+        }
+      });
+      this._dsResizeObserver = new ResizeObserver(() => {
+        document.querySelectorAll('#dsGrid img.ds-thumb').forEach(img => { if (img.complete) this._dsDrawBboxes(img); });
+      });
+      this._dsResizeObserver.observe(document.getElementById('dsGrid'));
+
       // Select-all via Ctrl+A when page is active
       document.addEventListener('keydown', e => {
         if (state.currentPage !== 'dataset') return;
+        if (e.target.matches('input,textarea,select,[contenteditable="true"]')) return;
         if ((e.ctrlKey || e.metaKey) && e.key === 'a' && state.dsSelectMode) {
           e.preventDefault();
           (this._dsCurrentItems || []).forEach(i => state.dsSelectedPaths.add(i.path));
@@ -4235,6 +4368,20 @@ const app = {
     }
   },
 
+  _dsHasFilters() {
+    return !!(state.dsSearch || state.dsClassFilter || state.dsFilter !== 'all' || state.dsAnnoFilter !== 'all');
+  },
+
+  _dsResetFilters() {
+    clearTimeout(this._dsSearchTimer);
+    state.dsSearch = ''; state.dsClassFilter = ''; state.dsFilter = 'all'; state.dsAnnoFilter = 'all'; state.dsPage = 1;
+    document.getElementById('dsSearch').value = '';
+    document.getElementById('dsClassFilter').value = '';
+    document.querySelectorAll('#dsSplitPills .ds-pill').forEach(b => b.classList.toggle('active', b.dataset.dsf === 'all'));
+    document.querySelectorAll('#dsStatusPills .ds-pill').forEach(b => b.classList.toggle('active', b.dataset.dsa === 'all'));
+    this._fetchDatasetImages();
+  },
+
   // Populate class filter dropdown from project classes + null option
   _dsPopulateClassFilter() {
     const sel = document.getElementById('dsClassFilter');
@@ -4248,7 +4395,7 @@ const app = {
       if (String(cls.id) === current) opt.selected = true;
       sel.appendChild(opt);
     });
-    if (current && current !== '__null__') sel.value = current;
+    sel.value = current;
   },
 
   _dsUpdateSelToolbar() {
@@ -4294,10 +4441,15 @@ const app = {
   },
 
   async _fetchDatasetImages() {
+    this._dsAbort?.abort();
+    const controller = new AbortController();
+    this._dsAbort = controller;
     const grid  = document.getElementById('dsGrid');
     const empty = document.getElementById('dsEmpty');
     const pag   = document.getElementById('dsPagination');
     if (!grid) return;
+    grid.setAttribute('aria-busy', 'true');
+    document.getElementById('dsGallerySummary').textContent = 'Loading images…';
 
     // Show loading shimmer
     grid.innerHTML = Array(8).fill(
@@ -4318,13 +4470,17 @@ const app = {
     if (state.dsClassFilter) params.set('class_id', state.dsClassFilter);
 
     try {
-      const r = await fetch(_p('/datasets/images?' + params.toString()), { headers: _authFD() });
+      const r = await fetch(_p('/datasets/images?' + params.toString()), { headers: _authFD(), signal: controller.signal });
       if (!r.ok) throw new Error('Failed');
       const d = await r.json();
+      if (controller.signal.aborted) return;
       this._renderDatasetGrid(d.items || [], d.pagination || {});
     } catch(e) {
-      grid.innerHTML = `<div class="ds-empty" id="dsEmpty" style="grid-column:1/-1">
-        <i class="fas fa-exclamation-circle"></i><p>Failed to load dataset images</p></div>`;
+      if (controller.signal.aborted) return;
+      grid.innerHTML = `<div class="ds-empty" style="grid-column:1/-1"><i class="fas fa-exclamation-circle"></i><h3>Could not load images</h3><p>Check your connection and try again.</p><button class="ghost-btn sm" onclick="app._fetchDatasetImages()">Try again</button></div>`;
+      document.getElementById('dsGallerySummary').textContent = 'Dataset unavailable';
+    } finally {
+      if (!controller.signal.aborted) grid.setAttribute('aria-busy', 'false');
     }
   },
 
@@ -4351,33 +4507,40 @@ const app = {
     const elA = document.getElementById('dsStatAnnotated');
     if (elT) elT.textContent = total;
     if (elA) elA.textContent = items.filter(m => m.annotated).length +
-      (pg.total ? ` / ${total}` : '');
+      '';
+    document.getElementById('dsTotalBadge').textContent = `${total.toLocaleString()} images`;
+    document.getElementById('dsGallerySummary').textContent = items.length ? `${((cur - 1) * state.dsPerPage + 1).toLocaleString()}–${Math.min(cur * state.dsPerPage, total).toLocaleString()} of ${total.toLocaleString()}${this._dsHasFilters() ? ' matching' : ''} images · Click an image to inspect` : '0 images';
 
     if (!items.length) {
       grid.innerHTML = '';
       if (empty) empty.style.display = '';
       if (pag)   pag.style.display = 'none';
+      const filtered = this._dsHasFilters();
+      document.getElementById('dsEmptyTitle').textContent = filtered ? 'No images match your filters' : 'Your dataset is ready for images';
+      document.getElementById('dsEmptyMessage').textContent = filtered ? 'Try a different filename, split, status, or class.' : 'Annotate an upload batch, then add the reviewed images to your dataset.';
+      document.getElementById('dsEmptyAction').textContent = filtered ? 'Clear filters' : 'Go to uploads';
       return;
     }
     if (empty) empty.style.display = 'none';
     if (pag)   pag.style.display = '';
 
     // Render cards — each card uses a canvas to overlay bboxes on the thumbnail
+    const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
     grid.innerHTML = items.map(item => {
       const thumb = _p(`/thumbnail?path=${encodeURIComponent(item.path)}`);
-      const safe  = item.path.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-      const sp    = item.split || 'none';
+      const safe  = escape(JSON.stringify(item.path));
+      const sp    = ['train','valid','val','test'].includes(item.split) ? (item.split === 'val' ? 'valid' : item.split) : 'none';
       const dsLabel = item.dataset_id ? item.dataset_id.replace(/^job_/, '').replace(/_/g,' ') : '';
       const isSel = state.dsSelectedPaths?.has(item.path);
       const isNull = item.is_null;
       return `<div class="ds-card${isSel ? ' ds-selected' : ''}"
-               onclick="app._dsCardClick('${safe}', event)" title="${item.name}">
+               data-path="${escape(item.path)}" tabindex="0" role="button" aria-label="Inspect ${escape(item.name)}" onclick="app._dsCardClick(${safe}, event)" title="${escape(item.name)}">
         <div class="ds-thumb-wrap">
-          <div class="ds-card-checkbox" onclick="event.stopPropagation();app._dsToggleSelect('${safe}')">
+          <button type="button" class="ds-card-checkbox" aria-label="Select ${escape(item.name)}" aria-pressed="${!!isSel}" onclick="event.stopPropagation();app._dsToggleSelect(${safe})">
             ${isSel ? '<i class="fas fa-check"></i>' : ''}
-          </div>
-          <img class="ds-thumb" src="${thumb}" loading="lazy"
-               data-path="${item.path.replace(/"/g,'&quot;')}"
+          </button>
+          <img class="ds-thumb" src="${thumb}" loading="lazy" alt="${escape(item.name)}"
+               data-path="${escape(item.path)}"
                onload="app._dsDrawBboxes(this)"
                onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
           <div class="ds-thumb-ph" style="display:none"><i class="fas fa-image"></i></div>
@@ -4390,9 +4553,9 @@ const app = {
               : ''}
         </div>
         <div class="ds-card-info">
-          <div class="ds-card-name">${item.name}</div>
+          <div class="ds-card-name">${escape(item.name)}</div>
           <div class="ds-card-meta-row">
-            <span class="ds-ds-label" title="${item.dataset_id}">${dsLabel}</span>
+            <span class="ds-ds-label" title="${escape(item.dataset_id)}">${escape(dsLabel)} · ${isNull ? 'Background' : item.annotated ? 'Labeled' : 'Unlabeled'}</span>
           </div>
         </div>
       </div>`;
@@ -4407,23 +4570,25 @@ const app = {
     const path = img.dataset.path;
     if (!path) return;
     try {
-      const r = await fetch(_p(`/annotations?path=${encodeURIComponent(path)}`), { headers: _authFD() });
-      if (!r.ok) return;
-      const d = await r.json();
+      let d = img._dsAnnotations;
+      if (!d) {
+        const r = await fetch(_p(`/annotations?path=${encodeURIComponent(path)}`), { headers: _authFD() });
+        if (!r.ok) return;
+        d = await r.json();
+        img._dsAnnotations = d;
+      }
       if (!d.bboxes || !d.bboxes.length) return;
 
       const canvas = img.nextElementSibling?.nextElementSibling; // canvas is after ph div
       if (!canvas || canvas.tagName !== 'CANVAS') return;
       const iw = img.naturalWidth  || img.offsetWidth  || 160;
       const ih = img.naturalHeight || img.offsetHeight || 120;
-      const dw = img.offsetWidth   || 160;
-      const dh = img.offsetHeight  || 120;
-      canvas.width  = dw;
-      canvas.height = dh;
+      const cw = img.offsetWidth || 160, ch = img.offsetHeight || 120;
+      const scale = Math.min(cw / iw, ch / ih);
+      const dw = iw * scale, dh = ih * scale;
+      canvas.width = cw; canvas.height = ch;
       const ctx = canvas.getContext('2d');
-
-      const scaleX = dw / iw;
-      const scaleY = dh / ih;
+      ctx.translate((cw - dw) / 2, (ch - dh) / 2);
 
       d.bboxes.forEach((b, i) => {
         // Pick a colour from the class palette
@@ -4522,19 +4687,19 @@ const app = {
   },
 
   _dsToggleSelect(path) {
+    state.dsSelectMode = true;
+    document.getElementById('dsSelToggle').classList.add('active');
+    document.getElementById('dsGrid').classList.add('ds-select-mode');
     if (!state.dsSelectedPaths) state.dsSelectedPaths = new Set();
     if (state.dsSelectedPaths.has(path)) state.dsSelectedPaths.delete(path);
     else state.dsSelectedPaths.add(path);
     // Update just that card's visual state
-    const safe = path.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-    const card = document.querySelector(`.ds-card[onclick*="${CSS.escape(path.slice(-20))}"]`) ||
-                 [...document.querySelectorAll('.ds-card')].find(c => c.title === path.split('/').pop() ||
-                   c.querySelector('.ds-card-name')?.textContent === path.split('/').pop());
+    const card = [...document.querySelectorAll('#dsGrid .ds-card')].find(c => c.dataset.path === path);
     if (card) {
       const isSel = state.dsSelectedPaths.has(path);
       card.classList.toggle('ds-selected', isSel);
       const cb = card.querySelector('.ds-card-checkbox');
-      if (cb) cb.innerHTML = isSel ? '<i class="fas fa-check"></i>' : '';
+      if (cb) { cb.innerHTML = isSel ? '<i class="fas fa-check"></i>' : ''; cb.setAttribute('aria-pressed', String(isSel)); }
     }
     this._dsUpdateSelToolbar();
   },
@@ -4714,7 +4879,7 @@ const app = {
         ctx.shadowBlur = 0;
         const cls = state.classes?.find(c => c.id === (b.class_id ?? -1));
         const label = cls ? cls.name : (b.class_id != null ? `#${b.class_id}` : '?');
-        ctx.font = `700 ${fontSize}px Sora, sans-serif`;
+        ctx.font = `700 ${fontSize}px ${ThemeColors.get().font}`;
         const tw = ctx.measureText(label).width;
         const lx = x, ly = y > fontSize + 4 ? y - fontSize - 4 : y + 2;
         ctx.fillStyle = col; ctx.fillRect(lx, ly, tw + 8, fontSize + 4);
@@ -4726,190 +4891,251 @@ const app = {
 
   /* ═══ VERSIONS PAGE ══════════════════════════════════════════ */
   async _loadVersionsPage() {
+    this._bindVersionsPage();
     try {
       const r = await fetch(_p('/versions'), { headers: _authFD() });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
       state.versions = await r.json();
-    } catch(e) { state.versions = []; }
+    } catch (e) { state.versions = []; }
+    // keep the open version open across reloads of the list
+    if (state.selectedVersionId && !state.versions.some(v => v.id === state.selectedVersionId)) state.selectedVersionId = null;
     this._renderVersionsList();
-    if (!this._versionsBound) {
-      this._versionsBound = true;
-      document.getElementById('createVersionBtn')?.addEventListener('click', () => this._vwOpen());
-      document.getElementById('vsStartCreateBtn')?.addEventListener('click', () => this._vwOpen());
+    const sel = state.versions.find(v => v.id === state.selectedVersionId);
+    if (sel) this._renderVersionDetail(sel); else this._closeVersionDetail();
+  },
+
+  _bindVersionsPage() {
+    if (this._versionsBound) return;
+    this._versionsBound = true;
+    const $ = id => document.getElementById(id);
+    $('createVersionBtn')?.addEventListener('click', () => this._vwOpen());
+    $('vsStartCreateBtn')?.addEventListener('click', () => this._vwOpen());
+    const list = $('vsListScroll');
+    const pick = item => {
+      const ver = state.versions.find(v => v.id === item.dataset.id);
+      if (!ver) return;
+      state.selectedVersionId = ver.id;
+      list.querySelectorAll('.ver-item').forEach(el => {
+        const on = el === item; el.classList.toggle('active', on); el.setAttribute('aria-selected', on ? 'true' : 'false');
+      });
+      this._renderVersionDetail(ver);
+    };
+    list?.addEventListener('click', e => {
+      const more = e.target.closest('.ver-more');
+      if (more) { e.stopPropagation(); this._verMenu(more, more.closest('.ver-item').dataset.id); return; }
+      const item = e.target.closest('.ver-item');
+      if (item) pick(item);
+    });
+    list?.addEventListener('keydown', e => {
+      const item = e.target.closest('.ver-item');
+      if (!item || e.target !== item) return;
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(item); }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const items = [...list.querySelectorAll('.ver-item')], i = items.indexOf(item);
+        items[Math.max(0, Math.min(items.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))]?.focus();
+      }
+    });
+    $('vsDetailPane')?.addEventListener('click', e => {
+      const act = e.target.closest('[data-ver-act]'); if (!act) return;
+      const id = state.selectedVersionId;
+      const kind = act.dataset.verAct;
+      if (kind === 'download') this._downloadVersion(id);
+      else if (kind === 'more') this._verMenu(act, id);
+      else if (kind === 'copy') this._verCopyPath(id);
+      else if (kind === 'back') this._closeVersionDetail();
+    });
+  },
+
+  _verMenu(btn, id) {
+    if (typeof KebabMenu === 'undefined' || !id) return;
+    if (btn.getAttribute('aria-expanded') === 'true') { KebabMenu.closeAll(); return; }
+    KebabMenu.open(btn, [
+      { icon: 'fa-download', label: 'Download ZIP', onClick: () => this._downloadVersion(id) },
+      { icon: 'fa-copy', label: 'Copy folder path', onClick: () => this._verCopyPath(id) },
+      'sep',
+      { icon: 'fa-trash-alt', label: 'Delete version', danger: true, onClick: () => this._deleteVersion(id) },
+    ]);
+  },
+
+  /** "Versions/v2_more_data": the folder inside the project (the full machine
+      path is long and differs per server). */
+  _verRelPath(ver) {
+    const full = (ver && ver.folder_path || '').replace(/\\/g, '/');
+    const i = full.lastIndexOf('/Versions/');
+    return i >= 0 ? full.slice(i + 1) : full;
+  },
+
+  async _verCopyPath(id) {
+    const ver = state.versions.find(v => v.id === id);
+    const text = (ver && ver.folder_path) || '';
+    if (!text) return;
+    try { await navigator.clipboard.writeText(text); this._toast('Folder path copied', 'success'); }
+    catch (e) {
+      const t = Object.assign(document.createElement('textarea'), { value: text });
+      document.body.append(t); t.select();
+      const ok = document.execCommand('copy'); t.remove();
+      this._toast(ok ? 'Folder path copied' : 'Copy failed', ok ? 'success' : 'error');
     }
   },
 
+  _verWhen(stamp) {
+    // created_at is "YYYY-MM-DD HH:MM" (server local time)
+    const d = new Date(String(stamp || '').replace(' ', 'T'));
+    if (isNaN(d)) return {rel: stamp || '', abs: stamp || ''};
+    const s = Math.round((Date.now() - d) / 1000);
+    const rel = s < 60 ? 'just now' : s < 3600 ? `${Math.round(s / 60)} min ago`
+      : s < 86400 ? `${Math.round(s / 3600)} h ago` : s < 86400 * 30 ? `${Math.round(s / 86400)} d ago`
+      : d.toLocaleDateString(undefined, {year: 'numeric', month: 'short', day: 'numeric'});
+    const abs = d.toLocaleString(undefined, {year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'});
+    return {rel, abs};
+  },
+
+  /** Stable version number: from the name when it starts with one ("v2 …",
+      "3 night"), else its creation position. Position alone renumbered the
+      remaining versions whenever one was deleted. */
+  _verNum(ver) {
+    const m = String(ver.name || '').match(/^v?(\d+)/i);
+    if (m) return m[1];
+    return (state.versions || []).findIndex(v => v.id === ver.id) + 1;
+  },
+
+  _verSplits(ver) {
+    const sc = ver.splits || {};
+    const train = sc.train || 0, val = sc.val || sc.valid || 0, test = sc.test || 0;
+    return {train, val, test, total: (ver.total_images || 0) || (train + val + test)};
+  },
+
+  _verSplitBar(sp, big) {
+    const t = sp.total || 1;
+    const seg = (cls, n, label) => n ? `<span class="${cls}" style="flex:${n}" title="${label}: ${n}"></span>` : '';
+    return `<div class="ver-split${big ? ' is-lg' : ''}" role="img" aria-label="Train ${sp.train}, Validation ${sp.val}, Test ${sp.test}">
+      ${seg('is-train', sp.train, 'Train')}${seg('is-val', sp.val, 'Validation')}${seg('is-test', sp.test, 'Test')}
+      ${sp.train + sp.val + sp.test === 0 ? '<span class="is-none"></span>' : ''}</div>`;
+  },
+
   _renderVersionsList() {
-    const scroll = document.getElementById('vsListScroll');
-    const empty  = document.getElementById('vsEmptyList');
-    if (!scroll) return;
-    scroll.innerHTML = '';
-    if (empty) scroll.appendChild(empty);
-    if (!state.versions.length) { if (empty) empty.style.display = ''; return; }
-    if (empty) empty.style.display = 'none';
-
-    const sorted = [...state.versions].reverse();
+    const list = document.getElementById('vsListScroll');
+    const empty = document.getElementById('vsEmptyList');
+    if (!list) return;
+    const esc = v => this._escHtml(String(v ?? ''));
+    const cnt = document.getElementById('vsCount');
+    if (cnt) cnt.textContent = state.versions.length;
+    list.querySelectorAll('.ver-item').forEach(el => el.remove());
+    if (empty) empty.style.display = state.versions.length ? 'none' : '';
+    list.setAttribute('role', 'listbox');
+    list.setAttribute('aria-label', 'Versions');
+    const sorted = [...state.versions].reverse();     // newest first
     sorted.forEach((ver, idx) => {
-      const isCurrent = idx === 0; // most recent = current
-      const pp  = ver.preprocessing || {};
-      const sc  = ver.splits || {};
-      const total = ver.total_images || 0;
-
-      // Preprocessing summary line
-      let ppLine = '';
-      if (pp.resize_mode && pp.resize_mode !== 'none') {
-        ppLine = `${pp.resize_w||'?'}×${pp.resize_h||'?'} – ${pp.resize_mode.charAt(0).toUpperCase()+pp.resize_mode.slice(1)}`;
-      } else if (pp.auto_orient || pp.normalize) {
-        ppLine = [pp.auto_orient?'Auto-orient':'', pp.normalize?'Normalize':''].filter(Boolean).join(' · ');
-      }
-
-      // Version number — extract from name or use index
-      const vNum = ver.name.match(/^v?(\d+)/i)?.[1] || (sorted.length - idx);
-
-      const div = document.createElement('div');
-      div.className = 'vs-item' + (state.selectedVersionId === ver.id ? ' active' : '');
-      div.innerHTML = `
-        <div class="vs-item-header">
-          <div class="vs-item-vnum">v${vNum}</div>
-          ${isCurrent ? '<span class="vs-item-current">current</span>' : ''}
-          <div class="vs-item-actions">
-            <button class="vs-item-act" title="Download" onclick="event.stopPropagation();app._downloadVersion('${ver.id}')">
-              <i class="fas fa-download"></i>
-            </button>
-            <button class="vs-item-act danger" title="Delete" onclick="event.stopPropagation();app._deleteVersion('${ver.id}')">
-              <i class="fas fa-trash-alt"></i>
-            </button>
-          </div>
+      const sp = this._verSplits(ver), when = this._verWhen(ver.created_at);
+      const num = this._verNum(ver);
+      const el = document.createElement('div');
+      el.className = 'vs-item ver-item' + (state.selectedVersionId === ver.id ? ' active' : '');
+      el.dataset.id = ver.id;
+      el.tabIndex = 0;
+      el.setAttribute('role', 'option');
+      el.setAttribute('aria-selected', state.selectedVersionId === ver.id ? 'true' : 'false');
+      el.innerHTML = `
+        <div class="ver-item-top">
+          <span class="ver-badge">v${num}</span>
+          ${idx === 0 ? '<span class="ver-latest">Latest</span>' : ''}
+          <button type="button" class="kmenu-btn ver-more" title="Version actions" aria-label="Actions for ${esc(ver.name)}">
+            <i class="fas fa-ellipsis-v" aria-hidden="true"></i></button>
         </div>
-        <div class="vs-item-name">${this._escHtml(ver.name)}</div>
-        <div class="vs-item-ts"><i class="fas fa-clock"></i> ${ver.created_at}</div>
-        <div class="vs-item-stats">
-          <span class="vs-item-stat"><i class="fas fa-images"></i> ${total.toLocaleString()} images</span>
-          <span class="vs-item-stat"><i class="fas fa-tags"></i> ${ver.num_classes||0} classes</span>
-        </div>
-        <div class="vs-item-split-bar">
-          <div class="vs-isb-train" style="width:${sc.train&&total?Math.round(sc.train/total*100):0}%" title="Train"></div>
-          <div class="vs-isb-val"   style="width:${(sc.val||sc.valid)&&total?Math.round((sc.val||sc.valid)/total*100):0}%" title="Val"></div>
-          <div class="vs-isb-test"  style="flex:1" title="Test"></div>
-        </div>
-        <div class="vs-item-split-nums">
-          <span class="train">${sc.train||0} train</span>
-          <span class="valid">${sc.val||sc.valid||0} val</span>
-          <span class="test">${sc.test||0} test</span>
-        </div>
-        ${ppLine ? `<div class="vs-item-pp"><i class="fas fa-sliders-h"></i> ${ppLine}</div>` : ''}
-      `;
-      div.addEventListener('click', () => {
-        state.selectedVersionId = ver.id;
-        document.querySelectorAll('.vs-item').forEach(v => v.classList.remove('active'));
-        div.classList.add('active');
-        this._renderVersionDetail(ver);
-      });
-      scroll.insertBefore(div, empty);
+        <div class="ver-item-name">${esc(ver.name)}</div>
+        <div class="ver-item-meta"><span>${(sp.total).toLocaleString()} image${sp.total === 1 ? '' : 's'}</span>
+          <span aria-hidden="true">·</span><span title="${esc(when.abs)}">${esc(when.rel)}</span></div>
+        ${this._verSplitBar(sp, false)}`;
+      list.insertBefore(el, empty);
     });
+  },
+
+  _closeVersionDetail() {
+    state.selectedVersionId = null;
+    document.getElementById('vsPage')?.classList.remove('has-selection');
+    document.querySelectorAll('#vsListScroll .ver-item').forEach(el => { el.classList.remove('active'); el.setAttribute('aria-selected', 'false'); });
+    const pane = document.getElementById('vsDetailPane');
+    if (!pane) return;
+    const has = (state.versions || []).length > 0;
+    pane.innerHTML = `
+      <div class="ver-placeholder" id="vsNoSelection">
+        <div class="ver-placeholder-icon"><i class="fas fa-${has ? 'hand-pointer' : 'box-open'}" aria-hidden="true"></i></div>
+        <h3>${has ? 'Select a version' : 'No versions yet'}</h3>
+        <p>${has ? 'See its images, split and folder, or download it as a YOLO ZIP.'
+                 : 'A version freezes your labelled images and their train/valid/test split, ready to download for training.'}</p>
+        <button type="button" class="btn btn-primary" id="vsStartCreateBtn"><i class="fas fa-plus" aria-hidden="true"></i> ${has ? 'New version' : 'Create your first version'}</button>
+      </div>`;
+    pane.querySelector('#vsStartCreateBtn')?.addEventListener('click', () => this._vwOpen());
   },
 
   _renderVersionDetail(ver) {
     const pane = document.getElementById('vsDetailPane');
-    if (!pane) return;
-    const sc   = ver.splits || {};
-    const pp   = ver.preprocessing || {};
-    const augs = ver.augmentations || [];
-    const total = ver.total_images || 0;
-    const trainN = sc.train || 0, valN = sc.val || sc.valid || 0, testN = sc.test || 0;
-    const trainPct = total ? Math.round(trainN/total*100) : 0;
-    const valPct   = total ? Math.round(valN/total*100)   : 0;
-    const testPct  = 100 - trainPct - valPct;
-    const ppChips = [
-      pp.resize_mode && pp.resize_mode !== 'none' ? `${pp.resize_mode} ${pp.resize_w}×${pp.resize_h}` : null,
+    if (!pane || !ver) return;
+    const esc = v => this._escHtml(String(v ?? ''));
+    const sp = this._verSplits(ver), when = this._verWhen(ver.created_at);
+    const pct = n => sp.total ? Math.round(n / sp.total * 100) : 0;
+    const sorted = [...state.versions].reverse();
+    const idx = sorted.findIndex(v => v.id === ver.id);
+    const num = this._verNum(ver);
+    const pp = ver.preprocessing || {}, augs = ver.augmentations || [];
+    const recorded = [
+      pp.resize_mode && pp.resize_mode !== 'none' ? `Resize ${esc(pp.resize_mode)} ${esc(pp.resize_w)}×${esc(pp.resize_h)}` : null,
       pp.auto_orient ? 'Auto-orient' : null,
-      pp.normalize   ? 'Normalize'   : null,
+      pp.normalize ? 'Normalize' : null,
+      ...augs.map(a => esc((a && (a.type || a.name)) || a).replace(/_/g, ' ')),
     ].filter(Boolean);
-    const folderPath = ver.folder_path || '';
-
+    const rel = this._verRelPath(ver);
+    document.getElementById('vsPage')?.classList.add('has-selection');
     pane.innerHTML = `
-      <div class="vs-detail-card">
-        <div class="vs-detail-tag"><i class="fas fa-archive"></i> Version</div>
-        <div class="vs-detail-name">${this._escHtml(ver.name)}</div>
-        <div class="vs-detail-date"><i class="fas fa-clock" style="margin-right:5px"></i>${ver.created_at}</div>
-        ${ver.note ? `<div class="vs-detail-note">${this._escHtml(ver.note)}</div>` : ''}
-        <div class="vs-detail-grid">
-          <div class="vs-dg-item"><div class="vs-dg-val">${total}</div><div class="vs-dg-lbl">Images</div></div>
-          <div class="vs-dg-item"><div class="vs-dg-val">${ver.annotated_images||0}</div><div class="vs-dg-lbl">Annotated</div></div>
-          <div class="vs-dg-item"><div class="vs-dg-val">${ver.num_classes||0}</div><div class="vs-dg-lbl">Classes</div></div>
-          <div class="vs-dg-item"><div class="vs-dg-val">${augs.length}</div><div class="vs-dg-lbl">Augments</div></div>
-        </div>
-        <div class="vs-split-bar-detail">
-          <div class="train" style="width:${trainPct}%"></div>
-          <div class="valid" style="width:${valPct}%"></div>
-          <div class="test"  style="width:${testPct}%"></div>
-        </div>
-        <div class="vs-split-legend">
-          <span><i class="fas fa-circle" style="color:var(--accent)"></i> Train ${trainN}</span>
-          <span><i class="fas fa-circle" style="color:#60a5fa"></i> Val ${valN}</span>
-          <span><i class="fas fa-circle" style="color:#c084fc"></i> Test ${testN}</span>
-        </div>
-        ${ppChips.length ? `<div class="vs-pp-summary">${ppChips.map(c=>`<span class="vs-pp-chip">${c}</span>`).join('')}</div>` : ''}
-
-        <!-- Folder location on disk -->
-        <div class="vs-folder-box">
-          <div class="vs-folder-head">
-            <i class="fas fa-folder-open"></i>
-            <span>Saved to disk</span>
-            <span class="vs-folder-size" id="vsFolderSize_${ver.id}">loading…</span>
+      <article class="ver-card" aria-labelledby="verCardName">
+        <button type="button" class="btn btn-ghost btn-sm ver-back" data-ver-act="back"><i class="fas fa-arrow-left" aria-hidden="true"></i> All versions</button>
+        <header class="ver-card-head">
+          <div class="ver-card-titles">
+            <div class="ver-card-badges"><span class="ver-badge">v${num}</span>${idx === 0 ? '<span class="ver-latest">Latest</span>' : ''}</div>
+            <h3 class="ver-card-name" id="verCardName">${esc(ver.name)}</h3>
+            <p class="ver-card-date"><i class="fas fa-clock" aria-hidden="true"></i> Created ${esc(when.abs)} <span>(${esc(when.rel)})</span></p>
           </div>
-          <div class="vs-folder-path" title="${folderPath}">${folderPath || '—'}</div>
-          <div class="vs-folder-tree">
-            <div class="vs-ftree-line">
-              <i class="fas fa-folder" style="color:#60a5fa"></i>
-              <span>images/</span>
-              <span class="vs-ftree-split train">train/</span>
-              <span class="vs-ftree-split valid">val/</span>
-              <span class="vs-ftree-split test">test/</span>
-            </div>
-            <div class="vs-ftree-line">
-              <i class="fas fa-folder" style="color:#f59e0b"></i>
-              <span>labels/</span>
-              <span class="vs-ftree-split train">train/</span>
-              <span class="vs-ftree-split valid">valid/</span>
-              <span class="vs-ftree-split test">test/</span>
-            </div>
-            <div class="vs-ftree-line"><i class="fas fa-file-code" style="color:var(--accent)"></i> data.yaml</div>
-            <div class="vs-ftree-line"><i class="fas fa-file-alt" style="color:var(--tx3)"></i> README.md</div>
+          <div class="ver-card-actions">
+            <button type="button" class="btn btn-primary" data-ver-act="download"><i class="fas fa-download" aria-hidden="true"></i> Download ZIP</button>
+            <button type="button" class="kmenu-btn ver-more ver-more-lg" data-ver-act="more" title="More actions" aria-label="More actions for ${esc(ver.name)}"><i class="fas fa-ellipsis-v" aria-hidden="true"></i></button>
           </div>
+        </header>
+        ${ver.note ? `<p class="ver-note"><i class="fas fa-sticky-note" aria-hidden="true"></i><span>${esc(ver.note)}</span></p>` : ''}
+        <div class="ver-kpis">
+          <div class="ver-kpi"><span class="ver-kpi-n">${sp.total.toLocaleString()}</span><span class="ver-kpi-l">Images</span></div>
+          <div class="ver-kpi"><span class="ver-kpi-n">${(ver.num_classes || 0).toLocaleString()}</span><span class="ver-kpi-l">Classes</span></div>
+          <div class="ver-kpi is-train"><span class="ver-kpi-n">${sp.train.toLocaleString()}</span><span class="ver-kpi-l">Train · ${pct(sp.train)}%</span></div>
+          <div class="ver-kpi is-val"><span class="ver-kpi-n">${sp.val.toLocaleString()}</span><span class="ver-kpi-l">Valid · ${pct(sp.val)}%</span></div>
+          <div class="ver-kpi is-test"><span class="ver-kpi-n">${sp.test.toLocaleString()}</span><span class="ver-kpi-l">Test · ${pct(sp.test)}%</span></div>
         </div>
-
-        <div class="vs-detail-actions">
-          <button class="ghost-btn" onclick="app._closeVersionDetail()" style="margin-right:auto;">
-            <i class="fas fa-times"></i> Close
-          </button>
-          <button class="primary-btn" onclick="app._downloadVersion('${ver.id}')">
-            <i class="fas fa-download"></i> Download ZIP
-          </button>
-          <button class="ghost-btn danger-ghost" onclick="app._deleteVersion('${ver.id}')">
-            <i class="fas fa-trash-alt"></i> Delete
-          </button>
-        </div>
-      </div>`;
-
-    // Fetch live folder size in background
-    if (folderPath) {
+        ${this._verSplitBar(sp, true)}
+        <section class="ver-section">
+          <h4 class="ver-section-title">Export</h4>
+          <p class="ver-section-text">YOLO format: <code>images/</code> and <code>labels/</code> for <code>train</code>, <code>valid</code> and <code>test</code>, plus <code>data.yaml</code> and a README. Only human-confirmed labels are included.</p>
+        </section>
+        <section class="ver-section">
+          <h4 class="ver-section-title">Folder <span class="ver-folder-size" id="vsFolderSize_${esc(ver.id)}">checking…</span></h4>
+          <div class="ver-path"><code title="${esc(ver.folder_path || '')}">${esc(rel || '—')}</code>
+            ${rel ? '<button type="button" class="btn btn-secondary btn-sm" data-ver-act="copy"><i class="fas fa-copy" aria-hidden="true"></i> Copy path</button>' : ''}</div>
+        </section>
+        ${recorded.length ? `
+        <section class="ver-section">
+          <h4 class="ver-section-title">Settings recorded</h4>
+          <div class="ver-chips">${recorded.map(c => `<span class="ver-chip">${c}</span>`).join('')}</div>
+          <div class="ui-alert ui-alert-info ver-honest" role="note"><i class="fas fa-info-circle" aria-hidden="true"></i>
+            <span>Written to the README only. Images were exported at their original size and no augmented copies were made.</span></div>
+        </section>` : ''}
+      </article>`;
+    if (ver.folder_path) {
       fetch(_p('/versions/' + encodeURIComponent(ver.id) + '/info'), { headers: _authFD() })
         .then(r => r.json()).then(d => {
           const el = document.getElementById('vsFolderSize_' + ver.id);
-          if (el) el.textContent = d.exists
-            ? (d.size_mb + ' MB · ' + d.file_count + ' files')
-            : 'Folder missing';
-        }).catch(() => {
-          const el = document.getElementById('vsFolderSize_' + ver.id);
-          if (el) el.textContent = '';
-        });
-    } else {
-      const el = document.getElementById('vsFolderSize_' + ver.id);
-      if (el) el.textContent = '';
+          if (el) el.textContent = d.exists ? `${Number(d.size_mb) > 0 ? d.size_mb : '< 0.1'} MB · ${Number(d.file_count).toLocaleString()} files` : 'Folder missing';
+          if (el && !d.exists) el.classList.add('is-missing');
+        }).catch(() => { const el = document.getElementById('vsFolderSize_' + ver.id); if (el) el.textContent = ''; });
     }
   },
 
-  // ── Version Wizard ────────────────────────────────────────────
   async _vwOpen() {
     state._vwStep = 1;
     state._vwAugs = [];
@@ -4931,6 +5157,8 @@ const app = {
     this._vwUpdateSliders();
     this._vwRenderAugs();
     this._vwGoToStep(1);
+    document.getElementById('vwDrawer')?.classList.remove('is-closing');
+    setTimeout(() => nameEl?.select(), 60);
 
     // Populate stats from Completed Datasets (not Active Work)
     try {
@@ -4966,18 +5194,29 @@ const app = {
 
   _vwClose() {
     const ov = document.getElementById('vwOverlay');
-    if (ov) {
-      const dr = document.getElementById('vwDrawer');
-      if (dr) { dr.style.animation = 'vwSlideOut .2s forwards'; }
-      setTimeout(() => {
-        if (ov) ov.style.display = 'none';
-        if (dr) dr.style.animation = '';
-      }, 200);
-    }
+    if (!ov || ov.style.display === 'none') return;
+    const dr = document.getElementById('vwDrawer');
+    dr?.classList.add('is-closing');                 // .ui-wizard exit animation
+    setTimeout(() => {
+      ov.style.display = 'none';
+      dr?.classList.remove('is-closing');
+      document.getElementById('createVersionBtn')?.focus();
+    }, 170);
   },
 
   _vwBindEvents() {
     document.getElementById('vwClose')?.addEventListener('click', () => this._vwClose());
+    // Esc closes the wizard (unless a popup inside it, e.g. the augmentation
+    // picker, is open — that one closes first).
+    document.addEventListener('keydown', e => {
+      if (e.key !== 'Escape') return;
+      const ov = document.getElementById('vwOverlay');
+      if (!ov || ov.style.display === 'none') return;
+      const picker = document.getElementById('vwAugPicker');
+      if (picker && picker.style.display !== 'none' && picker.offsetParent) { picker.style.display = 'none'; return; }
+      e.preventDefault();
+      this._vwClose();
+    });
     document.getElementById('vwBackdrop')?.addEventListener('click', () => this._vwClose());
     document.getElementById('vwBtnBack')?.addEventListener('click', () => this._vwGoToStep(state._vwStep - 1));
     document.getElementById('vwBtnNext')?.addEventListener('click', () => {
@@ -5090,17 +5329,12 @@ const app = {
     // Use annotated count from Completed Datasets (stored in stat card)
     const annEl = document.getElementById('vwStatAnnotated');
     const total = parseInt(annEl?.textContent || '0') || 0;
-    const set = (id, val, cnt) => {
-      const el = document.getElementById(id); if(el) el.textContent = val+'%';
-      const ce = document.getElementById(cnt); if(ce) ce.textContent = Math.round(total * val / 100) + ' imgs';
-    };
-    set('vwTrainPct','vwTrainCount',  t, 'vwTrainCount');
     document.getElementById('vwTrainPct').textContent   = t+'%';
-    document.getElementById('vwTrainCount').textContent = Math.round(total*t/100)+' imgs';
+    document.getElementById('vwTrainCount').textContent = this._plural(Math.round(total*t/100), 'image');
     document.getElementById('vwValPct').textContent     = v+'%';
-    document.getElementById('vwValCount').textContent   = Math.round(total*v/100)+' imgs';
+    document.getElementById('vwValCount').textContent   = this._plural(Math.round(total*v/100), 'image');
     document.getElementById('vwTestPct').textContent    = te+'%';
-    document.getElementById('vwTestCount').textContent  = Math.round(total*te/100)+' imgs';
+    document.getElementById('vwTestCount').textContent  = this._plural(Math.round(total*te/100), 'image');
     // Bar
     document.getElementById('vwSbTrain').style.width = t+'%';
     document.getElementById('vwSbVal').style.width   = v+'%';
@@ -5152,7 +5386,7 @@ const app = {
       cutout:'Cutout Patch', mosaic:'Mosaic 4×',
     };
     if (!state._vwAugs.length) {
-      list.innerHTML = '<div style="font-size:12px;color:var(--tx3);padding:10px 0">No augmentations added. Click "Add Augmentation" to begin.</div>';
+      list.innerHTML = '<div class="vw-aug-empty">No augmentations added. Click "Add Augmentation" to begin.</div>';
       return;
     }
     list.innerHTML = state._vwAugs.map((aug, i) => `
@@ -5239,7 +5473,7 @@ const app = {
       const d = await r.json();
       if (d.success) {
         this._vwClose();
-        this._toast(`Version "${name}" created — ${d.version?.total_images||0} images`, 'success');
+        this._toast(`Version "${name}" created — ${this._plural(d.version?.total_images||0, 'image')}`, 'success');
         await this._loadVersionsPage();
         // Auto-select new version
         const newVer = state.versions.find(v2 => v2.id === d.version?.id);
@@ -5259,17 +5493,19 @@ const app = {
   },
 
   async _deleteVersion(id) {
-    if (!confirm('Delete this version permanently?')) return;
+    const ver = (state.versions || []).find(v => v.id === id);
+    if (!ver) return;
+    const ok = await UI.confirm({ title: `Delete version "${ver.name}"?`, danger: true, confirmText: 'Delete version',
+      message: `Its folder (${this._plural(ver.total_images || 0, 'image')} and labels) is removed from disk. Your project data is not affected.\nThis cannot be undone.` });
+    if (!ok) return;
     try {
-      await fetch(_p('/versions'), { method:'DELETE', headers:_authH(), body: JSON.stringify({ id }) });
-      if (state.selectedVersionId === id) {
-        state.selectedVersionId = null;
-        const p = document.getElementById('vsDetailPane');
-        if (p) p.innerHTML = '';
-      }
+      const r = await fetch(_p('/versions'), { method: 'DELETE', headers: _authH(), body: JSON.stringify({ id }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d.success) throw new Error(d.error || `HTTP ${r.status}`);
+      if (state.selectedVersionId === id) state.selectedVersionId = null;
       await this._loadVersionsPage();
-      this._toast('Version deleted', 'success');
-    } catch(e) { this._toast('Delete failed', 'error'); }
+      this._toast(`Version "${ver.name}" deleted`, 'success');
+    } catch (e) { this._toast('Delete failed: ' + e.message, 'error'); }
   },
 
   async _downloadVersion(id) {
@@ -5286,30 +5522,149 @@ const app = {
 
   /* ═══ CLASSES PAGE ═══════════════════════════════════════════ */
   async _loadClassesPage() {
+    // Counts are unknown until /stats answers: render placeholders, not zeros.
+    state.clsStatsState = 'loading';
+    this._bindClassesPage();
+    this._clsSetNextColour();
+    this._renderClassesTable();
     try {
       const r = await fetch(_p('/stats'), { headers: _authFD() });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const d = await r.json();
       state.clsPageStats = {};
-      (d.class_counts || []).forEach(cc => { state.clsPageStats[cc.id] = {count:cc.count, images:cc.images}; });
-    } catch(e) { state.clsPageStats = {}; }
-    this._renderClassesTable();
-    if (!this._classesBound) {
-      this._classesBound = true;
-      document.getElementById('clsPageColor')?.addEventListener('input', e => {
-        const sw = document.getElementById('clsPageColorSwatch'); if (sw) sw.style.background = e.target.value;
+      // Key by class id. Fallback to the name for a server that predates the
+      // 'id' field in /stats (every class used to read 0 because of that).
+      (d.class_counts || []).forEach(cc => {
+        const id = cc.id ?? state.classes.find(c => c.name === cc.name)?.id;
+        if (id != null) state.clsPageStats[id] = {count: cc.count, images: cc.images};
       });
-      document.getElementById('clsPageAddBtn')?.addEventListener('click', () => this._clsPageAdd());
-      document.getElementById('clsPageName')?.addEventListener('keydown', e => { if (e.key === 'Enter') this._clsPageAdd(); });
-      document.getElementById('clsPageExportBtn')?.addEventListener('click', () => {
-        const text = state.classes.map(c => c.name).join('\n');
-        const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([text], {type:'text/plain'})), download: 'classes.txt' });
-        a.click(); this._toast('Exported classes.txt', 'success');
-      });
-      document.getElementById('clsPageSyncBtn')?.addEventListener('click', async () => {
-        try { await fetch(_p('/classes/sync'), { method:'POST', headers:_authH(), body: JSON.stringify({}) }); this._toast('Synced data.yaml', 'success'); }
-        catch(e) { this._toast('Sync failed', 'warn'); }
-      });
+      // labelled = images with at least one box. annotated_images counts images
+      // marked Done, which is a different thing (older servers lack labelled_images).
+      state.clsPageTotals = {images: d.total_images || 0, annotated: d.labelled_images ?? d.annotated_images ?? 0,
+                             boxes: d.total_boxes || 0};
+      state.clsStatsState = 'ready';
+    } catch (e) {
+      state.clsPageStats = {}; state.clsPageTotals = null; state.clsStatsState = 'error';
     }
+    this._renderClassesTable();
+  },
+
+  /** Next distinct colour for a new class: the same palette the annotator's
+      class popup uses, so classes added here don't all come out red. */
+  _clsSetNextColour() {
+    const inp = document.getElementById('clsPageColor');
+    if (!inp || inp.dataset.touched === '1') return;
+    const next = state.classes.length ? Math.max(...state.classes.map(c => c.id)) + 1 : 0;
+    // Pick, from the palette (starting at the next ID's slot), the colour least
+    // like any existing class colour, so neighbouring classes stay tellable apart.
+    const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+    const near = rgb => Math.min(Infinity, ...state.classes.map(c => dist(rgb, c.color)));
+    let rgb = CLASS_PALETTE[next % CLASS_PALETTE.length], best = near(rgb);
+    for (let i = 1; i < CLASS_PALETTE.length && best < 90; i++) {
+      const cand = CLASS_PALETTE[(next + i) % CLASS_PALETTE.length], d = near(cand);
+      if (d > best) { rgb = cand; best = d; }
+    }
+    inp.value = '#' + rgb.map(v => v.toString(16).padStart(2, '0')).join('');
+    const sw = document.getElementById('clsPageColorSwatch');
+    if (sw) sw.style.background = inp.value;
+  },
+
+  _bindClassesPage() {
+    if (this._classesBound) return;
+    this._classesBound = true;
+    state.clsSort = state.clsSort || {key: 'id', dir: 'asc'};
+    state.clsFilter = state.clsFilter || 'all';
+    const $ = id => document.getElementById(id);
+    $('clsPageColor')?.addEventListener('input', e => {
+      e.target.dataset.touched = '1';                 // user picked one: keep it
+      const sw = $('clsPageColorSwatch'); if (sw) sw.style.background = e.target.value;
+    });
+    $('clsPageAddBtn')?.addEventListener('click', () => this._clsPageAdd());
+    $('clsPageName')?.addEventListener('keydown', e => { if (e.key === 'Enter') this._clsPageAdd(); });
+    $('clsPageName')?.addEventListener('input', () => { const er = $('clsPageAddError'); if (er) er.textContent = ''; });
+    $('clsPageSearch')?.addEventListener('input', () => this._renderClassesTable());
+    $('clsPageExportBtn')?.addEventListener('click', () => {
+      const text = [...state.classes].sort((x, y) => x.id - y.id).map(c => c.name).join('\n');
+      const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([text], {type: 'text/plain'})), download: 'classes.txt' });
+      a.click(); this._toast('Exported classes.txt', 'success');
+    });
+    $('clsPageSyncBtn')?.addEventListener('click', async () => {
+      try {
+        const r = await fetch(_p('/classes/sync'), { method: 'POST', headers: _authH(), body: JSON.stringify({}) });
+        if (!r.ok) throw new Error();
+        this._toast('Synced data.yaml', 'success');
+      } catch (e) { this._toast('Sync failed', 'error'); }
+    });
+    // Filter chips
+    document.querySelector('#page-classes .cls-filters')?.addEventListener('click', e => {
+      const chip = e.target.closest('.cls-chip'); if (!chip) return;
+      this._clsSetFilter(chip.dataset.filter);
+    });
+    // Sortable headers: click toggles direction; a new column starts with its natural order
+    document.querySelector('#page-classes .cls-table thead')?.addEventListener('click', e => {
+      const th = e.target.closest('th[data-sort]'); if (!th) return;
+      const key = th.dataset.sort, cur = state.clsSort;
+      const first = (key === 'count' || key === 'images') ? 'desc' : 'asc';
+      state.clsSort = cur.key === key ? {key, dir: cur.dir === 'asc' ? 'desc' : 'asc'} : {key, dir: first};
+      this._renderClassesTable();
+    });
+    // Rows: name → rename; ⋮ → actions menu; colour dot → picker
+    const body = $('clsPageTableBody');
+    body?.addEventListener('click', e => {
+      const nameBtn = e.target.closest('.cls-name');
+      if (nameBtn) { this._clsOpenRename(+nameBtn.closest('tr').dataset.id); return; }
+      const more = e.target.closest('.cls-more');
+      if (more) { e.stopPropagation(); this._clsOpenRowMenu(more, +more.closest('tr').dataset.id); }
+    });
+    body?.addEventListener('change', e => {
+      if (e.target.matches('.cls-row-color input')) this._clsPageChangeColor(+e.target.closest('tr').dataset.id, e.target.value);
+    });
+    // Insights: jump to a class / show unused / retry
+    document.querySelector('#page-classes .cls-side')?.addEventListener('click', e => {
+      const jump = e.target.closest('[data-cls-jump]');
+      if (jump) { this._clsHighlight(+jump.dataset.clsJump); return; }
+      if (e.target.closest('[data-cls-filter]')) { this._clsSetFilter(e.target.closest('[data-cls-filter]').dataset.clsFilter); return; }
+      if (e.target.closest('[data-cls-retry]')) this._loadClassesPage();
+    });
+    // "/" focuses the class search while on this page
+    document.addEventListener('keydown', e => {
+      if (e.key !== '/' || !document.getElementById('page-classes')?.classList.contains('active')) return;
+      if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName)) return;
+      e.preventDefault(); $('clsPageSearch')?.focus();
+    });
+  },
+
+  _clsSetFilter(filter) {
+    state.clsFilter = ['all', 'used', 'unused'].includes(filter) ? filter : 'all';
+    this._renderClassesTable();
+  },
+
+  _clsOpenRowMenu(btn, id) {
+    const cls = state.classes.find(c => c.id === id);
+    if (!cls || typeof KebabMenu === 'undefined') return;
+    if (btn.getAttribute('aria-expanded') === 'true') { KebabMenu.closeAll(); return; }
+    KebabMenu.open(btn, [
+      { icon: 'fa-pen', label: 'Rename…', onClick: () => this._clsOpenRename(id) },
+      { icon: 'fa-palette', label: 'Change colour…', onClick: () =>
+          document.querySelector(`#clsPageTableBody tr[data-id="${id}"] .cls-row-color input`)?.click() },
+      { icon: 'fa-hashtag', label: 'Change ID…', onClick: () => this._clsOpenReindex(id) },
+      'sep',
+      { icon: 'fa-trash-alt', label: 'Delete class', danger: true, onClick: () => this.deleteClass(id) },
+    ]);
+  },
+
+  /** Scroll a class row into view and flash it (from the insights panel). */
+  _clsHighlight(id) {
+    if (state.clsFilter !== 'all' || document.getElementById('clsPageSearch')?.value) {
+      state.clsFilter = 'all';
+      const q = document.getElementById('clsPageSearch'); if (q) q.value = '';
+      this._renderClassesTable();
+    }
+    const row = document.querySelector(`#clsPageTableBody tr[data-id="${id}"]`);
+    if (!row) return;
+    row.scrollIntoView({block: 'center', behavior: 'smooth'});
+    row.classList.remove('is-flash'); void row.offsetWidth; row.classList.add('is-flash');
+    row.querySelector('.cls-name')?.focus({preventScroll: true});
   },
 
   /* ═══════════════════════════════════════════════════════════════
@@ -5554,53 +5909,425 @@ const app = {
   _renderClassesTable() {
     const body = document.getElementById('clsPageTableBody');
     if (!body) return;
-    if (!state.classes.length) {
-      body.innerHTML = '<div class="cls-table-empty"><i class="fas fa-tags"></i><p style="margin-top:6px;color:var(--tx2)">No classes yet — add one above.</p></div>';
+    const esc = v => String(v).replace(/[&<>"']/g, ch => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[ch]));
+    const stats = state.clsPageStats || {};
+    const ready = state.clsStatsState === 'ready';
+    const n = c => (stats[c.id] || {}).count || 0;
+    const total = state.classes.reduce((sum, c) => sum + n(c), 0);
+    const max   = Math.max(1, ...state.classes.map(n));
+    const fmt = v => Number(v || 0).toLocaleString();
+    // Classes may load after this page opened: keep the default colour current.
+    this._clsSetNextColour();
+    const cnt = document.getElementById('clsPageCount');
+    if (cnt) cnt.textContent = state.classes.length;
+    const sum = document.getElementById('clsPageSummary');
+    if (sum) sum.textContent = !state.classes.length ? 'Classes label every annotation in this project.'
+      : `${state.classes.length} class${state.classes.length === 1 ? '' : 'es'}` +
+        (ready ? ` · ${fmt(total)} annotation${total === 1 ? '' : 's'}` : ' · counting annotations…');
+    this._renderClassInsights(esc);
+
+    // filter chips (counts reflect ALL classes)
+    const used = state.classes.filter(c => n(c) > 0).length;
+    const setN = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    setN('clsFilterAll', state.classes.length);
+    setN('clsFilterUsed', ready ? used : '…');
+    setN('clsFilterUnused', ready ? state.classes.length - used : '…');
+    document.querySelectorAll('#page-classes .cls-chip').forEach(ch => {
+      const on = ch.dataset.filter === (state.clsFilter || 'all');
+      ch.classList.toggle('active', on); ch.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+
+    // sort headers
+    const sort = state.clsSort || {key: 'id', dir: 'asc'};
+    document.querySelectorAll('#page-classes .cls-table th[data-sort]').forEach(th => {
+      const on = th.dataset.sort === sort.key;
+      if (on) th.setAttribute('aria-sort', sort.dir === 'asc' ? 'ascending' : 'descending');
+      else th.removeAttribute('aria-sort');
+      const ic = th.querySelector('i');
+      if (ic) ic.className = 'fas ' + (on ? (sort.dir === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort');
+    });
+
+    const q = (document.getElementById('clsPageSearch')?.value || '').trim().toLowerCase();
+    const filter = state.clsFilter || 'all';
+    const key = {
+      name: c => c.name.toLowerCase(), id: c => c.id,
+      count: c => n(c), images: c => (stats[c.id] || {}).images || 0,
+    }[sort.key] || (c => c.id);
+    const rows = state.classes
+      .filter(c => !q || c.name.toLowerCase().includes(q) || String(c.id) === q)
+      .filter(c => filter === 'all' || !ready || (filter === 'used' ? n(c) > 0 : n(c) === 0))
+      .sort((x, y) => {
+        const a = key(x), b = key(y);
+        const d = typeof a === 'string' ? a.localeCompare(b) : a - b;
+        return (sort.dir === 'asc' ? d : -d) || x.id - y.id;
+      });
+    if (!state.classes.length || !rows.length) {
+      const why = !state.classes.length ? ['No classes yet', 'Add your first class above. You can rename it any time.']
+        : q ? ['No classes match your search', 'Try a different name or clear the search.']
+        : filter === 'unused' ? ['Every class is in use', 'All classes have at least one annotation.']
+        : ['No classes in use yet', 'Annotate some images and the counts appear here.'];
+      body.innerHTML = `<tr class="cls-empty-row"><td colspan="6"><div class="cls-page-empty">
+        <i class="fas fa-tags" aria-hidden="true"></i><strong>${why[0]}</strong><span>${why[1]}</span></div></td></tr>`;
       return;
     }
-    body.innerHTML = state.classes.map(cls => {
-      const [r,g,b] = cls.color;
-      const hex = '#' + [r,g,b].map(v => v.toString(16).padStart(2,'0')).join('');
-      const st  = state.clsPageStats[cls.id] || {count:0, images:0};
-      return `<div class="cls-table-row">
-        <div class="color-picker-wrap"><div class="ct-swatch" style="background:rgb(${r},${g},${b})"></div><input type="color" value="${hex}" onchange="app._clsPageChangeColor(${cls.id},this.value)"></div>
-        <div class="ct-name"><input type="text" value="${cls.name}" onblur="app._clsPageRename(${cls.id},this.value)" onkeydown="if(event.key==='Enter')this.blur()"></div>
-        <div class="ct-id">${cls.id}</div>
-        <div class="ct-count">${st.count}</div>
-        <div class="ct-count" style="color:var(--tx2)">${st.images}</div>
-        <div class="ct-actions"><button class="ct-btn danger" onclick="app.deleteClass(${cls.id})"><i class="fas fa-trash-alt"></i></button></div>
-      </div>`;
+    const skel = '<span class="cls-skel" aria-label="Loading"></span>';
+    const na = '<span class="cls-num is-na" title="Counts unavailable">—</span>';
+    body.innerHTML = rows.map(cls => {
+      const hex = '#' + cls.color.map(v => v.toString(16).padStart(2, '0')).join('');
+      const st  = stats[cls.id] || {count: 0, images: 0};
+      const pct = Math.round((st.count || 0) / max * 100);
+      const share = total ? (st.count || 0) / total * 100 : 0;
+      const countCell = ready
+        ? `<div class="cls-bar-cell"><span class="cls-num">${fmt(st.count)}</span>
+             <span class="cls-bar" aria-hidden="true"><span style="width:${pct}%;background:${hex}"></span></span>
+             <span class="cls-share">${share >= 10 || share === 0 ? Math.round(share) : share.toFixed(1)}%</span></div>`
+        : (state.clsStatsState === 'error' ? na : skel);
+      return `<tr data-id="${cls.id}">
+        <td class="cls-col-color"><label class="cls-row-color" title="Change colour" style="--cls:${hex}">
+          <input type="color" value="${hex}" aria-label="Colour of ${esc(cls.name)}"></label></td>
+        <td class="cls-col-name"><button type="button" class="cls-name" title="Rename">
+          <span class="cls-name-text">${esc(cls.name)}</span><i class="fas fa-pen" aria-hidden="true"></i></button></td>
+        <td class="cls-col-id"><span class="cls-mobile-label">ID</span><span class="cls-id">${cls.id}</span></td>
+        <td class="cls-col-count"><span class="cls-mobile-label">Annotations</span>${countCell}</td>
+        <td class="cls-col-num"><span class="cls-mobile-label">Images</span>${ready ? `<span class="cls-num">${fmt(st.images)}</span>` : (state.clsStatsState === 'error' ? na : skel)}</td>
+        <td class="cls-col-act"><button type="button" class="kmenu-btn cls-more" title="Class actions" aria-label="Actions for ${esc(cls.name)}">
+          <i class="fas fa-ellipsis-v" aria-hidden="true"></i></button></td>
+      </tr>`;
     }).join('');
+  },
+
+  /** Right-hand insights on the Classes page: overview KPIs, class balance
+      (share of all annotations, sorted) and "needs attention" alerts. Always
+      reflects ALL classes, independent of the search filter. */
+  _renderClassInsights(esc) {
+    const $ = id => document.getElementById(id);
+    if (!$('clsKpiClasses')) return;
+    const stats  = state.clsPageStats || {};
+    const totals = state.clsPageTotals;
+    const n = c => (stats[c.id] || {}).count || 0;
+    const known = state.classes.reduce((sum, c) => sum + n(c), 0);
+    const unused = state.classes.filter(c => n(c) === 0);
+    const fmt = v => Number(v).toLocaleString();
+    $('clsKpiClasses').textContent = fmt(state.classes.length);
+    if (state.clsStatsState !== 'ready') {
+      const loading = state.clsStatsState === 'loading';
+      ['clsKpiBoxes', 'clsKpiImages', 'clsKpiUnused'].forEach(k => {
+        $(k).innerHTML = loading ? '<span class="cls-skel"></span>' : '—'; });
+      $('clsKpiUnused').closest('.cls-kpi').classList.remove('is-warn');
+      $('clsBalanceNote').textContent = '';
+      $('clsDistList').innerHTML = loading
+        ? '<li class="cls-dist-empty"><span class="cls-skel is-wide"></span></li>'
+        : '<li class="cls-dist-empty">Counts unavailable.</li>';
+      $('clsHealth').innerHTML = loading ? '' :
+        `<div class="ui-alert ui-alert-danger" role="status"><i class="fas fa-exclamation-circle" aria-hidden="true"></i>
+           <span>Couldn't load annotation counts. <button type="button" class="cls-link" data-cls-retry>Retry</button></span></div>`;
+      return;
+    }
+    $('clsKpiBoxes').textContent = fmt(totals ? totals.boxes : known);
+    $('clsKpiImages').innerHTML = totals
+      ? `${fmt(totals.annotated)}<small> / ${fmt(totals.images)}</small>` : '—';
+    $('clsKpiUnused').textContent = fmt(unused.length);
+    $('clsKpiUnused').closest('.cls-kpi').classList.toggle('is-warn', unused.length > 0);
+
+    const hex = c => '#' + c.color.map(v => v.toString(16).padStart(2, '0')).join('');
+    const sorted = [...state.classes].sort((a, b) => n(b) - n(a) || a.id - b.id);
+    $('clsBalanceNote').textContent = known ? `${fmt(known)} annotations` : '';
+    $('clsDistList').innerHTML = !state.classes.length
+      ? '<li class="cls-dist-empty">No classes yet.</li>'
+      : !known ? '<li class="cls-dist-empty">No annotations yet. Balance appears once images are labelled.</li>'
+      : sorted.map(c => {
+          const pct = n(c) / known * 100;
+          return `<li><button type="button" class="cls-dist-item" data-cls-jump="${c.id}"
+              title="${esc(c.name)}: ${fmt(n(c))} annotations. Show in the list">
+            <span class="cls-dist-dot" style="background:${hex(c)}"></span>
+            <span class="cls-dist-name">${esc(c.name)}</span>
+            <span class="cls-dist-pct">${pct >= 10 ? Math.round(pct) : pct.toFixed(1)}%</span>
+            <span class="cls-dist-bar"><span style="width:${pct.toFixed(2)}%;background:${hex(c)}"></span></span></button></li>`;
+        }).join('');
+
+    const alerts = [];
+    const alert = (kind, icon, html) => alerts.push(
+      `<div class="ui-alert ui-alert-${kind}" role="status"><i class="fas ${icon}" aria-hidden="true"></i><span>${html}</span></div>`);
+    if (unused.length) {
+      const names = unused.slice(0, 4).map(c => `<strong>${esc(c.name)}</strong>`).join(', ');
+      alert('warning', 'fa-tag', `${unused.length} class${unused.length === 1 ? ' has' : 'es have'} no annotations: ${names}${unused.length > 4 ? ' …' : ''}
+        <button type="button" class="cls-link" data-cls-filter="unused">Show unused</button>`);
+    }
+    const used = sorted.filter(c => n(c) > 0);
+    if (used.length > 1) {
+      const ratio = n(used[0]) / n(used[used.length - 1]);
+      if (ratio >= 10) alert('warning', 'fa-balance-scale',
+        `Imbalanced: <strong>${esc(used[0].name)}</strong> has ${Math.round(ratio)}× more annotations than <strong>${esc(used[used.length - 1].name)}</strong>.`);
+    }
+    if (totals && totals.images > totals.annotated) alert('info', 'fa-image',
+      `${fmt(totals.images - totals.annotated)} of ${fmt(totals.images)} images have no labels yet.`);
+    if (!alerts.length) alert('success', 'fa-check-circle',
+      state.classes.length ? 'Every class is in use and no class dominates.' : 'Add classes to start labelling.');
+    $('clsHealth').innerHTML = alerts.join('');
+  },
+
+  /** Rename popup (#clsRenameModal): shows the current name, ID and usage,
+      takes the new name, previews old → new, and saves through
+      _clsPageRename (server-checked). The class ID never changes. */
+  _clsOpenRename(id) {
+    const cls = state.classes.find(c => c.id === id);
+    const $ = k => document.getElementById(k);
+    if (!cls || !$('clsRenameModal')) return;
+    this._clsBindRename();
+    const st = (state.clsPageStats || {})[id] || {count: 0, images: 0};
+    const fmt = v => Number(v || 0).toLocaleString();
+    $('clsRenameDot').style.background = '#' + cls.color.map(v => v.toString(16).padStart(2, '0')).join('');
+    $('clsRenameOld').textContent = cls.name;
+    $('clsRenameId').textContent = `ID ${id}`;
+    $('clsRenameIdNote').textContent = id;
+    $('clsRenameBoxes').textContent = fmt(st.count);
+    $('clsRenameImages').textContent = fmt(st.images);
+    $('clsRenameInput').value = cls.name;
+    $('clsRenameError').textContent = '';
+    $('clsRenamePreview').textContent = '';
+    $('clsRenameSave').disabled = true;
+    this._clsRenameId = id;
+    this._clsRenameReturn = document.activeElement;
+    this.openModal('clsRenameModal');
+    const inp = $('clsRenameInput');
+    inp.focus(); inp.select();
+  },
+
+  _clsCloseRename() {
+    this.closeModal('clsRenameModal');
+    this._clsRenameId = null;
+    const back = this._clsRenameReturn;
+    if (back && document.body.contains(back)) back.focus();
+  },
+
+  _clsBindRename() {
+    if (this._clsRenameBound) return;
+    this._clsRenameBound = true;
+    const $ = k => document.getElementById(k);
+    const inp = $('clsRenameInput'), save = $('clsRenameSave');
+    const current = () => state.classes.find(c => c.id === this._clsRenameId);
+    const sync = () => {
+      const cls = current(), v = inp.value.trim();
+      $('clsRenameError').textContent = '';
+      save.disabled = !cls || !v || v === cls.name;
+      const pv = $('clsRenamePreview');
+      pv.textContent = '';
+      if (cls && v && v !== cls.name) {
+        const from = document.createElement('span'); from.className = 'cls-rn-from'; from.textContent = cls.name;
+        const to = document.createElement('span'); to.className = 'cls-rn-to'; to.textContent = v;
+        const arrow = document.createElement('i'); arrow.className = 'fas fa-arrow-right'; arrow.setAttribute('aria-hidden', 'true');
+        pv.append(from, arrow, to);
+      }
+    };
+    const submit = async () => {
+      const cls = current();
+      if (!cls || save.disabled) return;
+      save.disabled = true;
+      const ok = await this._clsPageRename(cls.id, inp.value, msg => { $('clsRenameError').textContent = msg; });
+      if (ok) { this._clsCloseRename(); this._renderClassesTable(); }
+      else { save.disabled = false; inp.focus(); inp.select(); }
+    };
+    inp.addEventListener('input', sync);
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
+    save.addEventListener('click', submit);
+    $('clsRenameCancel').addEventListener('click', () => this._clsCloseRename());
+    $('clsRenameClose').addEventListener('click', () => this._clsCloseRename());
+    $('clsRenameModal').addEventListener('mousedown', e => { if (e.target.id === 'clsRenameModal') this._clsCloseRename(); });
+  },
+
+  /* ── Change class ID ("index") ─────────────────────────────────────────
+     Labels store only the class number, so changing an ID rewrites every
+     label file that uses it; the server does that (core/class_reindex.py)
+     after a backup. Two ways to free the target ID:
+       swap  — X takes T, the class at T takes X's old ID
+       shift — X takes T, classes between move one step to close the gap */
+  _clsReindexMapping(id, target, mode) {
+    const owner = state.classes.find(c => c.id === target);
+    const map = {[id]: target};
+    if (!owner || target === id) return map;
+    if (mode === 'swap') { map[owner.id] = id; return map; }
+    for (const c of state.classes) {
+      if (c.id === id) continue;
+      if (target < id && c.id >= target && c.id < id) map[c.id] = c.id + 1;
+      if (target > id && c.id > id && c.id <= target) map[c.id] = c.id - 1;
+    }
+    return map;
+  },
+
+  _clsOpenReindex(id) {
+    const cls = state.classes.find(c => c.id === id);
+    const $ = k => document.getElementById(k);
+    if (!cls || !$('clsReindexModal')) return;
+    this._clsBindReindex();
+    this._clsReindexId = id;
+    $('clsReindexDot').style.background = '#' + cls.color.map(v => v.toString(16).padStart(2, '0')).join('');
+    $('clsReindexName').textContent = cls.name;
+    $('clsReindexCurrent').textContent = `ID ${id}`;
+    const sel = $('clsReindexTarget');
+    sel.innerHTML = '';
+    const opt = (value, text) => { const o = document.createElement('option'); o.value = value; o.textContent = text; sel.append(o); };
+    opt('', 'Choose the new ID…');
+    [...state.classes].sort((a, b) => a.id - b.id)
+      .forEach(c => { if (c.id !== id) opt(c.id, `${c.id} (now ${c.name})`); });
+    const free = Math.max(-1, ...state.classes.map(c => c.id)) + 1;
+    opt(free, `${free} (unused, next free ID)`);
+    document.querySelector('input[name="clsReindexMode"][value="swap"]').checked = true;
+    $('clsReindexModes').hidden = true;
+    $('clsReindexPreview').innerHTML = '';
+    $('clsReindexError').textContent = '';
+    $('clsReindexApply').disabled = true;
+    this.openModal('clsReindexModal');
+    sel.focus();
+  },
+
+  _clsBindReindex() {
+    if (this._clsReindexBound) return;
+    this._clsReindexBound = true;
+    const $ = k => document.getElementById(k);
+    const esc = v => String(v).replace(/[&<>"']/g, ch => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[ch]));
+    const name = id => state.classes.find(c => c.id === +id)?.name ?? `#${id}`;
+    const mode = () => document.querySelector('input[name="clsReindexMode"]:checked')?.value || 'swap';
+    let seq = 0, mapping = null;
+    const refresh = async () => {
+      const id = this._clsReindexId, raw = $('clsReindexTarget').value;
+      const apply = $('clsReindexApply');
+      apply.disabled = true; mapping = null;
+      $('clsReindexError').textContent = ''; $('clsReindexPreview').innerHTML = '';
+      if (raw === '') { $('clsReindexModes').hidden = true; return; }
+      const target = +raw, owner = state.classes.find(c => c.id === target);
+      $('clsReindexModes').hidden = !owner;
+      if (owner) {
+        const sw = this._clsReindexMapping(id, target, 'swap'), sh = this._clsReindexMapping(id, target, 'shift');
+        const desc = m => Object.entries(m).map(([o, n]) => `${name(o)} → ${n}`).join(', ');
+        $('clsReindexSwapDesc').textContent = desc(sw);
+        $('clsReindexShiftDesc').textContent = desc(sh);
+      }
+      const m = this._clsReindexMapping(id, target, mode());
+      const mine = ++seq;
+      $('clsReindexPreview').innerHTML = '<span class="ui-spinner" role="status" aria-label="Checking"></span> Checking what will change…';
+      try {
+        const r = await fetch(_p('/classes/reindex'), { method: 'POST', headers: _authH(),
+          body: JSON.stringify({mapping: m, dry_run: true}) });
+        const d = await r.json().catch(() => ({}));
+        if (mine !== seq) return;                       // a newer choice superseded this preview
+        if (!r.ok) { $('clsReindexPreview').innerHTML = ''; $('clsReindexError').textContent = d.error || `HTTP ${r.status}`; return; }
+        const moved = d.classes.filter(c => c.old_id !== c.new_id);
+        $('clsReindexPreview').innerHTML = `
+          <ul class="cls-rx-list">${moved.map(c => `<li><strong>${esc(c.name)}</strong>
+            <span class="cls-id">${c.old_id}</span><i class="fas fa-arrow-right" aria-hidden="true"></i><span class="cls-id is-new">${c.new_id}</span></li>`).join('')}</ul>
+          <p class="cls-rx-impact"><strong>${Number(d.boxes).toLocaleString()}</strong> label line${d.boxes === 1 ? '' : 's'} in
+            <strong>${Number(d.files).toLocaleString()}</strong> file${d.files === 1 ? '' : 's'} will be rewritten.</p>`;
+        mapping = m; apply.disabled = false;
+      } catch (e) {
+        if (mine === seq) $('clsReindexError').textContent = 'Could not check the change: network error.';
+      }
+    };
+    $('clsReindexTarget').addEventListener('change', refresh);
+    document.querySelectorAll('input[name="clsReindexMode"]').forEach(r => r.addEventListener('change', refresh));
+    const close = () => { seq++; this.closeModal('clsReindexModal'); };
+    $('clsReindexCancel').addEventListener('click', close);
+    $('clsReindexClose').addEventListener('click', close);
+    $('clsReindexModal').addEventListener('mousedown', e => { if (e.target.id === 'clsReindexModal') close(); });
+    $('clsReindexApply').addEventListener('click', async () => {
+      if (!mapping) return;
+      const apply = $('clsReindexApply');
+      apply.disabled = true;
+      apply.innerHTML = '<span class="ui-spinner" aria-hidden="true"></span> Changing…';
+      try {
+        // Disk must be current before the server renumbers it.
+        clearTimeout(state.saveTimer);
+        if (state.currentIdx >= 0 && state.imgW > 0 && state.imgH > 0) await this._saveCurrentAnnotations();
+        const r = await fetch(_p('/classes/reindex'), { method: 'POST', headers: _authH(), body: JSON.stringify({mapping}) });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok || !d.success) throw new Error(d.error || `HTTP ${r.status}`);
+        this._clsRemapInMemory(mapping, d.classes);
+        close();
+        const moved = Object.entries(d.mapping).map(([o, n]) => `${name(n)} ${o}→${n}`).join(', ');
+        this._toast(`IDs changed: ${moved}. ${d.boxes} label lines updated; backup saved.`, 'success');
+        this._loadClassesPage();
+      } catch (e) {
+        $('clsReindexError').textContent = e.message || 'Change failed.';
+      } finally {
+        apply.innerHTML = '<i class="fas fa-check" aria-hidden="true"></i> Change ID';
+        apply.disabled = !mapping;
+      }
+    });
+  },
+
+  /** After a server renumbering: this tab's loaded image, AI example boxes and
+      selection must use the new IDs, and undo/redo (which hold old IDs) is
+      cleared, so no autosave or undo can write the old numbers back. */
+  _clsRemapInMemory(mapping, classes) {
+    const m = id => (mapping[id] !== undefined ? +mapping[id] : id);
+    state.classes = classes.map(c => ({id: c.id, name: c.name, color: c.color}));
+    (state.bboxes || []).forEach(b => { b.cls = m(b.cls); });
+    (state.promptBoxes || []).forEach(b => { if (b.cls !== undefined) b.cls = m(b.cls); });
+    state.selectedCls = m(state.selectedCls);
+    state.undoStack = []; state.redoStack = [];
+    const stats = state.clsPageStats || {}, next = {};
+    Object.keys(stats).forEach(k => { next[m(+k)] = stats[k]; });
+    state.clsPageStats = next;
+    this._populateClassList();
+    this._render && this._render();
+    this._updateAnnoList && this._updateAnnoList();
+    this._updateNavBadges && this._updateNavBadges();
   },
 
   async _clsPageAdd() {
     const ni = document.getElementById('clsPageName'), ci = document.getElementById('clsPageColor');
-    const name = ni?.value.trim();
-    if (!name) return;
+    const er = document.getElementById('clsPageAddError');
+    const name = (ni?.value || '').trim();
+    const fail = msg => { if (er) er.textContent = msg; ni?.focus(); };
+    if (!name) return fail('Enter a class name.');
+    if (state.classes.some(c => c.name.toLowerCase() === name.toLowerCase())) return fail(`"${name}" already exists.`);
     const hex = ci?.value || '#FF3B3B';
-    const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
-    const newId = state.classes.length ? Math.max(...state.classes.map(c=>c.id)) + 1 : 0;
+    const color = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
     try {
-      const res = await fetch(_p('/classes'), { method:'POST', headers:_authH(), body: JSON.stringify({name, color:[r,g,b], id:newId}) });
-      const d   = await res.json();
-      if (d.success) { state.classes.push({id:newId, name, color:[r,g,b]}); if(ni) ni.value=''; this._populateClassList(); this._renderClassesTable(); this._updateNavBadges(); this._toast(`Class "${name}" added`, 'success'); }
-    } catch(e) { this._toast('Failed to add class', 'error'); }
+      const res = await fetch(_p('/classes'), { method: 'POST', headers: _authH(), body: JSON.stringify({name, color}) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.success) return fail(d.error || `Could not add class (HTTP ${res.status}).`);
+      const id = d.new_id ?? Math.max(-1, ...state.classes.map(c => c.id)) + 1;   // the SERVER's id
+      state.classes.push({id, name, color});
+      state.clsPageStats[id] = {count: 0, images: 0};
+      if (ni) ni.value = '';
+      if (ci) delete ci.dataset.touched;
+      this._clsSetNextColour();
+      if (er) er.textContent = '';
+      this._populateClassList(); this._renderClassesTable(); this._updateNavBadges();
+      this._toast(`Class "${name}" added`, 'success');
+    } catch (e) { fail('Could not add class: network error.'); }
   },
 
-  async _clsPageRename(id, newName) {
-    newName = newName.trim();
+  /** Returns true when saved (or nothing to save); false + message on refusal. */
+  async _clsPageRename(id, newName, onError) {
+    newName = (newName || '').trim();
     const cls = state.classes.find(c => c.id === id);
-    if (!cls || !newName || cls.name === newName) return;
-    try { await fetch(_p('/classes/rename'), { method:'POST', headers:_authH(), body: JSON.stringify({id, name:newName}) }); cls.name = newName; this._populateClassList(); this._renderClassesTable(); this._toast(`Renamed to "${newName}"`, 'success'); }
-    catch(e) { this._toast('Rename failed', 'error'); }
+    const say = m => { if (onError) onError(m); else this._toast(m, 'error'); return false; };
+    if (!cls) return true;
+    if (!newName) return say('A class needs a name.');
+    if (cls.name === newName) return true;
+    if (state.classes.some(c => c.id !== id && c.name.toLowerCase() === newName.toLowerCase())) return say(`"${newName}" already exists.`);
+    try {
+      const r = await fetch(_p('/classes/rename'), { method: 'POST', headers: _authH(), body: JSON.stringify({id, name: newName}) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d.success) return say(d.error || `Rename failed (HTTP ${r.status}).`);
+      cls.name = newName;
+      this._populateClassList();
+      this._render && this._render();
+      this._toast(`Renamed to "${newName}"`, 'success');
+      return true;
+    } catch (e) { return say('Rename failed: network error.'); }
   },
 
   async _clsPageChangeColor(id, hex) {
-    const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
     const cls = state.classes.find(c => c.id === id);
     if (!cls) return;
-    cls.color = [r,g,b];
-    try { await fetch(_p('/classes/color'), { method:'POST', headers:_authH(), body: JSON.stringify({id, color:[r,g,b]}) }); } catch(e) {}
+    const color = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+    try {
+      const r = await fetch(_p('/classes/color'), { method: 'POST', headers: _authH(), body: JSON.stringify({id, color}) });
+      if (!r.ok) throw new Error();
+      cls.color = color;
+    } catch (e) { this._toast('Colour change failed', 'error'); }
     this._populateClassList(); this._renderClassesTable(); this._render();
   },
 
@@ -6205,18 +6932,18 @@ const app = {
     }
 
     const srcLabel = (batch.source || 'images').toUpperCase();
-    const srcColor = {FOLDER:'#f59e0b', ZIP:'#818cf8', VIDEO:'#a855f7', IMAGES:'#22c5e1'}[srcLabel] || '#22c5e1';
+    const srcColor = {FOLDER:'var(--warning)', ZIP:'var(--indigo)', VIDEO:'var(--purple)', IMAGES:'var(--info)'}[srcLabel] || 'var(--info)';
     const splits   = batch.source_splits || {};
 
     // Assignment badge
     const statusMeta = {
-      pending:     { color:'#f59e0b', icon:'fa-clock',        label:'Pending'     },
-      in_progress: { color:'#22c5e1', icon:'fa-pen',          label:'In Progress' },
-      submitted:   { color:'#a855f7', icon:'fa-paper-plane',  label:'Submitted'   },
-      approved:    { color:'#22c55e', icon:'fa-check-circle', label:'Approved'    },
-      rejected:    { color:'#ef4444', icon:'fa-times-circle', label:'Rejected'    },
+      pending:     { color:'var(--warning)', icon:'fa-clock',        label:'Pending'     },
+      in_progress: { color:'var(--info)', icon:'fa-pen',          label:'In Progress' },
+      submitted:   { color:'var(--purple)', icon:'fa-paper-plane',  label:'Submitted'   },
+      approved:    { color:'var(--success)', icon:'fa-check-circle', label:'Approved'    },
+      rejected:    { color:'var(--danger)', icon:'fa-times-circle', label:'Rejected'    },
     };
-    const sm = asgn ? (statusMeta[asgn.status] || {color:'#6b7280', icon:'fa-circle', label:asgn.status}) : null;
+    const sm = asgn ? (statusMeta[asgn.status] || {color:'var(--tx3)', icon:'fa-circle', label:asgn.status}) : null;
 
     const card = document.createElement('div');
     card.className = 'uhp-batch-card';
@@ -6229,7 +6956,7 @@ const app = {
           <div class="uhp-card-daystr">${this._escHtml(dayStr)}</div>
           <div class="uhp-card-timestr">${this._escHtml(timeStr)}</div>
           <div class="uhp-card-badges">
-            <span class="uhp-src-badge" style="background:${srcColor}22;color:${srcColor};border-color:${srcColor}44">${srcLabel}</span>
+            <span class="uhp-src-badge" style="background:color-mix(in srgb, ${srcColor} 13%, transparent);color:color-mix(in srgb, ${srcColor} 60%, var(--tx));border-color:color-mix(in srgb, ${srcColor} 27%, transparent)">${srcLabel}</span>
             ${inDs ? '<span class="uhp-ds-badge"><i class="fas fa-check-circle"></i> In Dataset</span>' : ''}
           </div>
         </div>
@@ -6244,7 +6971,7 @@ const app = {
       <!-- Uploader + annotated-by row -->
       <div class="uhp-meta-row">
         ${uploader ? `<span class="uhp-meta-chip uploader"><i class="fas fa-upload"></i> ${this._escHtml(uploader)}</span>` : ''}
-        ${asgn ? `<span class="uhp-meta-chip assigned" style="color:${sm.color};background:${sm.color}18;border-color:${sm.color}33">
+        ${asgn ? `<span class="uhp-meta-chip assigned" style="color:color-mix(in srgb, ${sm.color} 60%, var(--tx));background:color-mix(in srgb, ${sm.color} 9%, transparent);border-color:color-mix(in srgb, ${sm.color} 20%, transparent)">
           <i class="fas ${sm.icon}"></i> ${this._escHtml(asgn.assignee)} <em>${sm.label}</em>
           ${asgn.total_images > 0 ? `<span class="uhp-asgn-pct">${asgn.progress_pct}%</span>` : ''}
         </span>` : `<span class="uhp-meta-chip unassigned"><i class="fas fa-user-slash"></i> Unassigned</span>`}
@@ -6495,7 +7222,14 @@ const app = {
       }
       let allMedia = d.media;
       if (folderFilter) {
-        allMedia = d.media.filter(m => m.folder === folderFilter);
+        // "raw" is an annotation status, not a filesystem folder. The
+        // batch API returns flat image paths without a `folder: raw` field.
+        if (folderFilter === 'raw') {
+          const done = new Set([...(d.annotated || []), ...(d.null_paths || [])]);
+          allMedia = d.media.filter(m => !done.has(m.path));
+        } else {
+          allMedia = d.media.filter(m => m.folder === folderFilter);
+        }
         if (!allMedia.length) {
           this._toast(`No images in ${folderFilter}/`,'warn');
           this._setListLoading(false);
@@ -6787,7 +7521,7 @@ const app = {
       { icon: 'fa-eye', label: 'Review dataset',
         onClick: () => this._loadDatasetForReview(ds, card) },
       { icon: 'fa-file-export', label: 'Export…',
-        onClick: () => this._toast('Export — use the Export tab to configure format', 'info') },
+        onClick: () => this.startExport(id) },
       { icon: 'fa-tag', label: 'Tags…',
         onClick: () => this._showTagModal(
           `Dataset ${id}`, ds.tags || [],
@@ -7014,35 +7748,8 @@ const app = {
       let v = parseInt(vEl.value);
       let s = parseInt(sEl.value);
 
-      // Clamp all to [0,100]
-      t = Math.min(100, Math.max(0, t));
-      v = Math.min(100, Math.max(0, v));
-      s = Math.min(100, Math.max(0, s));
-
-      // Redistribute: the changed slider takes its value,
-      // remaining two share leftover proportionally
-      const step = 5;
-      if (changedId === 'batchTrainSlider') {
-        const left = 100 - t;
-        const total = v + s || 1;
-        v = Math.round(left * v / total / step) * step;
-        s = 100 - t - v;
-      } else if (changedId === 'batchValSlider') {
-        const left = 100 - v;
-        const total = t + s || 1;
-        t = Math.round(left * t / total / step) * step;
-        s = 100 - t - v;
-      } else {
-        const left = 100 - s;
-        const total = t + v || 1;
-        t = Math.round(left * t / total / step) * step;
-        v = 100 - t - s;
-      }
-
-      // Clamp edges
-      t = Math.min(100, Math.max(0, t));
-      v = Math.min(100, Math.max(0, v));
-      s = Math.max(0, 100 - t - v);
+      [t, v, s] = rebalanceSplit(t, v, s,
+        changedId === 'batchTrainSlider' ? 'train' : changedId === 'batchValSlider' ? 'val' : 'test');
 
       tEl.value = t; vEl.value = v; sEl.value = s;
       _updateSplitUI(t, v, s);
@@ -7183,6 +7890,12 @@ const app = {
     }
   },
 
+  /** "1 image" / "3 images" — counts shown to users read naturally. */
+  _plural(n, word, many) {
+    n = Number(n) || 0;
+    return `${n.toLocaleString()} ${n === 1 ? word : (many || word + 's')}`;
+  },
+
   _escHtml(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   },
@@ -7222,16 +7935,17 @@ const app = {
       const splitInfo = splits || {};
 
       // Build split rows with match stats
-      const splitColors = { train: '#00d4a0', valid: '#818cf8', test: '#f59e0b' };
+      const splitColors = { train: 'var(--split-train)', valid: 'var(--split-val)', test: 'var(--split-test)' };
+      const splitText = sp => ({ train: 'var(--split-train-text)', valid: 'var(--split-val-text)', test: 'var(--split-test-text)' })[sp] || 'var(--tx2)';
       const splitRows = Object.entries(splitInfo).map(([sp, sd]) => {
         const matchPct = sd.images > 0 ? Math.round((sd.matched||sd.images) / sd.images * 100) : 0;
-        const col = splitColors[sp] || '#888';
+        const col = splitColors[sp] || 'var(--tx3)';
         return `
           <div class="udr-split-block" style="border-left-color:${col}">
             <div class="udr-split-block-head">
-              <div class="udr-split-name" style="color:${col}"><i class="fas fa-folder-open"></i> ${sp}/</div>
+              <div class="udr-split-name" style="color:${splitText(sp)}"><i class="fas fa-folder-open"></i> ${sp}/</div>
               <div class="udr-split-imgcount">${sd.images} img</div>
-              <div class="udr-split-matchbadge" style="${matchPct===100?'background:rgba(34,197,94,.12);color:#22c55e':'background:rgba(245,158,11,.1);color:#f59e0b'}">
+              <div class="udr-split-matchbadge" style="${matchPct===100?'background:var(--success-bg);color:var(--success)':'background:var(--warning-bg);color:var(--warning)'}">
                 ${matchPct === 100 ? '<i class="fas fa-check"></i> All matched' : `${sd.matched||sd.images}/${sd.images} matched`}
               </div>
             </div>
@@ -7242,10 +7956,10 @@ const app = {
       // Fallback split rows from raw count
       const fallbackSplitRows = Object.keys(splitInfo).length === 0 && splitFolders
         ? Object.entries(splitFolders).map(([sp, n]) => {
-            const col = splitColors[sp] || '#888';
+            const col = splitColors[sp] || 'var(--tx3)';
             return `<div class="udr-split-block" style="border-left-color:${col}">
               <div class="udr-split-block-head">
-                <div class="udr-split-name" style="color:${col}"><i class="fas fa-folder-open"></i> ${sp}/</div>
+                <div class="udr-split-name" style="color:${splitText(sp)}"><i class="fas fa-folder-open"></i> ${sp}/</div>
                 <div class="udr-split-imgcount">${n} images</div>
               </div>
             </div>`;
@@ -7253,8 +7967,8 @@ const app = {
         : '';
 
       const clsPills = (classes||[]).slice(0,12).map((c,i) => {
-        const pal = ['#00d4a0','#818cf8','#f59e0b','#22c5e1','#f87171','#a78bfa','#34d399','#fb923c'];
-        return `<span class="udr-cls-chip" style="background:${pal[i%pal.length]}1a;color:${pal[i%pal.length]};border-color:${pal[i%pal.length]}44">${this._escHtml(c)}</span>`;
+        const pal = ['var(--accent)','var(--indigo)','var(--warning)','var(--info)','var(--danger)','var(--purple)'];
+        return `<span class="udr-cls-chip" style="background:color-mix(in srgb, ${pal[i%pal.length]} 10%, transparent);color:color-mix(in srgb, ${pal[i%pal.length]} 60%, var(--tx));border-color:color-mix(in srgb, ${pal[i%pal.length]} 24%, transparent)">${this._escHtml(c)}</span>`;
       }).join('') + ((classes||[]).length > 12 ? `<span class="udr-cls-chip udr-more">+${classes.length-12} more</span>` : '');
 
       const warnHtml = (warnings||[]).slice(0,4).map(w =>
@@ -7379,25 +8093,26 @@ const app = {
     const total  = result.total_images || preAnn + raw;
 
     const hasSplits   = Object.keys(splits).length > 0;
-    const splitColors = { train:'#00d4a0', valid:'#818cf8', test:'#f59e0b' };
+    const splitColors = { train:'var(--split-train)', valid:'var(--split-val)', test:'var(--split-test)' };
+    const splitText = sp => ({ train: 'var(--split-train-text)', valid: 'var(--split-val-text)', test: 'var(--split-test-text)' })[sp] || 'var(--tx2)';
 
     const splitRowsHtml = hasSplits
       ? Object.entries(splits).map(([sp, sd]) => {
-          const col = splitColors[sp] || '#888';
+          const col = splitColors[sp] || 'var(--tx3)';
           const pct = sd.images > 0 ? Math.round((sd.matched||sd.images) / sd.images * 100) : 100;
           return `
             <div class="uyr-split-row" style="border-left:3px solid ${col}">
-              <span class="uyr-split-name" style="color:${col}">${sp}/</span>
+              <span class="uyr-split-name" style="color:${splitText(sp)}">${sp}/</span>
               <span class="uyr-split-imgs">${sd.images} images</span>
-              <span class="uyr-split-match" style="color:${pct===100?'#22c55e':'#f59e0b'}">${sd.matched||sd.images} matched</span>
+              <span class="uyr-split-match" style="color:${pct===100?'var(--success)':'var(--warning)'}">${sd.matched||sd.images} matched</span>
               <div class="uyr-split-bar"><div style="width:${pct}%;background:${col}"></div></div>
             </div>`;
         }).join('')
       : '';
 
     const clsPills = cls.slice(0,10).map((c,i) => {
-      const pal = ['#00d4a0','#818cf8','#f59e0b','#22c5e1','#f87171','#a78bfa'];
-      return `<span class="uyr-cls-chip" style="background:${pal[i%pal.length]}1a;color:${pal[i%pal.length]};border-color:${pal[i%pal.length]}33">${this._escHtml(c)}</span>`;
+      const pal = ['var(--accent)','var(--indigo)','var(--warning)','var(--info)','var(--danger)','var(--purple)'];
+      return `<span class="uyr-cls-chip" style="background:color-mix(in srgb, ${pal[i%pal.length]} 10%, transparent);color:color-mix(in srgb, ${pal[i%pal.length]} 60%, var(--tx));border-color:color-mix(in srgb, ${pal[i%pal.length]} 24%, transparent)">${this._escHtml(c)}</span>`;
     }).join('') + (cls.length > 10 ? `<span class="uyr-cls-chip">+${cls.length-10}</span>` : '');
 
     el.className = 'uyr-card';
@@ -7827,18 +8542,25 @@ const app = {
 
     // Header nav buttons
     document.getElementById('prevImgBtn')?.addEventListener('click', () => {
-      if (state.currentIdx > 0) this.loadImage(state.currentIdx - 1);
+      this.prevImage();
     });
     document.getElementById('nextImgBtn')?.addEventListener('click', () => {
-      if (state.currentIdx < state.media.length - 1) this.loadImage(state.currentIdx + 1);
+      this.nextImage();
     });
 
     // Complete button — mark image as reviewed
-    document.getElementById('completeBtn')?.addEventListener('click', () => {
+    document.getElementById('completeBtn')?.addEventListener('click', async () => {
       if (state.currentIdx < 0) return;
       const item = state.media[state.currentIdx];
       if (!item) return;
-      state.annotatedPaths.add(item.path);
+      if (!state.isCurrentNull && !Boxes.confirmed(state.bboxes).length) {
+        this._toast('Add an annotation or mark this image as Null before completing it.', 'warn');
+        return;
+      }
+      clearTimeout(state.saveTimer);
+      const saved = await this._saveCurrentAnnotations();
+      if (!saved) { this._toast('Could not save. Image was not marked complete.', 'error'); return; }
+      if (!state.isCurrentNull) state.annotatedPaths.add(item.path);
       this._updateImageStatusBadge(item);
       this._updateNavBadges();
       this._updateAddToDatasetBtn();
@@ -7924,8 +8646,15 @@ const app = {
       if (confirmBtn) confirmBtn.disabled = !ok;
       return ok;
     };
-    sliders.forEach(({ slider }) => {
-      document.getElementById(slider)?.addEventListener('input', syncSliders);
+    sliders.forEach(({ slider }, i) => {
+      document.getElementById(slider)?.addEventListener('input', () => {
+        const els = ['atdTrainSlider', 'atdValSlider', 'atdTestSlider'].map(id => document.getElementById(id));
+        if (els.every(Boolean)) {
+          const [t, v, s] = rebalanceSplit(+els[0].value, +els[1].value, +els[2].value, ['train', 'val', 'test'][i]);
+          els[0].value = t; els[1].value = v; els[2].value = s;
+        }
+        syncSliders();
+      });
     });
     this._atdSyncSliders = syncSliders;
 
@@ -8127,10 +8856,11 @@ const app = {
     const CKEY_CLS  = 'annomaster_cls_collapsed';
     const CKEY_ANNO = 'annomaster_anno_collapsed';
 
-    const setLeftCollapsed = (collapsed) => {
+    const setLeftCollapsed = (collapsed, persist = true) => {
       if (!leftSb) return;
       leftSb.classList.toggle('collapsed', collapsed);
-      try { localStorage.setItem(LKEY, collapsed ? '1' : '0'); } catch(e) {}
+      leftSb.closest('.workspace')?.classList.toggle('left-sb-collapsed', collapsed);
+      try { if (persist) localStorage.setItem(LKEY, collapsed ? '1' : '0'); } catch(e) {}
       // Keep strip count in sync
       const strip = document.getElementById('totalCountStrip');
       const badge = document.getElementById('totalCount');
@@ -8152,7 +8882,7 @@ const app = {
     const restoreTab   = document.getElementById('rsbRestoreTab');
     const workspace    = document.querySelector('.workspace');
 
-    const setRightCollapsed = (collapsed) => {
+    const setRightCollapsed = (collapsed, persist = true) => {
       if (!rightSb) return;
       rightSb.classList.toggle('collapsed', collapsed);
       workspace?.classList.toggle('right-sb-collapsed', collapsed);
@@ -8191,7 +8921,7 @@ const app = {
         icon.className = collapsed ? 'fas fa-chevron-left' : 'fas fa-chevron-right';
       }
 
-      try { localStorage.setItem(RKEY, collapsed ? '1' : '0'); } catch(e) {}
+      try { if (persist) localStorage.setItem(RKEY, collapsed ? '1' : '0'); } catch(e) {}
     };
 
     if (rightToggle) rightToggle.addEventListener('click', e => {
@@ -8202,6 +8932,21 @@ const app = {
 
     // Restore right state
     try { if (localStorage.getItem(RKEY) === '1') setRightCollapsed(true); } catch(e) {}
+
+    // Fixed sidebars previously consumed the entire canvas on phones/tablets.
+    // Collapse automatically without replacing the user's desktop preference.
+    const compactViewport = window.matchMedia('(max-width: 1023px)');
+    const adaptPanels = () => {
+      let leftSaved = false, rightSaved = false;
+      try {
+        leftSaved = localStorage.getItem(LKEY) === '1';
+        rightSaved = localStorage.getItem(RKEY) === '1';
+      } catch(e) {}
+      setLeftCollapsed(compactViewport.matches || leftSaved, false);
+      setRightCollapsed(compactViewport.matches || rightSaved, false);
+    };
+    compactViewport.addEventListener('change', adaptPanels);
+    adaptPanels();
 
     // ── Section collapse: Classes + Annotations ──────────────────────────────
     const bindSectionCollapse = (headId, bodyId, storageKey, startCollapsed = false) => {
@@ -8267,6 +9012,8 @@ const app = {
       new MutationObserver(() => {
         const strip = document.getElementById('totalCountStrip');
         if (strip) strip.textContent = totalBadge.textContent;
+        const listCount = document.getElementById('imageListCount');
+        if (listCount) listCount.textContent = totalBadge.textContent;
       }).observe(totalBadge, { childList: true, characterData: true, subtree: true });
     }
   },

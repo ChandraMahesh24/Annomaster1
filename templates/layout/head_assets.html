@@ -1,0 +1,38 @@
+{#-
+  Shared <head> assets — included by EVERY page. This is the single place
+  that loads web fonts, the icon font, the CSS layers (in contract order),
+  the pre-paint theme script and the shared UI helpers.
+
+  Usage, inside <head> after <meta charset>/<viewport>/<title>:
+
+    {% set page_css = ['css/layout.css', 'css/settings.css'] %}
+    {% include 'layout/head_assets.html' %}
+
+  Optional before the include:
+    {% set no_icons = true %}   skip Font Awesome (auth pages draw no icons)
+
+  Cascade contract — do not reorder:
+    tokens.css → base.css → components.css → page_css… → modes.css
+  modes.css (custom colours / compact density from Settings) must win, so
+  it is always last. asset() appends ?v=<mtime> so a CSS/JS edit reaches
+  browsers on the next normal reload.
+
+  To change the app's font: edit --font-sans/--font-mono in tokens.css AND
+  the Google Fonts URL below. Nothing else references a font by name.
+-#}
+<link rel="icon" type="image/svg+xml" href="/favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
+{%- if not no_icons %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+{%- endif %}
+<link rel="stylesheet" href="{{ asset('css/tokens.css') }}">
+<link rel="stylesheet" href="{{ asset('css/base.css') }}">
+<link rel="stylesheet" href="{{ asset('css/components.css') }}">
+{%- for sheet in page_css|default([]) %}
+<link rel="stylesheet" href="{{ asset(sheet) }}">
+{%- endfor %}
+<link rel="stylesheet" href="{{ asset('css/modes.css') }}">
+<script src="{{ asset('js/theme.js') }}"></script>
+<script src="{{ asset('js/core/ui.js') }}"></script>

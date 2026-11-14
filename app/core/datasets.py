@@ -119,7 +119,7 @@ def add_batch_to_dataset(ws_folder: str, project: str, uid: int,
 
     buckets = [
         ('train', dataset_pairs[:n_train]),
-        ('val',   dataset_pairs[n_train:n_train + n_val]),
+        ('valid', dataset_pairs[n_train:n_train + n_val]),
         ('test',  dataset_pairs[n_train + n_val:]),
     ]
     split_counts = {'train': n_train, 'val': n_val, 'test': n_test}

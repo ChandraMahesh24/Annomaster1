@@ -2,6 +2,9 @@
 
 [← Back to the project README](../README.md)
 
+Development sessions must begin with [Project audit & progress](../PROJECT_AUDIT_AND_PROGRESS.md),
+which records tested behavior, fixes, remaining gaps and the next unfinished task.
+
 ## Getting started
 
 | Guide | What it covers |
@@ -23,3 +26,6 @@
 | Guide | What it covers |
 |---|---|
 | **[Architecture](architecture.md)** | System overview, folder structure, data layout on disk, maintenance commands |
+| **[Testing & maintenance](testing-and-maintenance.md)** | Isolated test commands, code map, invariants and change checklist |
+| **[Design system](../DESIGN_SYSTEM.md)** | Tokens, typography, components, layouts and how to change the look app-wide |
+| **[Code review — 13 November 2026](code-review-2026-11-13.md)** | Reproduced defects, test results, priorities and coverage limits |

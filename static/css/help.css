@@ -1,0 +1,15 @@
+/* Help — a prose page. Typography/colour come from base.css; only the
+   reading measure and vertical rhythm are set here, all from tokens. */
+.help-page {
+  max-width: var(--content-prose); margin: 0 auto;
+  padding: var(--sp-8) var(--sp-5) var(--sp-16);
+  line-height: 1.7; overflow-wrap: anywhere;
+}
+.help-page h1 { margin: var(--sp-6) 0 var(--sp-3); }
+.help-page h2 { margin: var(--sp-8) 0 var(--sp-3); }
+.help-page p  { margin: var(--sp-3) 0; }
+.help-page ol { padding-left: var(--sp-6); }
+.help-page li { margin: var(--sp-2) 0; }
+.help-page a  { color: var(--accent-text); text-decoration: underline; text-underline-offset: .2em; }
+.help-page code { font-family: var(--font-mono); font-size: .92em; }
+.help-page section { scroll-margin-top: var(--sp-6); }

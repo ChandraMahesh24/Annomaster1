@@ -4,15 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sign In | AnnoMaster AI</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/tokens.css">
-  <link rel="stylesheet" href="/static/css/base.css">
-  <link rel="stylesheet" href="/static/css/modes.css">
-  <!-- Applies the saved theme before paint, so the page opens in the
-       user's theme with no flash. The Light/Dark chip below writes the
-       same am_theme_mode key the Settings page does. -->
-  <script src="/static/js/theme.js"></script>
-  <link rel="stylesheet" href="/static/css/auth-3d.css">
+  {# Auth pages draw no Font Awesome icons. auth-3d.css is the page sheet;
+     the shared partial loads fonts, tokens, components, modes and theme.js. #}
+  {% set no_icons = true %}
+  {% set page_css = ['css/auth-3d.css'] %}
+  {% include 'layout/head_assets.html' %}
 </head>
 <body>
 
@@ -35,7 +31,7 @@
       <div class="l-tools">
         <div class="l-status">
           <div class="l-dot l-pulse"></div>
-          <span>All systems operational</span>
+          <span>Self-hosted annotation workspace</span>
         </div>
         <button type="button" class="l-chip-btn" id="mode-btn" title="Switch 3D object">Data field</button>
         <button type="button" class="l-chip-btn" id="theme-btn" title="Toggle theme">
@@ -49,39 +45,33 @@
 
       <section class="l-copy">
         <div class="l-eyebrow l-rise">Neural labeling · v4</div>
-        <h1 class="l-h1 l-rise" style="animation-delay:.08s;">A living surface for<br><span>machine perception.</span></h1>
-        <p class="l-lede l-rise" style="animation-delay:.16s;">Sign in to your workspace. Move your cursor across the field — every point reacts, the way your dataset does.</p>
-        <div class="l-stats l-rise" style="animation-delay:.24s;">
-          <div class="l-stat"><div class="l-stat-lbl">Frames labeled</div><div class="l-stat-val">4.28M</div></div>
-          <div class="l-stat"><div class="l-stat-lbl">Model agreement</div><div class="l-stat-val">99.98%</div></div>
-          <div class="l-stat"><div class="l-stat-lbl">Throughput</div><div class="l-stat-val">12.4k / min</div></div>
+        <h1 class="l-h1 l-rise" style="animation-delay:calc(80ms * var(--motion-scale));">A living surface for<br><span>machine perception.</span></h1>
+        <p class="l-lede l-rise" style="animation-delay:calc(160ms * var(--motion-scale));">Sign in to your workspace. Move your cursor across the field — every point reacts, the way your dataset does.</p>
+        <div class="l-stats l-rise" style="animation-delay:calc(240ms * var(--motion-scale));">
+          <div class="l-stat"><div class="l-stat-lbl">Annotate</div><div class="l-stat-val">Images</div></div>
+          <div class="l-stat"><div class="l-stat-lbl">Review</div><div class="l-stat-val">AI labels</div></div>
+          <div class="l-stat"><div class="l-stat-lbl">Export</div><div class="l-stat-val">YOLO</div></div>
         </div>
-        <div class="l-hint l-rise" style="animation-delay:.3s;">
+        <div class="l-hint l-rise" style="animation-delay:calc(300ms * var(--motion-scale));">
           <div class="l-dot l-pulse"></div>
           <span id="point-label">initializing field…</span>
         </div>
       </section>
 
       <section class="l-form-col">
-        <div class="l-card-wrap l-rise" style="animation-delay:.12s;">
+        <div class="l-card-wrap l-rise" style="animation-delay:calc(120ms * var(--motion-scale));">
           <div class="l-halo" aria-hidden="true"></div>
 
           <div class="l-card" data-nodrag>
             <h2>Welcome back</h2>
             <p class="l-card-sub">Access your annotation workspace</p>
 
-            <div class="l-sso">
-              <button type="button" onclick="socialLogin('google')">Google</button>
-              <button type="button" onclick="socialLogin('github')">GitHub</button>
-              <button type="button" onclick="socialLogin('sso')">SSO</button>
-            </div>
-
-            <div class="l-or"><i></i><span>or email</span><i></i></div>
+            <p class="l-card-sub">Sign in with your email and password.</p>
 
             <form id="login-form" class="l-fields" novalidate>
               <div>
                 <label class="l-label" for="email">Email address</label>
-                <input class="l-input" type="email" id="email" placeholder="you@company.com" autocomplete="email" autofocus>
+                <input class="l-input" type="email" id="email" required maxlength="255" placeholder="you@company.com" autocomplete="email" autofocus>
               </div>
               <div>
                 <div class="l-label-row">
@@ -89,14 +79,11 @@
                   <a href="/forgot-password" id="forgot-link">Forgot?</a>
                 </div>
                 <div class="l-input-wrap">
-                  <input class="l-input has-toggle" type="password" id="password" placeholder="••••••••••••" autocomplete="current-password">
+                  <input class="l-input has-toggle" type="password" id="password" required placeholder="••••••••••••" autocomplete="current-password">
                   <button type="button" class="l-pw-toggle" id="pw-toggle" aria-label="Show password" onclick="togglePw()">Show</button>
                 </div>
               </div>
-              <label class="l-check">
-                <input type="checkbox" id="remember" checked>
-                <span>Keep me signed in for 30 days</span>
-              </label>
+              <p class="l-check">Use sign out when you finish on a shared device.</p>
               <div class="l-error" id="err" role="alert"></div>
               <button type="submit" class="l-submit" id="submit-btn">
                 <span class="l-spinner"></span>
@@ -108,9 +95,9 @@
           </div>
 
           <div class="l-compliance">
-            <div>SOC 2 Type II</div>
-            <div>GDPR</div>
-            <div>ISO 27001</div>
+            <div>Self-hosted</div>
+            <div>YOLO exports</div>
+            <div>Human review</div>
           </div>
         </div>
       </section>
@@ -119,9 +106,9 @@
     <footer class="l-footer">
       <span>© 2026 AnnoMaster AI</span>
       <nav>
-        <a href="#">Privacy</a>
-        <a href="#">Terms</a>
-        <a href="#">Status</a>
+        <a href="/help#data">Data information</a>
+        <a href="/help#usage">Usage</a>
+        <a href="/health">Server health</a>
       </nav>
     </footer>
   </div>
@@ -138,10 +125,6 @@
     btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
   }
 
-  /* ── Placeholder for a flow that doesn't exist yet ── */
-  function socialLogin(p) {
-    document.getElementById('err').textContent = p.charAt(0).toUpperCase() + p.slice(1) + ' login coming soon! Use email for now.';
-  }
 
   /* ── Main login ── */
   async function doLogin() {
@@ -170,6 +153,6 @@
 
 </script>
 
-<script type="module" src="/static/js/features/auth-scene.js"></script>
+<script type="module" src="{{ asset('js/features/auth-scene.js') }}"></script>
 </body>
 </html>

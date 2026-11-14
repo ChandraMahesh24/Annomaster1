@@ -1,0 +1,39 @@
+/* Scoped media browser; preserve virtual list 52px row geometry. */
+#sidebarLeft #leftSbHead { min-height: 54px; padding: var(--s-12) !important; }
+#sidebarLeft #leftSbHead .ph-title { font-size: var(--fs-13) !important; text-transform: none; letter-spacing: -.15px; color: var(--tx); }
+#sidebarLeft .ph-badge { border-radius: var(--rad-6); background: var(--panel); color: var(--tx2); }
+#sidebarLeft .ml-sub-head { padding: var(--s-10) var(--s-12) !important; border-bottom: 0 !important; }
+#sidebarLeft .ml-sub-title { font-size: var(--fs-11) !important; text-transform: none; letter-spacing: 0; color: var(--tx) !important; }
+#sidebarLeft .ml-sub-icon { background: transparent; color: var(--tx2) !important; box-shadow: none; width: 16px; }
+#sidebarLeft .ml-sub-body { padding: 0 var(--s-10) var(--s-10); }
+#sidebarLeft .ml-sub-body.collapsed, #sidebarLeft .ml-sub-body-collapsed { padding: 0; }
+#sidebarLeft #mlImagesBody { padding: 0; }
+#sidebarLeft .anno-count-row { border: 1px solid var(--border); border-radius: var(--rad-9); padding: var(--s-9) var(--s-4); gap: 0 !important; }
+#sidebarLeft .aco-badge { border: 0 !important; background: transparent !important; padding: var(--s-2) var(--s-4); font-size: var(--fs-10) !important; }
+#sidebarLeft .aco-badge + .aco-badge { border-left: 1px solid var(--border) !important; border-radius: 0 !important; }
+#sidebarLeft .aco-n { font-size: var(--fs-17) !important; line-height: 1.4; }
+#sidebarLeft .job-stats-bar { margin: var(--s-9) 0 0; box-shadow: none; border-radius: var(--rad-8); }
+#sidebarLeft .search-bar { margin: 0 0 var(--s-10); height: 34px; padding: 0 var(--s-9); border-radius: var(--rad-7) !important; }
+#sidebarLeft .search-bar input { min-width: 0; width: 100%; font-size: var(--fs-12); }
+#sidebarLeft .filter-group-label { margin: var(--s-8) 0 var(--s-5); text-transform: none; letter-spacing: 0; }
+#sidebarLeft .filter-pills { gap: var(--s-4); }
+#sidebarLeft .ftab { min-height: var(--chip-h); border-radius: var(--chip-radius) !important; font-size: var(--text-chip) !important; }
+#sidebarLeft .upload-zone { padding: var(--s-14) var(--s-8); }
+#sidebarLeft .img-item { padding: var(--s-8) var(--s-10); gap: var(--s-9); height: 52px; box-sizing: border-box; border-bottom: 1px solid var(--border); }
+#sidebarLeft .img-item.active { border-left: 3px solid var(--accent); padding-left: var(--s-7); }
+#sidebarLeft .img-thumb, #sidebarLeft .img-thumb-placeholder { width: 44px; height: 34px; border-radius: var(--rad-5); object-fit: contain; }
+#sidebarLeft .img-name { font-size: var(--fs-11); font-weight: 600; }
+#sidebarLeft .img-sub { font-size: var(--fs-10); color: var(--tx2); }
+#sidebarLeft .list-page-bar { padding: var(--s-9); gap: var(--s-6); }
+#sidebarLeft button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 639px) {
+  /* Phones: the canvas gets every column but the 44px library strip. Both
+     panels open as overlays. This used to reserve var(--right-w) (256px) for
+     the right panel even while collapsed, leaving the canvas 26px wide. */
+  body:has(#page-annotate.active) .workspace { grid-template-columns: 44px minmax(0,1fr) 0px; }
+  body:has(#page-annotate.active) #sidebarRight:not(.collapsed) {
+    position: absolute; top: 0; bottom: 0; right: 0; z-index: 90;
+    width: min(var(--right-w), calc(100vw - 80px)); box-shadow: var(--sh-lg);
+  }
+  #sidebarLeft:not(.collapsed) { position: absolute; top: 0; bottom: 0; left: 0; width: min(280px, calc(100vw - 80px)); z-index: 90; box-shadow: var(--sh-lg); }
+}

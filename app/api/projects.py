@@ -91,10 +91,9 @@ def api_delete_project(workspace_id, project):
     except ProjectOpError as e:
         # A locked file now surfaces as a readable 400 instead of a bare 500.
         return _op_error(e)
-    # NOTE: the Image/batch rows are deliberately left as-is — that is the
-    # pre-existing behaviour of this endpoint, not an oversight of the ops
-    # below. (It is also why re-creating a project under a deleted project's
-    # name resurrects its old rows.) Changing it is a separate fix.
+    from app.utils.data_cleanup import clear_tracking
+    clear_tracking(workspace_id, project)
+    db.session.commit()
     return jsonify({'success': True})
 
 
@@ -143,7 +142,8 @@ def api_cover_from_path(workspace_id, project):
         return jsonify({'error': 'path required'}), 400
     wsf      = _wsf(workspace_id)
     pd       = project_dir(wsf, project)
-    src_path = pd / rel
+    from app.core.paths import resolve_project_path
+    src_path = resolve_project_path(pd, rel)
     if not src_path.exists():
         return jsonify({'error': 'Image not found'}), 404
     cover = pd / 'cover.jpg'

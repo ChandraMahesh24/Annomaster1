@@ -4,14 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Account Settings – AnnoMaster</title>
-  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <link rel="stylesheet" href="/static/css/tokens.css">
-  <link rel="stylesheet" href="/static/css/base.css">
-  <link rel="stylesheet" href="/static/css/layout.css">
-  <link rel="stylesheet" href="/static/css/settings.css">
-  <link rel="stylesheet" href="/static/css/modes.css">
-  <script src="/static/js/theme.js"></script>
+  {% set page_css = ['css/layout.css', 'css/settings.css'] %}
+  {% include 'layout/head_assets.html' %}
 </head>
 <body>
 
@@ -142,7 +136,7 @@
           </div>
 
           <div class="theme-mode-card" id="theme-mode-custom" onclick="SettingsPage.setThemeMode('custom')">
-            <div class="theme-preview custom-preview" style="background: linear-gradient(135deg, #2d2d38 0%, #1e1e24 100%)">
+            <div class="theme-preview custom-preview" style="background: linear-gradient(135deg, #2d2d38 0%, #1e1e24 100%)"> {# ds-allow: custom-theme preview swatch #}
               <span class="preview-accent" style="background: var(--accent);"></span>
             </div>
             <div class="theme-mode-info">
@@ -153,17 +147,50 @@
           </div>
         </div>
 
-        <!-- Custom Background & Text Color Picker row -->
-        <div id="custom-theme-colors-row" style="display: none; margin-top: 15px; margin-bottom: 25px; padding: 18px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border); border-radius: 14px; gap: 20px; flex-wrap: wrap; align-items: center;">
-          <div style="display: flex; align-items: center; gap: 10px;">
-            <label style="font-size: 13px; font-weight: 700; color: var(--tx2); font-family: 'Sora', sans-serif;" for="custom-theme-bg">Background:</label>
-            <input type="color" id="custom-theme-bg" value="#1e1e24" onchange="SettingsPage.onCustomThemeChange()" style="cursor: pointer; width: 44px; height: 32px; border: none; border-radius: 8px; background: none; padding: 0;">
+        <!-- Dark style: variants of Dark Mode (tokens.css "DARK STYLES").
+             Shown only while Dark Mode is selected (settings.js). -->
+        <div id="dark-style-row" class="st-subpanel st-dark-styles">
+          <div class="dsty-head">
+            <h4 class="dsty-title">Dark style</h4>
+            <p class="dsty-sub">Pick the look of Dark Mode. Each style brings its own surfaces and accent; you can still change the accent below.</p>
           </div>
-          <div style="display: flex; align-items: center; gap: 10px;">
-            <label style="font-size: 13px; font-weight: 700; color: var(--tx2); font-family: 'Sora', sans-serif;" for="custom-theme-text">Text Color:</label>
-            <input type="color" id="custom-theme-text" value="#e4e4e7" onchange="SettingsPage.onCustomThemeChange()" style="cursor: pointer; width: 44px; height: 32px; border: none; border-radius: 8px; background: none; padding: 0;">
+          <div class="dsty-grid" role="radiogroup" aria-label="Dark style">
+            <button type="button" class="dsty-opt active" data-style="classic" role="radio" aria-checked="true" onclick="SettingsPage.setDarkStyle('classic')">
+              <span class="dsty-swatch dsty-classic" aria-hidden="true"><span class="dsty-bar"></span><span class="dsty-card"></span><span class="dsty-dot"></span></span>
+              <span class="dsty-name">Classic</span>
+              <span class="dsty-desc">Graphite with teal (default)</span>
+            </button>
+            <button type="button" class="dsty-opt" data-style="midnight" role="radio" aria-checked="false" onclick="SettingsPage.setDarkStyle('midnight')">
+              <span class="dsty-swatch dsty-midnight" aria-hidden="true"><span class="dsty-bar"></span><span class="dsty-card"></span><span class="dsty-dot"></span></span>
+              <span class="dsty-name">Midnight Blue</span>
+              <span class="dsty-desc">Deep indigo, electric blue glow</span>
+            </button>
+            <button type="button" class="dsty-opt" data-style="navy" role="radio" aria-checked="false" onclick="SettingsPage.setDarkStyle('navy')">
+              <span class="dsty-swatch dsty-navy" aria-hidden="true"><span class="dsty-bar"></span><span class="dsty-card"></span><span class="dsty-dot"></span></span>
+              <span class="dsty-name">Navy</span>
+              <span class="dsty-desc">Blue navy with emerald accent</span>
+            </button>
+            <button type="button" class="dsty-opt" data-style="carbon" role="radio" aria-checked="false" onclick="SettingsPage.setDarkStyle('carbon')">
+              <span class="dsty-swatch dsty-carbon" aria-hidden="true"><span class="dsty-bar"></span><span class="dsty-card"></span><span class="dsty-dot"></span></span>
+              <span class="dsty-name">Carbon</span>
+              <span class="dsty-desc">Neutral black with vivid blue</span>
+            </button>
           </div>
-          <span style="font-size: 11px; color: var(--tx3); font-style: italic;">Changes apply instantly. Card surface colors are calculated automatically.</span>
+        </div>
+
+        <!-- Custom Background & Text Color Picker row.
+             display is toggled by settings.js (selectThemeMode), so the
+             initial hidden state stays inline; the look is .st-subpanel. -->
+        <div id="custom-theme-colors-row" class="st-subpanel st-custom-colors" style="display: none;">
+          <div class="st-field-inline">
+            <label class="st-label-lg" for="custom-theme-bg">Background:</label>
+            <input type="color" class="st-color-input" id="custom-theme-bg" value="#1e1e24" onchange="SettingsPage.onCustomThemeChange()">
+          </div>
+          <div class="st-field-inline">
+            <label class="st-label-lg" for="custom-theme-text">Text Color:</label>
+            <input type="color" class="st-color-input" id="custom-theme-text" value="#e4e4e7" onchange="SettingsPage.onCustomThemeChange()">
+          </div>
+          <span class="st-hint">Changes apply instantly. Card surface colors are calculated automatically.</span>
         </div>
 
         <!-- Custom Theme Color Customization -->
@@ -171,46 +198,49 @@
         <p class="section-desc">Choose a primary accent color used for progress bars, selections, and buttons.</p>
         <div class="color-picker-container">
           <div class="accent-color-grid">
-            <button class="color-circle active" style="background:#00e5b0" onclick="SettingsPage.setAccentColor('#00e5b0', this)" title="Classic Teal"></button>
-            <button class="color-circle" style="background:#9b51e0" onclick="SettingsPage.setAccentColor('#9b51e0', this)" title="Electric Violet"></button>
-            <button class="color-circle" style="background:#ff4081" onclick="SettingsPage.setAccentColor('#ff4081', this)" title="Neon Pink"></button>
-            <button class="color-circle" style="background:#ffb020" onclick="SettingsPage.setAccentColor('#ffb020', this)" title="Amber Gold"></button>
-            <button class="color-circle" style="background:#2d9cdb" onclick="SettingsPage.setAccentColor('#2d9cdb', this)" title="Sapphire Blue"></button>
-            <button class="color-circle" style="background:#eb5757" onclick="SettingsPage.setAccentColor('#eb5757', this)" title="Sunset Crimson"></button>
+            {#- ds-allow-start: swatch fills are DATA (each shows the colour it
+                selects), so they stay literal like the theme-preview swatches. #}
+            <button class="color-circle active" style="background:#00e5b0" onclick="SettingsPage.setAccentColor('#00e5b0', this)" title="Classic Teal" aria-label="Classic Teal"></button>
+            <button class="color-circle" style="background:#9b51e0" onclick="SettingsPage.setAccentColor('#9b51e0', this)" title="Electric Violet" aria-label="Electric Violet"></button>
+            <button class="color-circle" style="background:#ff4081" onclick="SettingsPage.setAccentColor('#ff4081', this)" title="Neon Pink" aria-label="Neon Pink"></button>
+            <button class="color-circle" style="background:#ffb020" onclick="SettingsPage.setAccentColor('#ffb020', this)" title="Amber Gold" aria-label="Amber Gold"></button>
+            <button class="color-circle" style="background:#2d9cdb" onclick="SettingsPage.setAccentColor('#2d9cdb', this)" title="Sapphire Blue" aria-label="Sapphire Blue"></button>
+            <button class="color-circle" style="background:#eb5757" onclick="SettingsPage.setAccentColor('#eb5757', this)" title="Sunset Crimson" aria-label="Sunset Crimson"></button>
+            {#- ds-allow-end #}
           </div>
           <div class="custom-color-row">
-            <span>Or custom accent:</span>
+            <label for="custom-accent-picker">Or custom accent:</label>
             <input type="color" id="custom-accent-picker" onchange="SettingsPage.onCustomColorPick(this.value)">
-        </div>
+          </div>
+        </div>{#- closes .color-picker-container — it was never closed, so the
+                 whole card-customisation section rendered nested inside it #}
 
         <!-- Card Customization Section -->
-        <h3 class="section-subtitle" style="margin-top: 30px;">Card Appearance Customization</h3>
+        <h3 class="section-subtitle st-section-gap">Card Appearance Customization</h3>
         <p class="section-desc">Design the style, dimensions, border corners, opacity and hover effects for cards used globally.</p>
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 25px; margin-top: 15px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border); border-radius: 14px; padding: 20px; align-items: start; flex-wrap: wrap;">
-          
+        <div class="st-subpanel st-card-grid">
+
           <!-- Controls Panel -->
-          <div style="display: flex; flex-direction: column; gap: 15px;">
-            <!-- Background & Text & Border Picker row -->
-            <div style="display: flex; gap: 15px; flex-wrap: wrap;">
-              <div style="display: flex; flex-direction: column; gap: 6px;">
-                <label style="font-size: 11px; font-weight: 700; color: var(--tx2); font-family: 'Sora', sans-serif;">Card Background:</label>
-                <input type="color" id="card-custom-bg" value="#16161f" onchange="SettingsPage.onCardCustomChange()" style="cursor: pointer; width: 44px; height: 32px; border: none; border-radius: 6px; background: none; padding: 0;">
+          <div class="st-stack">
+            <div class="st-row-wrap">
+              <div class="st-field">
+                <label class="st-label" for="card-custom-bg">Card Background:</label>
+                <input type="color" class="st-color-input" id="card-custom-bg" value="#16161f" onchange="SettingsPage.onCardCustomChange()">
               </div>
-              <div style="display: flex; flex-direction: column; gap: 6px;">
-                <label style="font-size: 11px; font-weight: 700; color: var(--tx2); font-family: 'Sora', sans-serif;">Card Text:</label>
-                <input type="color" id="card-custom-tx" value="#e4e4e7" onchange="SettingsPage.onCardCustomChange()" style="cursor: pointer; width: 44px; height: 32px; border: none; border-radius: 6px; background: none; padding: 0;">
+              <div class="st-field">
+                <label class="st-label" for="card-custom-tx">Card Text:</label>
+                <input type="color" class="st-color-input" id="card-custom-tx" value="#e4e4e7" onchange="SettingsPage.onCardCustomChange()">
               </div>
-              <div style="display: flex; flex-direction: column; gap: 6px;">
-                <label style="font-size: 11px; font-weight: 700; color: var(--tx2); font-family: 'Sora', sans-serif;">Card Border:</label>
-                <input type="color" id="card-custom-border" value="#2d2d3d" onchange="SettingsPage.onCardCustomChange()" style="cursor: pointer; width: 44px; height: 32px; border: none; border-radius: 6px; background: none; padding: 0;">
+              <div class="st-field">
+                <label class="st-label" for="card-custom-border">Card Border:</label>
+                <input type="color" class="st-color-input" id="card-custom-border" value="#2d2d3d" onchange="SettingsPage.onCardCustomChange()">
               </div>
             </div>
 
-            <!-- Corner Radius Dropdown -->
-            <div style="display: flex; flex-direction: column; gap: 6px;">
-              <label style="font-size: 11px; font-weight: 700; color: var(--tx2); font-family: 'Sora', sans-serif;" for="card-custom-radius">Border Radius (Rounded Corners):</label>
-              <select id="card-custom-radius" class="form-select" onchange="SettingsPage.onCardCustomChange()" style="padding: 6px 12px; font-size: 12px;">
+            <div class="st-field">
+              <label class="st-label" for="card-custom-radius">Border Radius (Rounded Corners):</label>
+              <select id="card-custom-radius" class="form-select st-select-sm" onchange="SettingsPage.onCardCustomChange()">
                 <option value="0px">Sharp Corners (0px)</option>
                 <option value="6px">Subtle Rounded (6px)</option>
                 <option value="12px" selected>Default Elegant (12px)</option>
@@ -219,10 +249,9 @@
               </select>
             </div>
 
-            <!-- Shadow Intensity Dropdown -->
-            <div style="display: flex; flex-direction: column; gap: 6px;">
-              <label style="font-size: 11px; font-weight: 700; color: var(--tx2); font-family: 'Sora', sans-serif;" for="card-custom-shadow">Box Shadow Intensity:</label>
-              <select id="card-custom-shadow" class="form-select" onchange="SettingsPage.onCardCustomChange()" style="padding: 6px 12px; font-size: 12px;">
+            <div class="st-field">
+              <label class="st-label" for="card-custom-shadow">Box Shadow Intensity:</label>
+              <select id="card-custom-shadow" class="form-select st-select-sm" onchange="SettingsPage.onCardCustomChange()">
                 <option value="none">Flat (No Shadow)</option>
                 <option value="subtle">Subtle Glow</option>
                 <option value="medium" selected>Standard Elegant</option>
@@ -230,20 +259,18 @@
               </select>
             </div>
 
-            <!-- Card Padding Selector -->
-            <div style="display: flex; flex-direction: column; gap: 6px;">
-              <label style="font-size: 11px; font-weight: 700; color: var(--tx2); font-family: 'Sora', sans-serif;" for="card-custom-padding">Card Padding & Spacing:</label>
-              <select id="card-custom-padding" class="form-select" onchange="SettingsPage.onCardCustomChange()" style="padding: 6px 12px; font-size: 12px;">
+            <div class="st-field">
+              <label class="st-label" for="card-custom-padding">Card Padding & Spacing:</label>
+              <select id="card-custom-padding" class="form-select st-select-sm" onchange="SettingsPage.onCardCustomChange()">
                 <option value="0.75rem">Compact Spacing (0.75rem)</option>
                 <option value="1.5rem" selected>Default Comfortable (1.5rem)</option>
                 <option value="2.25rem">Spacious / Cinematic (2.25rem)</option>
               </select>
             </div>
 
-            <!-- Hover Effect Option -->
-            <div style="display: flex; flex-direction: column; gap: 6px;">
-              <label style="font-size: 11px; font-weight: 700; color: var(--tx2); font-family: 'Sora', sans-serif;" for="card-custom-hover">Hover Effects style:</label>
-              <select id="card-custom-hover" class="form-select" onchange="SettingsPage.onCardCustomChange()" style="padding: 6px 12px; font-size: 12px;">
+            <div class="st-field">
+              <label class="st-label" for="card-custom-hover">Hover Effects style:</label>
+              <select id="card-custom-hover" class="form-select st-select-sm" onchange="SettingsPage.onCardCustomChange()">
                 <option value="none">None (Static)</option>
                 <option value="scale">Subtle Scale Uplift</option>
                 <option value="glow">Accent Glow Highlight</option>
@@ -251,33 +278,32 @@
               </select>
             </div>
 
-            <!-- Transparency Opacity Slider -->
-            <div style="display: flex; flex-direction: column; gap: 6px;">
-              <div style="display: flex; justify-content: space-between; align-items: center;">
-                <label style="font-size: 11px; font-weight: 700; color: var(--tx2); font-family: 'Sora', sans-serif;" for="card-custom-opacity">Card Opacity (Transparency):</label>
-                <span id="card-custom-opacity-val" style="font-size: 11px; font-weight: 800; color: var(--accent);">100%</span>
+            <div class="st-field">
+              <div class="st-field-head">
+                <label class="st-label" for="card-custom-opacity">Card Opacity (Transparency):</label>
+                <span id="card-custom-opacity-val" class="st-value">100%</span>
               </div>
-              <input type="range" id="card-custom-opacity" min="0.2" max="1.0" step="0.05" value="1.0" oninput="SettingsPage.onCardCustomChange()" style="cursor: pointer; height: 6px; background: var(--border2); border-radius: 4px; border: none; outline: none; width: 100%;">
+              <input type="range" class="st-range" id="card-custom-opacity" min="0.2" max="1.0" step="0.05" value="1.0" oninput="SettingsPage.onCardCustomChange()">
             </div>
           </div>
 
           <!-- Live Preview Panel -->
-          <div style="display: flex; flex-direction: column; gap: 12px; height: 100%; justify-content: center; align-items: stretch;">
-            <span style="font-size: 11px; font-weight: 700; color: var(--tx3); text-transform: uppercase; letter-spacing: 0.05em; font-family: 'Sora', sans-serif;">Live Style Preview:</span>
-            
-            <!-- Real-time dynamic preview card -->
-            <div id="live-preview-card" class="settings-card" style="margin: 0; pointer-events: auto;">
-              <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
-                <span style="width: 32px; height: 32px; border-radius: 50%; background: var(--accent-bg); color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 14px;"><i class="fas fa-magic"></i></span>
+          <div class="st-preview-col">
+            <span class="st-overline">Live Style Preview:</span>
+
+            <!-- Real-time dynamic preview card (settings.js writes its card tokens) -->
+            <div id="live-preview-card" class="settings-card st-preview-card">
+              <div class="st-preview-head">
+                <span class="st-preview-icon"><i class="fas fa-magic" aria-hidden="true"></i></span>
                 <div>
-                  <h4 style="margin: 0; font-size: 13px; font-weight: 700;">Interactive Card</h4>
-                  <p style="margin: 0; font-size: 10px; opacity: 0.72;">Changes reflect instantly below</p>
+                  <h4 class="st-preview-title">Interactive Card</h4>
+                  <p class="st-preview-sub">Changes reflect instantly below</p>
                 </div>
               </div>
-              <p style="font-size: 11px; line-height: 1.6; margin-top: 10px;">Hover over this card to preview dynamic animations, border curves, transparency level and shadow scales globally.</p>
-              <div style="display: flex; gap: 8px; margin-top: 12px;">
-                <span style="font-size: 8px; font-weight: 800; text-transform: uppercase; padding: 3px 8px; border-radius: 12px; background: rgba(0,229,176,0.08); color: var(--accent);">Preview Pill</span>
-                <span style="font-size: 8px; font-weight: 800; text-transform: uppercase; padding: 3px 8px; border-radius: 12px; background: rgba(255,255,255,0.04); color: var(--tx2);">Dynamic</span>
+              <p class="st-preview-body">Hover over this card to preview dynamic animations, border curves, transparency level and shadow scales globally.</p>
+              <div class="st-pill-row">
+                <span class="st-pill st-pill-accent">Preview Pill</span>
+                <span class="st-pill">Dynamic</span>
               </div>
             </div>
           </div>
@@ -285,27 +311,21 @@
         </div>
 
         <!-- Theme Save Action Bar -->
-        <div id="theme-save-bar" style="display: flex; align-items: center; justify-content: space-between; margin-top: 24px; padding: 14px 18px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border); border-radius: 14px; gap: 14px; flex-wrap: wrap;">
-          <div style="display: flex; align-items: center; gap: 10px;">
-            <span id="theme-unsaved-dot" style="display: none; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent-glow); flex-shrink: 0; animation: pulse-dot 1.4s ease infinite;"></span>
-            <span id="theme-save-status" style="font-size: 12px; color: var(--tx2); font-family: 'Sora', sans-serif;">Theme changes save automatically and apply globally across all pages.</span>
+        <div id="theme-save-bar" class="st-subpanel st-save-bar">
+          <div class="st-field-inline">
+            {#- display toggled by settings.js (markThemeUnsaved/markThemeSaved) #}
+            <span id="theme-unsaved-dot" class="st-unsaved-dot" style="display: none;"></span>
+            <span id="theme-save-status" class="st-save-status" role="status">Theme changes save automatically and apply globally across all pages.</span>
           </div>
-          <div style="display: flex; gap: 10px; flex-shrink: 0;">
-            <button class="btn btn-secondary" onclick="SettingsPage.restoreThemeDefaults()" style="font-size: 12px; padding: 8px 16px;">
-              <i class="fas fa-undo"></i> Reset Theme
+          <div class="st-save-actions">
+            <button class="btn btn-secondary btn-sm" onclick="SettingsPage.restoreThemeDefaults()">
+              <i class="fas fa-undo" aria-hidden="true"></i> Reset Theme
             </button>
-            <button class="btn btn-primary" id="btn-save-theme" onclick="SettingsPage.saveThemeChanges()" style="font-size: 12px; padding: 8px 20px; display: flex; align-items: center; gap: 8px;">
-              <i class="fas fa-save"></i> Save Theme Changes
+            <button class="btn btn-primary btn-sm" id="btn-save-theme" onclick="SettingsPage.saveThemeChanges()">
+              <i class="fas fa-save" aria-hidden="true"></i> Save Theme Changes
             </button>
           </div>
         </div>
-
-        <style>
-          @keyframes pulse-dot {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.4; transform: scale(0.8); }
-          }
-        </style>
       </section>
 
       <!-- Panel: Workspace Settings ─────────────────────────────────────────
@@ -391,7 +411,7 @@
       <section class="settings-panel" id="panel-security">
         <div class="panel-header">
           <h2 id="txt-security-title">Security &amp; Sessions</h2>
-          <p>Update credentials, enable double authentication, and view active workspaces.</p>
+          <p>Update your password and manage this browser session.</p>
         </div>
 
         <!-- Password Change Card -->
@@ -404,7 +424,7 @@
             </div>
             <div class="form-group">
               <label class="form-label" for="security-new-pw">New Password</label>
-              <input class="form-input" type="password" id="security-new-pw" placeholder="Min. 6 characters">
+              <input class="form-input" type="password" id="security-new-pw" placeholder="Min. 8 characters">
             </div>
             <div class="form-group">
               <label class="form-label" for="security-confirm-pw">Confirm New Password</label>
@@ -420,60 +440,14 @@
           </button>
         </div>
 
-        <!-- Two-Factor Authentication (2FA) -->
         <div class="settings-card">
-          <div class="twofa-header-row">
-            <div>
-              <h3 class="card-title"><i class="fas fa-shield-alt"></i> Two-Factor Authentication (2FA)</h3>
-              <p class="card-desc">Add an extra layer of protection to your account with a secondary dynamic mobile code.</p>
-            </div>
-            <span class="badge badge-inactive" id="twofa-status-badge">Inactive</span>
-          </div>
-
-          <div class="toggle-control-row">
-            <div class="toggle-text">
-              <h4>Secure with Authenticator</h4>
-              <p>Use applications like Google Authenticator or 1Password</p>
-            </div>
-            <label class="switch">
-              <input type="checkbox" id="twofa-switch" onchange="SettingsPage.toggleTwoFactor(this.checked)">
-              <span class="slider"></span>
-            </label>
-          </div>
-
-          <!-- Simulated 2FA Modal / Setup Grid -->
-          <div class="twofa-setup-box" id="twofa-setup-box" style="display:none">
-            <div class="twofa-setup-grid">
-              <div class="twofa-qr-wrap">
-                <!-- Gorgeous mock QR code in CSS -->
-                <div class="mock-qr-code">
-                  <div class="qr-block top-left"></div>
-                  <div class="qr-block top-right"></div>
-                  <div class="qr-block bottom-left"></div>
-                  <div class="qr-center-pixels"></div>
-                </div>
-                <span class="qr-label">AM-SEC-8F92-9K11</span>
-              </div>
-              <div class="twofa-setup-instructions">
-                <p>1. Scan the QR code with your mobile authenticator app.</p>
-                <p>2. Enter the 6-digit confirmation code below to verify initialization.</p>
-                <div class="code-verify-row">
-                  <input class="form-input code-input" id="twofa-code-input" placeholder="000 000" maxlength="6">
-                  <button class="btn btn-primary" onclick="SettingsPage.verifyTwoFactor()">Verify &amp; Enable</button>
-                </div>
-                <div class="form-error" id="twofa-verify-error"></div>
-              </div>
-            </div>
-          </div>
+          <h3 class="card-title">Two-factor authentication</h3>
+          <p class="card-desc">Authenticator-based two-factor authentication is not available in this installation. Signing in currently requires your email and password. No local preference can enable a second-factor check.</p>
         </div>
-
-        <!-- Active Sessions Management -->
         <div class="settings-card">
-          <h3 class="card-title"><i class="fas fa-server"></i> Active Sessions</h3>
-          <p class="card-desc">Review and revoke active login tokens for security.</p>
-          <div class="sessions-list" id="sessions-list">
-            <!-- Sessions loaded/revoked by JS -->
-          </div>
+          <h3 class="card-title">This browser</h3>
+          <p class="card-desc">Sign out when you finish using a shared device. Remote session listing and revocation are not available.</p>
+          <div class="sessions-list" id="sessions-list"></div>
         </div>
       </section>
 
@@ -481,7 +455,7 @@
       <section class="settings-panel" id="panel-notifications">
         <div class="panel-header">
           <h2 id="txt-notifications-title">Notification Settings</h2>
-          <p>Control exactly when and how you receive alerts from AnnoMaster.</p>
+          <p>Preferences are saved on this browser. Automatic email and push delivery is not available in this installation.</p>
         </div>
 
         <div class="settings-card">
@@ -539,7 +513,7 @@
         <div class="settings-card">
           <h3 class="card-title"><i class="fas fa-language"></i> Display Language</h3>
           <p class="card-desc">Select the primary localization language for AnnoMaster's dashboard, sidebar actions, and workspace parameters.</p>
-          <div class="form-group" style="max-width:320px; margin-top:1.25rem;">
+          <div class="form-group st-narrow st-mt">
             <select class="form-select" id="language-select" onchange="SettingsPage.onLanguageChange(this.value)">
               <option value="en">English (US)</option>
               <option value="es">Español (ES)</option>
@@ -600,7 +574,7 @@
         <div class="settings-card">
           <h3 class="card-title"><i class="fas fa-undo"></i> Restore System Defaults</h3>
           <p class="card-desc">Wipe all localized colors, layout sizes, density preferences, and notification presets to return to factory default.</p>
-          <button class="btn btn-secondary" style="margin-top:1.25rem" onclick="SettingsPage.restoreSystemDefaults()">
+          <button class="btn btn-secondary st-mt" onclick="SettingsPage.restoreSystemDefaults()">
             <i class="fas fa-history"></i> Reset Settings to Base
           </button>
         </div>
@@ -609,7 +583,7 @@
         <div class="settings-card danger-zone-box">
           <h3 class="card-title"><i class="fas fa-exclamation-triangle"></i> Permanent Account Destruction</h3>
           <p class="card-desc">Permanently delete your profile credentials, completely owned workspaces, projects, and target annotation coordinates. This action is irreversible.</p>
-          <button class="btn btn-danger-solid" style="margin-top:1.25rem" onclick="SettingsPage.deleteAccount()">
+          <button class="btn btn-danger-solid st-mt" onclick="SettingsPage.deleteAccount()">
             <i class="fas fa-trash-alt"></i> Destroy Account &amp; Workspaces
           </button>
         </div>
@@ -620,14 +594,13 @@
   </div>
 </div>
 
-<div class="toast-container" id="toast-stack"></div>
 
 <!-- ══ SCRIPTS ══════════════════════════════════════════════════════ -->
-<script src="/static/js/core/api.js"></script>
-<script src="/static/js/core/state.js"></script>
-<script src="/static/js/core/utils.js"></script>
-<script src="/static/js/features/auth.js"></script>
-<script src="/static/js/features/settings.js"></script>
+<script src="{{ asset('js/core/api.js') }}"></script>
+<script src="{{ asset('js/core/state.js') }}"></script>
+<script src="{{ asset('js/core/utils.js') }}"></script>
+<script src="{{ asset('js/features/auth.js') }}"></script>
+<script src="{{ asset('js/features/settings.js') }}"></script>
 <script>
   document.addEventListener('DOMContentLoaded', async () => {
     const user = await AuthFeature.requireAuth();

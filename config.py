@@ -15,8 +15,8 @@ class Config:
     JWT_SECRET = os.environ.get('JWT_SECRET', SECRET_KEY)
     JWT_EXPIRY_HOURS = int(os.environ.get('JWT_EXPIRY_HOURS', 24))
 
-    # Password reset (app/core/password_reset.py). With no MAIL_SERVER the
-    # reset link is written to the server log instead of emailed.
+    # Password reset requires MAIL_SERVER and a sender address. The API returns
+    # 503 when missing instead of promising an email that cannot be sent.
     RESET_TOKEN_MINUTES = int(os.environ.get('RESET_TOKEN_MINUTES', 30))
     # Public URL used to build reset links, e.g. http://192.168.1.67:5000.
     # Set it in production: otherwise the request's Host header is used.

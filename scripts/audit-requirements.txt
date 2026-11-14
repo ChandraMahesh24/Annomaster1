@@ -1,0 +1,3 @@
+# Isolated browser audit tools; install into .audit-tools, not production.
+playwright==1.65.1
+imageio-ffmpeg==0.8.1

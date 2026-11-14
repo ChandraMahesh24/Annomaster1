@@ -31,6 +31,19 @@ All keyboard shortcuts are listed in **[Keyboard shortcuts](keyboard-shortcuts.m
 - **Repeat mode** (<kbd>R</kbd>) skips the popup and reuses the last class.
 - Change a selected box's class with <kbd>C</kbd>.
 - Rename classes, choose **class colours** and sync classes across the project.
+- **Rename** (Classes page → click the name): only the name changes. Label files store the class
+  *ID*, never the name, so existing annotations stay assigned.
+- The Classes page list can be **sorted** (click a column header) and **filtered**
+  (All / In use / Unused); every row's ⋮ menu has Rename, Change colour, Change ID and Delete.
+  New classes get a colour that differs from the existing ones. Press <kbd>/</kbd> to search.
+- **Change ID** (Classes page → ⋮ → *Change ID…*): give a class another number, e.g. move
+  `tree` from 2 to 0. If another class already has that ID, choose **Swap** (tree 0, jcb 2) or
+  **Move and shift the others** (tree 0, jcb 1, road 2). The popup previews exactly which classes
+  and how many label lines change. Every label `.txt`, AI-suggestion file and AI example is
+  rewritten; a backup zip of the originals is saved first in `<project>/_backups/class_ids/`
+  (unzip it over the project folder to undo). Already-created **Versions keep their old
+  numbering**: create a new version afterwards for training. The change is refused while
+  another user has an image open in the project; close the project in your other tabs too.
 - The side panel shows live **per-class object counts**.
 
 ## Editing and speed features

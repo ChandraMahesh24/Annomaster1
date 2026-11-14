@@ -74,8 +74,11 @@ def delete_workspace(workspace_id):
     ws = Workspace.query.get_or_404(workspace_id)
     import shutil
     wd = workspace_dir(ws.folder_name)
+    from app.utils.data_cleanup import clear_tracking, close_workspace_indexes
+    close_workspace_indexes(ws.folder_name)
     if wd.exists():
         shutil.rmtree(wd)
+    clear_tracking(workspace_id)
     db.session.delete(ws)
     db.session.commit()
     return jsonify({'success': True})

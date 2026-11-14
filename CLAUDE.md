@@ -2,6 +2,55 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+Before making changes, read `PROJECT_AUDIT_AND_PROGRESS.md` completely. It is the
+permanent audit memory: continue its next unfinished task, preserve completed
+work, and update it after every meaningful change. Never treat source inventory
+or HTTP rendering as browser interaction verification.
+For Annotate work, also read `docs/annotate-control-checklist.md`. Test both themes,
+popup-visible states, navigation away/return, save failures and responsive layouts;
+never mark pending control cases passed from a screenshot or source inspection.
+User approved the compact Assign Class picker on 13 November 2026. Preserve its
+220px responsive width, scrollable list, annotation-aware placement, draggable
+header, theme support, and keyboard/Confirm/Cancel behavior. Read the approval
+checkpoint in PROJECT_AUDIT_AND_PROGRESS.md before changing that interaction.
+Shared project navigation follows the selected theme across all six sections.
+Do not restore page-specific dark rails. Badge text uses --on-fill against the
+accent background; navigation labels need readable contrast in both themes.
+
+**Design system (mandatory for every UI change, user request 13 Nov 2026):** read
+`DESIGN_SYSTEM.md`. Check `static/css/tokens.css` first and make colour, font,
+size, spacing, radius, shadow and component changes there or in
+`static/css/components.css`, so every page inherits them. Don't patch page by page.
+Every page loads its `<head>` through `templates/layout/head_assets.html`.
+`python scripts/check_design_tokens.py` (also run by the unit tests) must report
+0 violations. Verify visual changes with `ds-snapshots` + `compare_design_snapshots.py`
+and `ds-propagation` (DESIGN_SYSTEM.md §8). Keep the existing teal/green palette
+unless the user asks to change it; a purple re-brand was previously undone.
+Global knobs `--font-scale/--radius-scale/--space-scale/--shadow-strength/--motion-scale`
+reach every component (measured by `ds-geometry`). New button class → add it to
+`ROLES` in `scripts/apply_button_roles.py`. Honest status per requirement lives in
+`DESIGN_SYSTEM.md` §10 (buttons and list/card markup are still PARTIAL).
+"Add to Dataset" is ONE component (`.ui-split-card`, Upload `#uspModal` + Annotate
+`#atdPanel`, shared `rebalanceSplit()`); `ds-split-card` fails if the two differ.
+Classes (`#classes`) is full width with an insights panel; clicking a class name
+opens the Rename popup (`#clsRenameModal`). Renaming never changes the class ID.
+Versions (`#versions`): `static/css/versions.css`, list + detail, ⋮ menu, themed delete,
+stable version numbers from the name (`_verNum`), honest "recorded only" notes for
+resize/augment (still NOT applied), list↔detail on tablet/phone; browser phase
+`versions`. The Create Dataset Version wizard is the shared centred
+`.ui-wizard` dialog (components.css, `--wizard-*` tokens; step rail left, Esc
+closes); browser phase `wizard`. Reuse it for any new multi-step flow. The Dataset/Classes/Versions compact header is one rule in annotate-v2.css.
+Row actions are a ⋮ `KebabMenu` (Rename / Change colour / Change ID / Delete);
+list is sortable + filterable; counts show a skeleton until `/stats` answers.
+**Changing an ID** = ⋮ → Change ID… → `#clsReindexModal` → `POST /classes/reindex`
+(`app/core/class_reindex.py`): rewrites the first token of every label line, plus
+`.suggestions.json`, `prompt_examples.json`, `project.json` and `data.yaml`; never
+`Versions/`. Backup zip first (`paths.class_id_backups_dir`), atomic writes with
+rollback, refuses an ID still used by a deleted class's leftover labels, 409 while
+another user holds a live annotation lock. Tests: `tests/test_class_reindex.py`; `/stats` returns
+`class_counts[].id` (was missing, so all classes showed 0) and `labelled_images`
+(images with ≥1 box; `annotated_images` = images marked Done, a different number).
+
 > ## ⚠️ TWO codebases in this repo
 >
 > 1. **The original app** (repo root: `app/`, `static/`, `templates/`) — Flask +
@@ -36,9 +85,19 @@ schema is created by `db.create_all()` in the app factory, and column additions 
 the hand-written `migrate_db.py` (raw `sqlite3` ALTER TABLE). Don't assume `flask db upgrade`
 works.
 
-**There are no tests, no linter, and no JS build step.** CSS and JS are served as static files
-directly; there is nothing to compile. Verification is manual — run the app and exercise the
-flow. Useful smoke check without a browser:
+**Isolated review tests:** run `python -m unittest discover -s tests -v`.
+See `docs/testing-and-maintenance.md` and `docs/code-review-2026-11-13.md`;
+the four reviewed defects are fixed. The expanded suite has 46 passing checks
+(including 5 design-system contract checks in `tests/test_design_system.py`) and
+one symlink check skipped on Windows without symlink privileges. Run
+`python scripts/run_audit_tests.py` to also refresh the structured results.
+Pure live annotation-state checks: `node scripts/test_annotation_lifecycle.cjs`
+(9 checks; Node is available through the tool runtime here, not on shell PATH).
+There is no configured linter and no JS build step. CSS and JS are served as static files
+directly; there is nothing to compile. Real Chrome automation is available through
+`scripts/browser_audit.py`; see the permanent progress file and testing guide for
+phase coverage and unresolved gaps. Selected workflow passes do not mean all controls
+are verified. Useful smoke check without a browser:
 
 ```bash
 python -c "
@@ -136,8 +195,14 @@ is `static/js/main.js` (~7.8k lines), which contains its own copy of the same dr
 `canvas.js` is a stale reference copy kept from an earlier refactor. Editing it has no effect
 on the running app. Verify with `grep -rn 'engine/canvas.js' templates/` before touching it.
 
-There is **no Jinja base template**; each page is a standalone `<html>` document that
-`{% include 'layout/navbar.html' %}`. A change to `<head>` must be applied to each page.
+There is no Jinja base template; each page is a standalone `<html>` document, but every
+page's `<head>` assets come from ONE partial, **`templates/layout/head_assets.html`**
+(fonts, Font Awesome, tokens → base → components → `page_css` → modes, `theme.js`,
+`core/ui.js`). A page sets `{% set page_css = [...] %}` (and optionally
+`{% set no_icons = true %}`) before `{% include 'layout/head_assets.html' %}`. Change
+shared `<head>` assets in the partial, not per page. The `asset('path')` Jinja global
+(`app/__init__.py::_register_asset_helper`) appends `?v=<mtime>`; don't hand-write `?v=`
+strings. Pages still `{% include 'layout/navbar.html' %}` for their chrome.
 
 `layout/navbar.html` carries more than the `<nav>`: the inline `AccountSettings`
 script (logout, the off-canvas sidebar drawer, the account-dropdown toggle) is defined
@@ -162,8 +227,9 @@ must match the server's 8-char check in `api/auth.py::register`. Notes:
   same key as Settings — so it changes the app-wide theme. A `MutationObserver` on
   `<html class>` repaints the scene. The Planet/Data-field choice is `am_login_scene`.
 - Login logic is unchanged: `POST /api/auth/login` → `am_token` in local + session storage →
-  redirect `/`. Google/GitHub/SSO are placeholders (no endpoints exist), and the
-  "Keep me signed in" checkbox is not sent — the API has no remember-me.
+  redirect `/`. Unsupported Google/GitHub/SSO buttons and the ignored 30-day
+  remember-me checkbox were removed during the audit. OAuth and configurable
+  remember-me remain unimplemented. `/help` explains self-hosted data/usage.
 - **Forgot password** = `templates/auth/forgot_password.html` (one page; `?token=` switches it
   to "choose a new password") + `/api/auth/forgot-password`, `/reset-password/check`,
   `/reset-password`; logic in **`app/core/password_reset.py`**. Tokens are *stateless*: an
@@ -174,7 +240,9 @@ must match the server's 8-char check in `api/auth.py::register`. Notes:
   no `MAIL_SERVER` set, the link is **logged** (`WARNING`, `app.core.password_reset`) rather than
   emailed. Set `APP_BASE_URL` in production, else links use the request `Host` header.
   A reset does not revoke existing JWTs (they carry no password stamp).
-- Stats, compliance badges and footer links are design copy, not real data.
+- Auth's fabricated metrics/certification badges and dead footer links were
+  replaced with factual feature labels and working help/health links. Auth
+  visual/responsive retesting remains pending browser access.
 
 **Draw mode draws; Select mode edits.** In `bbox` mode a drag anywhere starts a new box —
 including *inside* an existing one, so nested annotations work. Only the resize handles of the
@@ -600,14 +668,26 @@ links + GitHub heading anchors) passed with 76 links on 2026-11-12.
 The design-token layer is the single source of truth and the cascade order is a **contract**:
 
 ```
-tokens.css → base.css → layout.css → <page>.css → modes.css
+tokens.css → base.css → components.css → <page sheets, incl. layout.css> → modes.css
 ```
+(enforced by `templates/layout/head_assets.html`; full reference: `DESIGN_SYSTEM.md`)
 
-- **`tokens.css`** — every colour, type, space, radius, motion and z-index token. Dark and light
-  are both *derived* themes (`:root` = dark, `:root.light-mode` = light); neither is baked into
+- **`tokens.css`**: every colour, type, space, radius, motion and z-index token, plus
+  component knobs (`--btn-*`, `--input-*`, `--modal-*`, `--card-*`) and typography roles
+  (`--text-page-title`, `--text-body`, `--text-button`…). Dark and light are both
+  *derived* themes (`:root` = dark, `:root.light-mode` = light); neither is baked into
   a component sheet. Adding a theme = adding one block here.
-- **`base.css`** — reset, root typography, `:focus-visible` rings, scrollbars, and the shared
-  primitives (`.btn`, `.form-*`, `.card`, `.modal`, `.badge`).
+- **Typography:** fonts only via `var(--font-sans)` / `var(--font-mono)` (the Google
+  Fonts URL lives in the head partial). Sizes only via step tokens `--fs-8 … --fs-56`
+  (all multiplied by `--font-scale`) or role tokens. `scripts/tokenize_typography.py`
+  converts stray literals. Canvas labels read the family from `ThemeColors.get().font`.
+- **`base.css`**: reset, root typography, `:focus-visible` rings, scrollbars, layout helpers.
+- **`components.css`**: shared components (`.btn`, `.form-*`, `.card`, `.modal`, `.badge`,
+  `.kmenu`, and the `ui-` prefixed `.ui-table`, `.ui-tabs`, `.ui-toast`, `.ui-alert`,
+  `.ui-page-header`, `.ui-search`, `[data-tooltip]`, `.ui-spinner`). JS behaviour lives in
+  `static/js/core/ui.js`: use `UI.toast()` / `await UI.confirm()` / `UI.tabs()`, never
+  `alert()`/`confirm()` or a per-page toast (the annotator's `main.js` keeps its own
+  tested toast and dialogs for now).
 - **`modes.css`** — `.custom-mode` (user-picked colours from Settings) and `.compact-mode`
   component rules. Extracted from the deleted `theme.css`; **`custom-mode` is a real
   user-facing feature**, don't assume these rules are dead.
@@ -620,12 +700,53 @@ Rules for changes:
   declarations. That is what was removed; don't reintroduce it.
 - **Never write `var(--x, #somehex)` with a colour fallback.** The fallback silently pins the
   property to one theme when the variable is empty — a past source of light-mode breakage.
+- Deliberate literal exceptions are fenced `ds-allow-start: <reason>` … `ds-allow-end`
+  (or `ds-allow: <reason>` on one line) so `check_design_tokens.py` skips them. Pure-black
+  `rgba(0,0,0,a)` shadows are allowed. `--on-purple` is the text colour on a solid purple fill.
+- Theme preference keys: **global `am_theme_mode` (etc.) wins over the per-user
+  `…_<uid>` copy** in both `theme.js` and `settings.js`. Settings used to read the per-user
+  key first and flipped the whole app back to a stale theme on every visit.
 - `--on-fill` is the foreground for text on any *saturated* fill (accent, success, warning,
   danger). It is near-black on dark and white on light, because those fills invert brightness
   between themes. Never hardcode `#000`/`#fff` there. `--accent-ink` is an alias kept for
   compatibility.
+- **Readable text in every theme (14 Nov 2026).** Accent-coloured TEXT uses
+  `--accent-text` (fills keep `--accent`); split names use `--split-*-text`;
+  `--tx3` is ≥ 4.5:1, never "dim it more". `theme.js` recomputes `--tx2`, `--tx3`
+  and `--accent-text` from the user's Theme Settings (custom colours / accent),
+  so a custom theme can't produce unreadable text. Custom mode sets `light-mode`
+  on `<html>` ONLY (on `<body>` it redeclares the stock light palette). JS-built
+  markup uses tokens + `color-mix(...)`, never hex or `${hex}22` alpha suffixes.
+  `browser_audit.py ds-contrast` checks every visible text in light, dark,
+  custom-dark and custom-light (DESIGN_SYSTEM.md §2.4).
+- **Dark styles** (Classic / Midnight Blue / Navy / Carbon): one token block each
+  in `tokens.css` ("DARK STYLES"), applied by `theme.js` as
+  `<html data-dark-style>` from `am_dark_style`; Dark Mode only. Never style a
+  page per dark style — re-declare tokens in that block. Browser phase
+  `dark-styles`; `ds-contrast` covers 7 themes (light, dark, 2 custom, 3 styles).
+  Approved by the user 14 Nov 2026 (based on their CloudPeak / SasHub / Webflow
+  references). Classic stays the default.
+  - Selectors are `:root[data-dark-style="…"]:not(.light-mode):not(.custom-mode)`,
+    so Light and Custom ignore a saved style.
+  - The picker is `#dark-style-row` (`.dsty-*`) in `templates/pages/settings.html`.
+    It is visible only in Dark Mode. `SettingsPage.setDarkStyle(name)` stores
+    `am_dark_style` (+ `_<uid>`), drops any old accent pick so the style's own
+    accent shows, and switches to Dark Mode. A later accent pick still wins, and
+    `theme.js` recomputes `--accent-text` against the *live* surfaces
+    (`liveSurfaces()`). Reset Theme / Reset All return to Classic.
+  - `ThemeEngine` exposes `setDarkStyle`, `clearAccent` and `darkStyles`.
+  - **Adding a style** = one token block in tokens.css (measure `--tx2` ≥ 6:1,
+    `--tx3` / `--accent-text` ≥ 4.5:1 on all six surfaces, `--on-fill` ≥ 4.5:1 on
+    `--accent`) + its name in `theme.js` `DARK_STYLES` and settings.js
+    `DARK_STYLE_NAMES` + one `.dsty-opt` button and swatch (literal swatch colours
+    sit inside the `ds-allow` fence in settings.css) + `DARK_STYLE_BG/ACCENT` and
+    a `CONTRAST_THEMES` entry in `browser_audit.py`.
+  - Text on a purple fill uses `--on-purple`, never `--on-fill` / `--accent-ink`.
+    Some styles have a white `--on-fill`, which reads at only 3.1:1 on purple.
 - `--ink-a02…a30` is a contrast-overlay ramp (white on dark, near-black on light) for hairline
-  borders and hover fills. `--accent-a04…a40` is the same idea for accent washes.
+  borders and hover fills. `--accent-a04…a40` are accent washes, written as
+  `color-mix(in srgb, var(--accent) N%, transparent)` in both themes. That way they follow
+  a dark style or a user-picked accent; as literal teal rgba they stayed teal before.
 - Use only these breakpoints: **639px** (mobile), **1023px** (tablet), **1024px+** (laptop),
   **1440px+** (desktop), **1920px+** (ultra-wide). Values that vary by viewport belong in
   `tokens.css` so components stay breakpoint-free.

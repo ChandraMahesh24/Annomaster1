@@ -10,14 +10,20 @@ Additions over baseline:
 from datetime import datetime
 from flask import Blueprint, request, jsonify, g
 from app.utils.security import login_required, workspace_role_required
-from app.core.yolo import parse_yolo_label, write_yolo_label, is_valid_annotation_file
+from app.core.yolo import parse_yolo_label, write_yolo_label, is_valid_annotation_file, validate_boxes
 from app.core.suggestions import (
     read_suggestions, write_suggestions, delete_suggestions,
 )
-from app.core.paths import project_dir, label_path_for_image
+from app.core.paths import project_dir, project_label_path
 from app.models.workspace import Workspace
 
 annotations_bp = Blueprint('annotations', __name__)
+
+
+@annotations_bp.before_request
+def validate_annotation_json():
+    if request.method in ('POST', 'DELETE') and not isinstance(request.get_json(silent=True), dict):
+        return jsonify({'error': 'Request body must be a JSON object'}), 400
 
 
 def _wsf(wid):
@@ -36,7 +42,7 @@ def api_annotations(workspace_id, project):
     # ── GET: return current annotations ──────────────────────────────────────
     if request.method == 'GET':
         rel     = request.args.get('path', '')
-        lbl     = label_path_for_image(pd / rel, create_dir=False)
+        lbl     = project_label_path(pd, rel)
         _lbl_txt = lbl.read_text(encoding='utf-8', errors='ignore').strip() if lbl.exists() else None
         is_null  = _lbl_txt is not None and (_lbl_txt == '' or _lbl_txt == '__null__')
 
@@ -66,6 +72,13 @@ def api_annotations(workspace_id, project):
     data  = request.json or {}
     rel   = data.get('path', '')
     boxes = data.get('bboxes', [])
+    lbl = project_label_path(pd, rel)
+    rel = rel.replace('\\', '/')
+    try:
+        validate_boxes(boxes)
+        validate_boxes(data.get('suggestions') or [])
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
 
     # Soft-lock enforcement ─────────────────────────────────────────────────
     conflict = _check_lock_conflict(workspace_id, project, rel)
@@ -100,7 +113,6 @@ def api_annotations(workspace_id, project):
     )
 
     # Write label file (atomic) — confirmed only ────────────────────────────
-    lbl = label_path_for_image(pd / rel, create_dir=True)
     write_yolo_label(lbl, confirmed)
 
     if suggestions_sent:
@@ -143,8 +155,8 @@ def api_annotations(workspace_id, project):
         from app import db
         from app.models.image import Image as ImageModel
         img_row = ImageModel.query.filter_by(
-            workspace_id=workspace_id, project=project, rel_path=rel,
-        ).first()
+            workspace_id=workspace_id, project=project,
+        ).filter(db.func.replace(ImageModel.rel_path, '\\', '/') == rel).first()
         if img_row:
             img_row.is_annotated = is_annotated
             img_row.is_null      = False
@@ -168,7 +180,11 @@ def api_null(workspace_id, project):
     wsf  = _wsf(workspace_id)
     pd   = project_dir(wsf, project)
     rel  = data.get('path', '')
-    lbl  = label_path_for_image(pd / rel, create_dir=True)
+    lbl  = project_label_path(pd, rel)
+    rel = rel.replace('\\', '/')
+    conflict = _check_lock_conflict(workspace_id, project, rel)
+    if conflict:
+        return jsonify(conflict), 409
 
     if request.method == 'POST':
         lbl.parent.mkdir(parents=True, exist_ok=True)
@@ -203,8 +219,8 @@ def api_null(workspace_id, project):
             from app import db
             from app.models.image import Image as ImageModel
             img_row = ImageModel.query.filter_by(
-                workspace_id=workspace_id, project=project, rel_path=rel,
-            ).first()
+                workspace_id=workspace_id, project=project,
+            ).filter(db.func.replace(ImageModel.rel_path, '\\', '/') == rel).first()
             if img_row:
                 img_row.mark_annotated(g.current_user.id, is_null=True)
                 db.session.commit()
@@ -224,8 +240,8 @@ def api_null(workspace_id, project):
             from app import db
             from app.models.image import Image as ImageModel
             img_row = ImageModel.query.filter_by(
-                workspace_id=workspace_id, project=project, rel_path=rel,
-            ).first()
+                workspace_id=workspace_id, project=project,
+            ).filter(db.func.replace(ImageModel.rel_path, '\\', '/') == rel).first()
             if img_row:
                 img_row.is_annotated = False
                 img_row.is_null      = False

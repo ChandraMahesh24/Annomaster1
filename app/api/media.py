@@ -3,7 +3,7 @@ from flask import Blueprint, request, jsonify, send_file, abort, g
 from app.utils.security import login_required, workspace_role_required
 from app.core.media import get_or_make_thumbnail, ALLOWED_IMG, _ensure_index
 from app.core.yolo import is_valid_annotation_file, parse_yolo_label
-from app.core.paths import project_dir, label_path_for_image
+from app.core.paths import project_dir, label_path_for_image, resolve_project_path
 from app.core.storage import load_project_meta
 from app.models.workspace import Workspace
 
@@ -34,6 +34,12 @@ def api_media(workspace_id, project):
         total_pages = max(1, math.ceil(total / per_page))
         page        = min(page, total_pages)
 
+        from app.models.image import Image as ImageModel
+        split_map = {row.rel_path.replace('\\', '/'): row.split for row in ImageModel.query.filter_by(workspace_id=workspace_id, project=project).all() if row.split}
+        for item in result['media']:
+            value = split_map.get(item['path'].replace('\\', '/'))
+            if value:
+                item['split'] = 'valid' if value == 'val' else value
         return jsonify({
             'media':      result['media'],
             'annotated':  result['annotated'],
@@ -101,8 +107,8 @@ def api_media_count(workspace_id, project):
 def api_image(workspace_id, project):
     wsf  = _wsf(workspace_id)
     rel  = request.args.get('path', '')
-    full = project_dir(wsf, project) / rel
-    if not full.exists():
+    full = resolve_project_path(project_dir(wsf, project), rel)
+    if not full.is_file():
         abort(404)
     return send_file(full, mimetype='image/jpeg')
 
@@ -114,8 +120,8 @@ def api_thumbnail(workspace_id, project):
     wsf  = _wsf(workspace_id)
     rel  = request.args.get('path', '')
     pd   = project_dir(wsf, project)
-    full = pd / rel
-    if not full.exists():
+    full = resolve_project_path(pd, rel)
+    if not full.is_file():
         abort(404)
     cache_root = pd / '.thumbs'
     try:
@@ -147,14 +153,19 @@ def api_stats(workspace_id, project):
 
     # Class-level counts still require reading label files
     from app.core.media import collect_media
-    cls_counts = {c['id']: {'count': 0, 'images': 0,
+    # 'id' is required: the Classes page keys its counts by class id (it was
+    # missing, so every class showed 0 annotations / 0 images).
+    cls_counts = {c['id']: {'id': c['id'], 'count': 0, 'images': 0,
                              'name': c['name'], 'color': c['color']}
                   for c in classes}
     total_boxes = 0
+    labelled = 0      # images with >= 1 box (annotated_images = reviewed/"Done")
     for m in collect_media(wsf, project):
         lbl = label_path_for_image(pd / m['path'], create_dir=False)
         if lbl.exists():
             boxes   = parse_yolo_label(lbl)
+            if boxes:
+                labelled += 1
             img_ids = set()
             for b in boxes:
                 cid = b['class_id']
@@ -170,6 +181,7 @@ def api_stats(workspace_id, project):
         'total_images':     total,
         'annotated_images': annotated_,
         'total_boxes':      total_boxes,
+        'labelled_images':  labelled,
         'class_counts':     list(cls_counts.values()),
         'splits': {},
     })

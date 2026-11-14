@@ -52,8 +52,14 @@ Each version contains `images/` and `labels/` per split, a `data.yaml` and a `RE
 
 - Only **annotated and Null images** are included; images nobody has labelled yet are left out.
 - Only **human-confirmed** labels are included; see [Reviewing suggestions](ai-labelling.md#6-reviewing-suggestions).
+- The **Versions** page lists versions newest first. Each card shows its number (taken from the name,
+  e.g. `v2 …`), the *Latest* tag, image count and the train/valid/test split. Select one to see its
+  images, classes, split, the folder inside the project (with **Copy path**) and its size. **Download ZIP**
+  is on the detail; the ⋮ menu also has *Copy folder path* and *Delete version* (asks first; deletes only
+  that version's folder, never your project data). On tablets and phones the list and the detail are
+  separate screens with an *All versions* back button.
 
-> **Note:** the wizard also offers preprocessing (resize, auto-orient, normalize) and augmentation options. These are currently **recorded in the version's README only**; images are exported at their original size and unmodified.
+> **Note:** the wizard also offers preprocessing (resize, auto-orient, normalize) and augmentation options. These are currently **recorded in the version's README only**; images are exported at their original size and unmodified. The wizard and the version detail both say so ("Recorded only, not applied yet").
 
 ## How data is stored
 

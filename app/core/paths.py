@@ -23,8 +23,39 @@ Storage layout (NEVER change this):
     versions.json
     _uploads.json
 """
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from flask import current_app
+from werkzeug.exceptions import BadRequest
+
+
+def resolve_project_path(base: Path, relative: str) -> Path:
+    """Resolve an untrusted relative path, rejecting traversal and symlink escapes."""
+    if not isinstance(relative, str) or not relative or '\x00' in relative:
+        raise BadRequest('A nonempty relative path is required')
+    win = PureWindowsPath(relative)
+    if win.drive or win.root:
+        raise BadRequest('Absolute paths are not allowed')
+    parts = relative.replace('\\', '/').split('/')
+    if any(p in ('', '.', '..') or ':' in p or p.endswith((' ', '.')) for p in parts):
+        raise BadRequest('Invalid relative path')
+    root = base.resolve()
+    try:
+        candidate = root.joinpath(*parts).resolve()
+    except (OSError, ValueError, RuntimeError) as exc:
+        raise BadRequest('Invalid relative path') from exc
+    if not candidate.is_relative_to(root) or candidate == root:
+        raise BadRequest('Path must stay inside the project')
+    return candidate
+
+
+def project_label_path(base: Path, relative: str) -> Path:
+    """Validate both image and derived label paths, including label symlinks."""
+    image = resolve_project_path(base, relative)
+    label = label_path_for_image(image)
+    label = resolve_project_path(base, label.relative_to(base.resolve()).as_posix())
+    sidecar = label.with_suffix('.suggestions.json')
+    resolve_project_path(base, sidecar.relative_to(base.resolve()).as_posix())
+    return label
 
 
 # ── Workspace ──────────────────────────────────────────────────────────────────
@@ -44,7 +75,9 @@ def workspace_projects_dir(folder_name: str) -> Path:
 # ── Project ────────────────────────────────────────────────────────────────────
 
 def project_dir(ws_folder: str, project: str) -> Path:
-    return workspace_projects_dir(ws_folder) / project
+    if not isinstance(project, str) or '/' in project or '\\' in project:
+        raise BadRequest('Invalid project name')
+    return resolve_project_path(workspace_projects_dir(ws_folder), project)
 
 
 def active_work_dir(ws_folder: str, project: str) -> Path:
@@ -80,6 +113,15 @@ def prompt_examples_file(ws_folder: str, project: str) -> Path:
     project teaches its own classes. See core/box_examples.py.
     """
     return project_dir(ws_folder, project) / 'prompt_examples.json'
+
+
+def class_id_backups_dir(ws_folder: str, project: str) -> Path:
+    """
+    Zips written by core/class_reindex.py BEFORE it rewrites class IDs: every
+    label/sidecar/meta file it is about to change, at its project-relative path.
+    Unzip over the project folder to undo a Change-ID operation.
+    """
+    return project_dir(ws_folder, project) / '_backups' / 'class_ids'
 
 
 def tags_meta_file(ws_folder: str, project: str) -> Path:

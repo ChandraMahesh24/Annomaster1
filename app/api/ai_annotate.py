@@ -43,16 +43,8 @@ def _resolve_image(wsf, project, rel_path):
     over any image on the server's disk. Resolve, then require the result
     to stay inside the project and be an image file.
     """
-    base = project_dir(wsf, project).resolve()
-    rel = str(rel_path).replace('\\', '/')
-    if Path(rel).is_absolute() or Path(rel).drive or rel.startswith('/'):
-        return None, (jsonify({'error': 'path must be relative to the project'}), 400)
-    try:
-        p = (base / rel).resolve()
-    except (OSError, ValueError):
-        return None, (jsonify({'error': 'Invalid image path'}), 400)
-    if not p.is_relative_to(base):
-        return None, (jsonify({'error': 'path must stay inside the project'}), 400)
+    from app.core.paths import resolve_project_path
+    p = resolve_project_path(project_dir(wsf, project), rel_path)
     if p.suffix.lower() not in prompt_models.IMAGE_EXTS:
         return None, (jsonify({'error': f'Not an image file: {rel_path}'}), 400)
     if not p.is_file():

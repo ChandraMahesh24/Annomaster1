@@ -72,7 +72,27 @@ def create_app(config_class=None):
 
     _register_page_routes(app)
     _register_health(app)
+    _register_asset_helper(app)
     return app
+
+
+def _register_asset_helper(app):
+    """`asset('css/tokens.css')` → `/static/css/tokens.css?v=<mtime>`.
+
+    Used by templates/layout/head_assets.html so a stylesheet or script change
+    reaches browsers on the next normal reload, without hand-editing ?v= strings
+    in every template (stale cached CSS was a repeated audit finding).
+    """
+    import os
+
+    @app.template_global('asset')
+    def asset(path):
+        full = os.path.join(app.static_folder, path)
+        try:
+            version = int(os.path.getmtime(full))
+        except OSError:
+            version = 0
+        return f'/static/{path}?v={version}'
 
 
 def _register_health(app):
@@ -93,6 +113,10 @@ def _register_health(app):
     """
     from flask import jsonify
     from sqlalchemy import text
+
+    @app.route('/favicon.ico')
+    def favicon():
+        return app.send_static_file('favicon.svg')
 
     @app.route('/health')
     def health():
@@ -181,7 +205,14 @@ def _register_page_routes(app):
 
     @app.route('/pages/upload')
     def upload_page():
-        r = _require_auth(); return r if r else render_template('pages/upload.html')
+        r = _require_auth()
+        if r:
+            return r
+        # The legacy template loads the canvas engine without a canvas. Keep
+        # old links working by using the maintained project upload section.
+        from flask import request
+        from urllib.parse import urlencode
+        return redirect('/pages/annotate?' + urlencode(request.args) + '#upload')
 
     @app.route('/pages/annotate')
     def annotate_page():

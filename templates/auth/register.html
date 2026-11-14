@@ -4,14 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Create Account | AnnoMaster AI</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/tokens.css">
-  <link rel="stylesheet" href="/static/css/base.css">
-  <link rel="stylesheet" href="/static/css/modes.css">
-  <!-- Applies the saved theme before paint (no flash). -->
-  <script src="/static/js/theme.js"></script>
-  <!-- Same "Sign In 3D" design system as /login. -->
-  <link rel="stylesheet" href="/static/css/auth-3d.css">
+  {# Auth pages draw no Font Awesome icons. auth-3d.css is the page sheet;
+     the shared partial loads fonts, tokens, components, modes and theme.js. #}
+  {% set no_icons = true %}
+  {% set page_css = ['css/auth-3d.css'] %}
+  {% include 'layout/head_assets.html' %}
 </head>
 <body>
 
@@ -34,7 +31,7 @@
       <div class="l-tools">
         <div class="l-status">
           <div class="l-dot l-pulse"></div>
-          <span>All systems operational</span>
+          <span>Self-hosted annotation workspace</span>
         </div>
         <button type="button" class="l-chip-btn" id="mode-btn" title="Switch 3D object">Data field</button>
         <button type="button" class="l-chip-btn" id="theme-btn" title="Toggle theme">
@@ -48,9 +45,9 @@
 
       <section class="l-copy">
         <div class="l-eyebrow l-rise">Get started · Free</div>
-        <h1 class="l-h1 l-rise" style="animation-delay:.08s;">Label faster from<br><span>the very first frame.</span></h1>
-        <p class="l-lede l-rise" style="animation-delay:.16s;">Create your account, set up a workspace, and let Smart Detect suggest the first boxes — you stay in control of every label.</p>
-        <div class="l-steps l-rise" style="animation-delay:.24s;">
+        <h1 class="l-h1 l-rise" style="animation-delay:calc(80ms * var(--motion-scale));">Label faster from<br><span>the very first frame.</span></h1>
+        <p class="l-lede l-rise" style="animation-delay:calc(160ms * var(--motion-scale));">Create your account, set up a workspace, and let Smart Detect suggest the first boxes — you stay in control of every label.</p>
+        <div class="l-steps l-rise" style="animation-delay:calc(240ms * var(--motion-scale));">
           <div class="l-step">
             <div class="l-step-num">1</div>
             <div><div class="l-step-title">Create your account</div><div class="l-step-sub">Free forever, no credit card</div></div>
@@ -64,41 +61,35 @@
             <div><div class="l-step-title">Start annotating</div><div class="l-step-sub">Upload images, export YOLO datasets</div></div>
           </div>
         </div>
-        <div class="l-hint l-rise" style="animation-delay:.3s;">
+        <div class="l-hint l-rise" style="animation-delay:calc(300ms * var(--motion-scale));">
           <div class="l-dot l-pulse"></div>
           <span id="point-label">initializing field…</span>
         </div>
       </section>
 
       <section class="l-form-col">
-        <div class="l-card-wrap l-rise" style="animation-delay:.12s;">
+        <div class="l-card-wrap l-rise" style="animation-delay:calc(120ms * var(--motion-scale));">
           <div class="l-halo" aria-hidden="true"></div>
 
           <div class="l-card" data-nodrag>
             <h2>Create your account</h2>
             <p class="l-card-sub">Free forever · No credit card required</p>
 
-            <div class="l-sso">
-              <button type="button" onclick="socialLogin('google')">Google</button>
-              <button type="button" onclick="socialLogin('github')">GitHub</button>
-              <button type="button" onclick="socialLogin('sso')">SSO</button>
-            </div>
 
-            <div class="l-or"><i></i><span>or email</span><i></i></div>
 
             <form id="register-form" class="l-fields" novalidate>
               <div>
                 <label class="l-label" for="username">Username</label>
-                <input class="l-input" type="text" id="username" placeholder="johndoe" autocomplete="username" autofocus>
+                <input class="l-input" type="text" id="username" required minlength="2" maxlength="100" placeholder="johndoe" autocomplete="username" autofocus>
               </div>
               <div>
                 <label class="l-label" for="email">Email address</label>
-                <input class="l-input" type="email" id="email" placeholder="you@company.com" autocomplete="email">
+                <input class="l-input" type="email" id="email" required maxlength="255" placeholder="you@company.com" autocomplete="email">
               </div>
               <div>
                 <label class="l-label" for="password">Password</label>
                 <div class="l-input-wrap">
-                  <input class="l-input has-toggle" type="password" id="password" placeholder="Min. 8 characters" autocomplete="new-password" oninput="checkStrength(this.value)">
+                  <input class="l-input has-toggle" type="password" id="password" required placeholder="Min. 8 characters" autocomplete="new-password" oninput="checkStrength(this.value)">
                   <button type="button" class="l-pw-toggle" id="pw-toggle" aria-label="Show password" onclick="togglePw()">Show</button>
                 </div>
                 <div class="l-pw-meter" id="pw-meter" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
@@ -106,9 +97,9 @@
               </div>
               <div>
                 <label class="l-label" for="confirm">Confirm password</label>
-                <input class="l-input" type="password" id="confirm" placeholder="Repeat password" autocomplete="new-password">
+                <input class="l-input" type="password" id="confirm" required placeholder="Repeat password" autocomplete="new-password">
               </div>
-              <p class="l-terms">By signing up you agree to our <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a>.</p>
+              <p class="l-terms">Learn about <a href="/help#data">data storage</a> and <a href="/help#usage">using this installation</a>.</p>
               <div class="l-error" id="err" role="alert"></div>
               <button type="submit" class="l-submit" id="submit-btn">
                 <span class="l-spinner"></span>
@@ -120,9 +111,9 @@
           </div>
 
           <div class="l-compliance">
-            <div>SOC 2 Type II</div>
-            <div>GDPR</div>
-            <div>ISO 27001</div>
+            <div>Self-hosted</div>
+            <div>YOLO exports</div>
+            <div>Human review</div>
           </div>
         </div>
       </section>
@@ -131,9 +122,9 @@
     <footer class="l-footer">
       <span>© 2026 AnnoMaster AI</span>
       <nav>
-        <a href="#">Privacy</a>
-        <a href="#">Terms</a>
-        <a href="#">Status</a>
+        <a href="/help#data">Data information</a>
+        <a href="/help#usage">Usage</a>
+        <a href="/health">Server health</a>
       </nav>
     </footer>
   </div>
@@ -152,9 +143,6 @@
     btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
   }
 
-  function socialLogin(p) {
-    document.getElementById('err').textContent = p.charAt(0).toUpperCase() + p.slice(1) + ' sign-up coming soon! Use email for now.';
-  }
 
   /* ── Password strength ── */
   function checkStrength(val) {
@@ -184,6 +172,8 @@
     const err = document.getElementById('err');
     err.textContent = '';
     if (!username || !email || !password) { err.textContent = 'Please fill in all required fields.'; return; }
+    if (email.length > 255 || !/^\S+@\S+\.\S+$/.test(email)) { err.textContent = 'Please enter a valid email address.'; return; }
+    if (username.length > 100) { err.textContent = 'Username must be at most 100 characters.'; return; }
     if (username.length < 2) { err.textContent = 'Username must be at least 2 characters.'; return; }
     if (password.length < MIN_PW) { err.textContent = 'Password must be at least ' + MIN_PW + ' characters.'; return; }
     if (password !== confirm) { err.textContent = 'Passwords do not match.'; return; }
@@ -209,6 +199,6 @@
   document.getElementById('register-form').addEventListener('submit', e => { e.preventDefault(); doRegister(); });
 </script>
 
-<script type="module" src="/static/js/features/auth-scene.js"></script>
+<script type="module" src="{{ asset('js/features/auth-scene.js') }}"></script>
 </body>
 </html>

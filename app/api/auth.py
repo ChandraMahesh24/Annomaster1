@@ -3,8 +3,32 @@ from app import db, limiter
 from app.models.user import User
 from app.utils.security import generate_token, login_required
 from app.utils.id_gen import generate_unique_id
+import re
 
 auth_bp = Blueprint('auth', __name__)
+
+
+@auth_bp.before_request
+def validate_auth_json():
+    """Reject malformed bodies and field types before auth handlers use them."""
+    if request.method not in ('POST', 'DELETE') or request.endpoint == 'auth.logout':
+        return
+    if request.endpoint == 'auth.delete_account' and not request.data:
+        return
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Request body must be a JSON object'}), 400
+    fields = ('email', 'username', 'password', 'current_password', 'new_password',
+              'token', 'bio', 'avatar_url')
+    if any(k in data and data[k] is not None and not isinstance(data[k], str) for k in fields):
+        return jsonify({'error': 'Authentication fields must be strings'}), 400
+    if request.endpoint in ('auth.register', 'auth.update_profile', 'auth.forgot_password'):
+        email = (data.get('email') or '').strip()
+        if email and (len(email) > 255 or not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', email)):
+            return jsonify({'error': 'Enter a valid email address (max 255 characters)'}), 400
+        username = (data.get('username') or '').strip()
+        if username and not 2 <= len(username) <= 100:
+            return jsonify({'error': 'Username must be between 2 and 100 characters'}), 400
 
 
 # ── Page routes ────────────────────────────────────────────────────────────────
@@ -23,6 +47,11 @@ def register_page():
 def forgot_password_page():
     # One template, two states: ?token=… shows "choose a new password".
     return render_template('auth/forgot_password.html', token=request.args.get('token', ''))
+
+
+@auth_bp.route('/help', methods=['GET'])
+def help_page():
+    return render_template('pages/help.html')
 
 
 # ── Register ───────────────────────────────────────────────────────────────────
@@ -209,6 +238,16 @@ def forgot_password():
     if not email:
         return jsonify({'error': 'Email is required'}), 400
 
+    # Check service configuration before looking up an account. The same error
+    # for every address avoids exposing membership or falsely claiming delivery.
+    if not current_app.config.get('MAIL_SERVER') or not (
+        current_app.config.get('MAIL_FROM') or current_app.config.get('MAIL_USERNAME')
+    ):
+        return jsonify({
+            'error': 'Password reset email is unavailable. The administrator must configure the email service. Please contact your administrator.',
+            'code': 'mail_not_configured',
+        }), 503
+
     user = User.query.filter_by(email=email).first()
     if user and user.is_active:
         base = (current_app.config.get('APP_BASE_URL') or request.host_url).rstrip('/')
@@ -276,9 +315,12 @@ def delete_account():
                 workspace_id=ws.id, role='owner').filter(
                 WorkspaceMember.user_id != user.id).count()
             if other_owners == 0:
+                from app.utils.data_cleanup import clear_tracking, close_workspace_indexes
+                close_workspace_indexes(ws.folder_name)
                 ws_path = Path(current_app.config['WORKSPACE_ROOT']) / ws.folder_name
                 if ws_path.exists():
                     shutil.rmtree(ws_path)
+                clear_tracking(ws.id)
                 db.session.delete(ws)
 
     _audit('auth.account_delete', user_id=user.id)

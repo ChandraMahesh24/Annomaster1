@@ -418,7 +418,8 @@ const ProjectsFeature = (() => {
   async function submitMerge() {
     const target = document.getElementById('proj-merge-target').value;
     if (!target) { setError('proj-merge-error', 'Pick a target project'); return; }
-    if (!confirm(`Merge "${_opTarget}" into "${target}"?\n"${_opTarget}" will be deleted. This cannot be undone.`)) return;
+    if (!await UI.confirm({ title: 'Merge projects?', danger: true, confirmText: 'Merge',
+      message: `Merge "${_opTarget}" into "${target}"?\n"${_opTarget}" will be deleted. This cannot be undone.` })) return;
     setError('proj-merge-error', 'Merging…');
     const res = await API.post(
       `/api/workspaces/${_wsId}/projects/${encodeURIComponent(_opTarget)}/merge`,
@@ -493,7 +494,8 @@ const ProjectsFeature = (() => {
   // ── Delete project ────────────────────────────────────────────────────────
 
   async function deleteProject(name, wsId) {
-    if (!confirm(`Delete project "${name}"?\nAll images, annotations and datasets will be lost.`)) return;
+    if (!await UI.confirm({ title: 'Delete project?', danger: true, confirmText: 'Delete project',
+      message: `Delete project "${name}"?\nAll images, annotations and datasets will be lost.` })) return;
     const res = await API.del(`/api/workspaces/${wsId}/projects/${encodeURIComponent(name)}`,
                               { workspace_id: wsId });
     if (res && res.ok) {
@@ -504,14 +506,9 @@ const ProjectsFeature = (() => {
     }
   }
 
-  // ── Mini toast (independent of main.js) ──────────────────────────────────
-
+  // Shared toast — static/js/core/ui.js + components.css (.ui-toast).
   function _showToast(msg, type) {
-    const t = document.createElement('div');
-    t.className = `dash-toast dash-toast-${type}`;
-    t.textContent = msg;
-    document.body.appendChild(t);
-    setTimeout(() => t.remove(), 3000);
+    UI.toast(msg, type);
   }
 
   return {

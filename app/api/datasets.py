@@ -29,6 +29,35 @@ from app.models.workspace import Workspace
 datasets_bp = Blueprint('datasets', __name__)
 
 
+@datasets_bp.route('/api/workspaces/<int:workspace_id>/projects/<project>/split', methods=['POST'])
+@login_required
+@workspace_role_required('owner', 'editor')
+def api_split_images(workspace_id, project):
+    """Assign split metadata to reviewed DB images without moving source files."""
+    import random
+    from app.models.image import Image as ImageModel
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify(error='Expected a JSON object'), 400
+    try:
+        ratios = [float(data.get(k, default)) for k, default in [('train', .7), ('val', .15), ('test', .15)]]
+        if any(not math.isfinite(r) or not 0 <= r <= 1 for r in ratios) or abs(sum(ratios) - 1) > .000001:
+            raise ValueError()
+    except (ValueError, TypeError):
+        return jsonify(error='Split ratios must be finite values between 0 and 1 totaling 1'), 400
+    rows = ImageModel.query.filter_by(workspace_id=workspace_id, project=project, is_annotated=True).order_by(ImageModel.id).all()
+    if not rows:
+        return jsonify(error='No reviewed indexed images to split. Annotate or mark images as background first. Legacy folder datasets are not changed by this action.'), 400
+    if data.get('shuffle', True):
+        random.shuffle(rows)
+    train = int(len(rows) * ratios[0])
+    valid = int(len(rows) * ratios[1])
+    for index, row in enumerate(rows):
+        row.split = 'train' if index < train else 'valid' if index < train + valid else 'test'
+    db.session.commit()
+    return jsonify(success=True, train=train, val=valid, test=len(rows)-train-valid)
+
+
 def _wsf(wid): return Workspace.query.get_or_404(int(wid)).folder_name
 
 
@@ -171,14 +200,16 @@ def api_datasets_images(workspace_id, project):
     if q:
         all_items = [i for i in all_items if q in i['name'].lower()]
     if split_f != 'all':
-        all_items = [i for i in all_items if i['split'] == split_f]
+        all_items = [i for i in all_items if ('val' if i['split'] == 'valid' else i['split']) == split_f]
     if anno_f == 'yes':
         all_items = [i for i in all_items if i['annotated']]
     elif anno_f == 'no':
         all_items = [i for i in all_items if not i['annotated'] and not i['is_null']]
     elif anno_f == 'null':
         all_items = [i for i in all_items if i['is_null']]
-    if class_f:
+    if class_f == '__null__':
+        all_items = [i for i in all_items if i['is_null']]
+    elif class_f:
         try:
             cid = int(class_f)
             all_items = [i for i in all_items if cid in i['class_ids']]
@@ -210,6 +241,13 @@ def api_delete_dataset_images(workspace_id, project):
     data    = request.json or {}
     paths   = data.get('paths', [])
     pd      = project_dir(wsf, project)
+    from app.core.paths import resolve_project_path, project_label_path
+    if not isinstance(paths, list):
+        return jsonify({'error': 'paths must be a list'}), 400
+    # Validate the entire request before mutating any database or file.
+    for rel in paths:
+        resolve_project_path(pd, rel)
+        project_label_path(pd, rel)
     deleted = 0
 
     for rel in paths:
@@ -443,21 +481,41 @@ def api_export(workspace_id, project):
     classes = meta.get('classes', [])
     pd      = project_dir(wsf, project)
     buf     = io.BytesIO()
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Request body must be a JSON object'}), 400
+    dataset_id = data.get('dataset_id')
+    if dataset_id is not None and (not isinstance(dataset_id, str) or not dataset_id):
+        return jsonify({'error': 'Invalid dataset_id'}), 400
 
     with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+        # IDs are persisted in labels and can have holes after class deletion.
+        # Preserve their positions instead of silently changing class meanings.
+        names = [''] * (max((c['id'] for c in classes), default=-1) + 1)
+        for cls in classes:
+            names[cls['id']] = cls['name']
         zf.writestr('data.yaml', yaml.dump(
-            {'names': [c['name'] for c in classes], 'nc': len(classes)}))
+            {'names': names, 'nc': len(names), 'train': 'train/images',
+             'val': 'valid/images', 'test': 'test/images'}))
 
         # DB-based images (files in Active_Work)
         try:
             from app.models.image import Image as ImageModel
-            rows = ImageModel.query.filter_by(
+            query = ImageModel.query.filter_by(
                 workspace_id=workspace_id, project=project, status='in_dataset',
-            ).all()
+            )
+            if dataset_id:
+                if dataset_id == 'db':
+                    query = query.filter(ImageModel.batch_id.is_(None))
+                elif _is_db_dataset(dataset_id):
+                    query = query.filter_by(batch_id=_batch_id_from(dataset_id))
+                else:
+                    query = query.filter(db.false())
+            rows = query.all()
             for row in rows:
                 img_path = pd / row.rel_path
                 lbl_path = img_path.parent.parent / 'labels' / (img_path.stem + '.txt')
-                split    = row.split or 'train'
+                split    = 'valid' if row.split == 'val' else (row.split or 'train')
                 if img_path.exists():
                     zf.write(img_path, f'{split}/images/{img_path.name}')
                 if lbl_path.exists():
@@ -477,13 +535,25 @@ def api_export(workspace_id, project):
             for ds_dir in cd.iterdir():
                 if not ds_dir.is_dir():
                     continue
+                if dataset_id and ds_dir.name != dataset_id:
+                    continue
                 for split in ('train', 'valid', 'test'):
-                    for sub, arc in [('images', f'{split}/images'),
-                                     ('labels', f'{split}/labels')]:
-                        subdir = ds_dir / split / sub
-                        if subdir.exists():
-                            for f in subdir.iterdir():
-                                zf.write(f, f'{arc}/{f.name}')
+                    images = ds_dir / split / 'images'
+                    if not images.exists():
+                        continue
+                    for image in images.iterdir():
+                        if not image.is_file() or image.suffix.lower() not in ALLOWED_IMG:
+                            continue
+                        zf.write(image, f'{split}/images/{image.name}')
+                        # Never glob labels: that leaks suggestions, temp files
+                        # and other non-ground-truth sidecars into training ZIPs.
+                        label = ds_dir / split / 'labels' / (image.stem + '.txt')
+                        if label.is_file():
+                            content = label.read_text(encoding='utf-8', errors='ignore').strip()
+                            if not content or content == '__null__':
+                                zf.writestr(f'{split}/labels/{image.stem}.txt', '')
+                            elif is_valid_annotation_file(label):
+                                zf.write(label, f'{split}/labels/{image.stem}.txt')
 
     buf.seek(0)
     return send_file(buf, mimetype='application/zip',

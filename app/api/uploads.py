@@ -84,7 +84,7 @@ def _register_images(wsf, project, workspace_id, uploader_id, batch, dest_paths)
 
     for dest in dest_paths:
         try:
-            idx_res = db_index.add_image(pd, dest, batch['job_name'])
+            idx_res = db_index.add_image(pd, dest, batch['job_name'], keep_duplicate=True)
         except Exception as e:
             log.warning('media-index register failed for %s: %s', dest.name, e)
             continue
@@ -241,7 +241,7 @@ def api_upload(workspace_id, project):
     from app.core.paths import project_dir as _pd
     from app.core import db_index
     pd  = _pd(wsf, project)
-    result = db_index.add_image(pd, dest, batch['job_name'])
+    result = db_index.add_image(pd, dest, batch['job_name'], keep_duplicate=True)
     if result.get('duplicate'):
         # Keep the file in this new batch — do not delete.
         # The hashes table already has the MD5 so we skip re-registering,
@@ -332,7 +332,7 @@ def api_upload_folder(workspace_id, project):
         saved += 1
         # Register in SQLite index (best-effort)
         idx_result = None
-        try: idx_result = _dbi.add_image(_pd, dest, batch['job_name'])
+        try: idx_result = _dbi.add_image(_pd, dest, batch['job_name'], keep_duplicate=True)
         except Exception: pass
         lbl_stem   = Path(img_f.filename).stem
         has_label  = False
@@ -476,7 +476,7 @@ def api_batch_media(workspace_id, project, uid):
     pd      = project_dir(wsf, project)
     img_dir = batch_img_dir(wsf, project, batch['job_name'])
     lbl_dir = batch_lbl_dir(wsf, project, batch['job_name'])
-    media, ann = [], []
+    media, ann, null_paths = [], [], []
     if not img_dir.exists():
         meta = load_project_meta(wsf, project)
         return jsonify({'media': [], 'annotated': [], 'null_paths': [],
@@ -490,10 +490,12 @@ def api_batch_media(workspace_id, project, uid):
                       'job': batch['job_name'], 'split': None})
         if is_valid_annotation_file(lbl):
             ann.append(rel)
+        elif lbl.is_file() and lbl.read_text(encoding='utf-8', errors='ignore').strip() in ('', '__null__'):
+            null_paths.append(rel)
 
     meta = load_project_meta(wsf, project)
     return jsonify({'media': media, 'annotated': ann,
-                    'null_paths': [], 'classes': meta.get('classes', [])})
+                    'null_paths': null_paths, 'classes': meta.get('classes', [])})
 
 
 @uploads_bp.route(
@@ -629,7 +631,7 @@ def api_import(workspace_id, project):
             from app import db
             from app.models.image import Image as ImageModel
             for dest in img_paths:
-                idx_res = _dbi.add_image(_pd, dest, batch['job_name'])
+                idx_res = _dbi.add_image(_pd, dest, batch['job_name'], keep_duplicate=True)
                 if not idx_res.get('duplicate'):
                     lbl_f = lbl_dir / (dest.stem + '.txt')
                     has_ann = lbl_f.exists() and bool(lbl_f.read_text(errors='ignore').strip())
@@ -677,7 +679,29 @@ def api_extract_frames(workspace_id, project):
 
     wsf  = _wsf(workspace_id)
     file = request.files.get('file')
-    fps  = min(int(request.form.get('fps', 5)), 30)
+    try:
+        fps = int(request.form.get('fps', 5))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'fps must be an integer between 1 and 30'}), 400
+    if not 1 <= fps <= 30:
+        return jsonify({'error': 'fps must be between 1 and 30'}), 400
+    output_format = request.form.get('format', 'jpg')
+    if output_format not in ('jpg', 'png'):
+        return jsonify({'error': 'format must be jpg or png'}), 400
+    size = request.form.get('size', 'original')
+    dimensions = {'original': None, '1080p': (1920,1080), '720p': (1280,720), '480p': (854,480)}
+    if size == 'custom':
+        try:
+            width, height = int(request.form.get('custom_w', 0)), int(request.form.get('custom_h', 0))
+        except (TypeError, ValueError):
+            return jsonify({'error': 'Custom dimensions must be integers'}), 400
+        if not (64 <= width <= 7680 and 64 <= height <= 4320):
+            return jsonify({'error': 'Custom dimensions are out of range'}), 400
+        output_size = (width, height)
+    elif size in dimensions:
+        output_size = dimensions[size]
+    else:
+        return jsonify({'error': 'Invalid output size'}), 400
 
     if not file:
         return jsonify({'error': 'No file'}), 400
@@ -723,11 +747,14 @@ def api_extract_frames(workspace_id, project):
         if ffmpeg_ok:
             # ffmpeg: extracts exactly fps frames per second
             # supports .dav, H.264, H.265, HEVC, all RTSP/DVR formats
-            out_pat = str(img_dir / f'{stem}_frame%06d.jpg')
+            out_pat = str(img_dir / f'{stem}_frame%06d.{output_format}')
+            filters = f'fps={fps}'
+            if output_size:
+                filters += f',scale={output_size[0]}:{output_size[1]}'
             cmd = [
                 'ffmpeg', '-y',
                 '-i', str(tmp_path),
-                '-vf', f'fps={fps}',
+                '-vf', filters,
                 '-vsync', 'vfr',
                 '-q:v', '2',        # JPEG quality (1=best, 31=worst)
                 '-threads', '0',    # use all CPU cores
@@ -735,7 +762,7 @@ def api_extract_frames(workspace_id, project):
             ]
             proc = subprocess.run(cmd, capture_output=True, timeout=600)
             saved = sum(1 for f in img_dir.iterdir()
-                        if f.suffix.lower() == '.jpg'
+                        if f.suffix.lower() == '.' + output_format
                         and f.stem.startswith(stem + '_frame'))
             if saved == 0 and proc.returncode != 0:
                 err = proc.stderr.decode(errors='ignore')
@@ -743,7 +770,7 @@ def api_extract_frames(workspace_id, project):
                 cmd2 = [c for c in cmd if c != 'vfr' and c != '-vsync']
                 proc2 = subprocess.run(cmd2, capture_output=True, timeout=600)
                 saved = sum(1 for f in img_dir.iterdir()
-                            if f.suffix.lower() == '.jpg'
+                            if f.suffix.lower() == '.' + output_format
                             and f.stem.startswith(stem + '_frame'))
                 if saved == 0:
                     return jsonify({'error': f'ffmpeg could not decode this video: {err[-200:]}'}), 400
@@ -763,8 +790,10 @@ def api_extract_frames(workspace_id, project):
                 ok, frame = cap.read()
                 if not ok: break
                 if frame_n % interval == 0:
-                    cv2.imwrite(str(img_dir / f'{stem}_frame{frame_n:06d}.jpg'), frame)
-                    saved += 1
+                    if output_size:
+                        frame = cv2.resize(frame, output_size)
+                    if cv2.imwrite(str(img_dir / f'{stem}_frame{frame_n:06d}.{output_format}'), frame):
+                        saved += 1
                 frame_n += 1
             cap.release()
 
@@ -775,7 +804,7 @@ def api_extract_frames(workspace_id, project):
         # drift the consistency checker now reports for ws7/mahes).
         frame_paths = sorted(
             f for f in img_dir.iterdir()
-            if f.suffix.lower() == '.jpg' and f.stem.startswith(stem + '_frame')
+            if f.suffix.lower() == '.' + output_format and f.stem.startswith(stem + '_frame')
         )
         _register_images(wsf, project, workspace_id, g.current_user.id,
                          batch, frame_paths)

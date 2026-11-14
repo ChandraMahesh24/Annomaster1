@@ -121,7 +121,35 @@ The first AI request after the server starts also loads the model (≈15–20 s 
 | `JWT_EXPIRY_HOURS` | `24` | How long a login lasts |
 | `APP_BASE_URL` | *(empty)* | Base of password-reset links, e.g. `https://annotate.example.com`. Empty = the address the browser used. Set it in production |
 | `RESET_TOKEN_MINUTES` | `30` | Password-reset link lifetime |
-| `MAIL_SERVER` … `MAIL_FROM` | *(empty)* | SMTP settings. Empty = reset links are written to the server log instead of emailed |
+| `MAIL_SERVER` … `MAIL_FROM` | *(empty)* | SMTP settings. Without a server and sender, reset requests return503 and show an email-service error; no delivery is claimed |
+
+### Gmail password-reset email
+
+Gmail is an SMTP provider, not an alternative to SMTP. For a small installation,
+configure the following in the repository-root `.env` (create it if absent;
+preserve any existing entries). Use the sender's Gmail address in both fields:
+
+```dotenv
+APP_BASE_URL=http://localhost:5000
+MAIL_SERVER=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USE_TLS=true
+MAIL_USERNAME=your-sender@gmail.com
+MAIL_PASSWORD=your-google-app-password
+MAIL_FROM=your-sender@gmail.com
+```
+
+Use the actual user-accessible application URL for APP_BASE_URL on a shared server.
+Enable Google 2-Step Verification and create an App Password if available for
+your account; use that password, not your normal Google password. Enter credentials
+locally, never in chat or Git. Restart the app after changing `.env`, request a reset
+for an existing active account, and check the inbox/spam folder and server SMTP logs.
+SMTP acceptance does not guarantee inbox placement. Missing configuration now shows
+an explicit service-unavailable error; authentication/delivery errors from the
+background sender are logged and require administrator investigation.
+
+Official setup: https://support.google.com/mail/answer/7104828?hl=en
+App Password help: https://support.google.com/accounts/answer/185833
 | `AI_DEVICE` | `auto` | `auto` · `cpu` · `cuda` · `cuda:1` |
 | `AI_HALF` | `auto` | `auto` = half precision on GPU · `0` = always full precision |
 | `AI_APPEARANCE` | `dinov2` | Class judge for box prompts: `dinov2` · `sam3` |

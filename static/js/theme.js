@@ -4,6 +4,76 @@
  */
 
 (function() {
+  /* ── Contrast helpers (WCAG 2) ─────────────────────────────────────────
+     Used so user choices in Theme Settings (custom colours, custom accent)
+     can never produce unreadable text: derived TEXT tokens are nudged until
+     they meet AA on the surfaces they sit on. Fills keep the exact colour. */
+  const _lin = v => { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+  const _L = c => 0.2126 * _lin(c[0]) + 0.7152 * _lin(c[1]) + 0.0722 * _lin(c[2]);
+  const _cr = (a, c) => { const x = _L(a), y = _L(c); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+  const _rgb = str => {
+    str = String(str || '').trim();
+    if (str[0] === '#') return [1, 3, 5].map(i => parseInt(str.slice(i, i + 2), 16));
+    const m = str.match(/(\d+(?:\.\d+)?)\D+(\d+(?:\.\d+)?)\D+(\d+(?:\.\d+)?)/);
+    return m ? [+m[1], +m[2], +m[3]] : null;
+  };
+  // Stock surfaces per base theme (tokens.css): bg, surface, panel, card2, card3
+  const BASE_SURFACES = {
+    dark:  [[7, 7, 13], [13, 13, 22], [17, 17, 25], [28, 28, 40], [36, 36, 50]],
+    light: [[247, 249, 251], [255, 255, 255], [242, 244, 246], [236, 238, 240], [230, 232, 234]],
+  };
+  let _customSurfaces = null;           // set by applyCustomTheme
+
+  /** The surfaces actually in effect (dark styles change them), read from
+      the token layer. tokens.css is loaded before this script runs. */
+  function liveSurfaces() {
+    try {
+      const cs = getComputedStyle(document.documentElement);
+      const list = ['--bg', '--surface', '--panel', '--card', '--card2', '--card3']
+        .map(n => _rgb(cs.getPropertyValue(n)));
+      return list.every(Boolean) ? list : null;
+    } catch (e) { return null; }
+  }
+
+  /* Dark styles (tokens.css "DARK STYLES"): variants of the dark theme.
+     'classic' = the stock dark palette (no attribute). */
+  const DARK_STYLES = ['classic', 'midnight', 'navy', 'carbon'];
+  function applyDarkStyle(name) {
+    const root = document.documentElement;
+    if (name && name !== 'classic' && DARK_STYLES.includes(name)) root.setAttribute('data-dark-style', name);
+    else root.removeAttribute('data-dark-style');
+    syncAccentText();
+  }
+
+  /** Drop a user-picked accent so the theme / dark style's own accent shows. */
+  function clearAccent() {
+    const root = document.documentElement;
+    ['--accent', '--accent-dim', '--accent-bg', '--accent-glow', '--accent-text']
+      .forEach(p => root.style.removeProperty(p));
+    syncAccentText();
+  }
+
+  /** --accent-text = the accent, moved toward black (light) / white (dark)
+      only as far as needed for ≥ 4.5:1 on every surface + its own tint.
+      Without a user accent or custom theme, tokens.css values apply. */
+  function syncAccentText() {
+    const root = document.documentElement;
+    const userAccent = root.style.getPropertyValue('--accent').trim();
+    const custom = root.classList.contains('custom-mode');
+    if (!userAccent && !custom) { root.style.removeProperty('--accent-text'); return; }
+    const light = root.classList.contains('light-mode');
+    const surfaces = (custom && _customSurfaces) || liveSurfaces() || BASE_SURFACES[light ? 'light' : 'dark'];
+    const acc = _rgb(userAccent) || (light ? [0, 108, 73] : [0, 229, 176]);
+    const tints = surfaces.map(s => s.map((v, i) => Math.round(acc[i] * 0.10 + v * 0.90)));   // --accent-bg over a surface
+    const all = surfaces.concat(tints), target = light ? 0 : 255;
+    let c = acc;
+    for (let w = 0; w <= 1.0001; w += 0.04) {
+      c = acc.map(v => Math.round(v + (target - v) * w));
+      if (all.every(sf => _cr(c, sf) >= 4.5)) break;
+    }
+    root.style.setProperty('--accent-text', `rgb(${c[0]}, ${c[1]}, ${c[2]})`);
+  }
+
   function applyAccent(hexCode) {
     if (!hexCode) return;
     const root = document.documentElement;
@@ -21,6 +91,7 @@
     root.style.setProperty('--accent-dim', `rgb(${rDim}, ${gDim}, ${bDim})`);
     root.style.setProperty('--accent-bg', `rgba(${r}, ${g}, ${b}, 0.08)`);
     root.style.setProperty('--accent-glow', `rgba(${r}, ${g}, ${b}, 0.22)`);
+    syncAccentText();
   }
 
   function applyCustomTheme(bgHex, txHex) {
@@ -39,6 +110,14 @@
     if (isNaN(tr) || isNaN(tg) || isNaN(tb)) return;
 
     let isDark = (r * 0.299 + g * 0.587 + b * 0.114) < 128;
+    // A custom theme inherits every token it doesn't set (accent, status
+    // colours, card2/3, overlay ramps, on-fill) from a BASE theme. That base
+    // must match the custom background: a light custom background on the dark
+    // base kept bright-teal accents, white hairlines and dark cards.
+    // On <html> only: tokens.css also declares the stock light palette on
+    // body.light-mode, which would shadow these custom values for the page.
+    document.documentElement.classList.toggle('light-mode', !isDark);
+    if (document.body) document.body.classList.remove('light-mode');
     let factor = isDark ? 1.08 : 0.95;
     let sr = Math.min(255, Math.max(0, Math.floor(r * factor)));
     let sg = Math.min(255, Math.max(0, Math.floor(g * factor)));
@@ -53,8 +132,28 @@
     root.style.setProperty('--card', `rgb(${sr}, ${sg}, ${sb})`);
     root.style.setProperty('--panel', `rgb(${pr}, ${pg}, ${pb})`);
     root.style.setProperty('--tx', txHex);
-    root.style.setProperty('--tx2', `rgba(${tr}, ${tg}, ${tb}, 0.72)`);
-    root.style.setProperty('--tx3', `rgba(${tr}, ${tg}, ${tb}, 0.45)`);
+    // Secondary/tertiary text: the user's text colour faded toward the
+    // background, but never below WCAG contrast on any custom surface
+    // (tx2 ≥ 6:1, tx3 ≥ 4.5:1, the same targets as tokens.css). Fixed alphas (0.72 / 0.45) failed for many
+    // colour choices, which made labels unreadable.
+    const lin = v => { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+    const L = c => 0.2126 * lin(c[0]) + 0.7152 * lin(c[1]) + 0.0722 * lin(c[2]);
+    const cr = (a, c) => { const x = L(a), y = L(c); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+    // + the base theme's card2/card3 (inherited) and the deepest hover/chip
+    // overlay on the custom background (ink ramp ≈ 10%), where text also sits
+    const deep = [r, g, b].map(v => Math.round(isDark ? v + (255 - v) * 0.10 : v * 0.90));
+    const surfaces = [[r, g, b], [sr, sg, sb], [pr, pg, pb], deep].concat(isDark
+      ? [[0x1c, 0x1c, 0x28], [0x24, 0x24, 0x32]] : [[0xec, 0xee, 0xf0], [0xe6, 0xe8, 0xea]]);
+    _customSurfaces = surfaces;
+    const mixTx = (w) => [tr, tg, tb].map((t, i) => Math.round(t * w + [r, g, b][i] * (1 - w)));
+    const readable = (w, need) => {
+      for (; w < 1; w += 0.02) if (surfaces.every(s => cr(mixTx(w), s) >= need)) break;
+      const c = mixTx(Math.min(1, w));
+      return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
+    };
+    root.style.setProperty('--tx2', readable(0.72, 6));
+    root.style.setProperty('--tx3', readable(0.45, 4.5));
+    syncAccentText();
     
     if (isDark) {
       root.style.setProperty('--border', `rgba(255, 255, 255, 0.08)`);
@@ -83,6 +182,8 @@
       '--sh-md', '--sh-lg'
     ];
     props.forEach(p => root.style.removeProperty(p));
+    _customSurfaces = null;
+    syncAccentText();          // a user accent now sits on stock surfaces
   }
 
   function applyCardCustomization(opts) {
@@ -142,6 +243,7 @@
   let layoutMode = localStorage.getItem('am_layout_mode');
   let customBg = localStorage.getItem('am_custom_bg');
   let customText = localStorage.getItem('am_custom_text');
+  let darkStyle = localStorage.getItem('am_dark_style');
 
   let cardBg = localStorage.getItem('am_card_bg');
   let cardTx = localStorage.getItem('am_card_tx');
@@ -171,6 +273,7 @@
       if (!customText && key.startsWith('am_custom_text_')) {
         customText = localStorage.getItem(key);
       }
+      if (!darkStyle && key.startsWith('am_dark_style_')) darkStyle = localStorage.getItem(key);
       if (!cardBg && key.startsWith('am_card_bg_')) cardBg = localStorage.getItem(key);
       if (!cardTx && key.startsWith('am_card_tx_')) cardTx = localStorage.getItem(key);
       if (!cardBorder && key.startsWith('am_card_border_')) cardBorder = localStorage.getItem(key);
@@ -198,6 +301,10 @@
     clearCustomTheme();
   }
 
+  // The attribute only takes effect in dark mode (tokens.css guards it with
+  // :not(.light-mode):not(.custom-mode)), so it can stay set across switches.
+  applyDarkStyle(darkStyle);
+
   if (layoutMode === 'compact') {
     document.documentElement.classList.add('compact-mode');
   } else {
@@ -223,7 +330,10 @@
 
   // Sync classes to body on DOMContentLoaded for body-specific CSS rules
   document.addEventListener('DOMContentLoaded', () => {
-    if (document.documentElement.classList.contains('light-mode')) {
+    // Not in custom mode: there <html>.light-mode only picks the BASE palette,
+    // and body.light-mode would redeclare stock light tokens over the custom ones.
+    if (document.documentElement.classList.contains('light-mode') &&
+        !document.documentElement.classList.contains('custom-mode')) {
       document.body.classList.add('light-mode');
     }
     if (document.documentElement.classList.contains('custom-mode')) {
@@ -241,7 +351,10 @@
     clearCustomTheme: clearCustomTheme,
     applyCardCustomization: applyCardCustomization,
     clearCardCustomization: clearCardCustomization,
-    
+    setDarkStyle: applyDarkStyle,
+    clearAccent: clearAccent,
+    darkStyles: DARK_STYLES.slice(),
+
     setThemeMode: function(mode) {
       if (mode === 'light') {
         document.documentElement.classList.add('light-mode');
@@ -267,6 +380,7 @@
         }
         clearCustomTheme();
       }
+      syncAccentText();      // surfaces changed → re-derive accent text
     },
 
     setLayoutMode: function(mode) {

@@ -4,18 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Dashboard – AnnoMaster</title>
-  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <!-- Cascade order is a contract: tokens → base → shell → page.
-       tokens.css must be first so every later sheet resolves
-       against a single, theme-aware source of truth. -->
-  <link rel="stylesheet" href="/static/css/tokens.css">
-  <link rel="stylesheet" href="/static/css/base.css">
-  <link rel="stylesheet" href="/static/css/layout.css">
-  <link rel="stylesheet" href="/static/css/workspace.css">
-  <link rel="stylesheet" href="/static/css/dashboard.css">
-  <link rel="stylesheet" href="/static/css/modes.css">
-  <script src="/static/js/theme.js"></script>
+  {% set page_css = ['css/layout.css', 'css/workspace.css', 'css/dashboard.css'] %}
+  {% include 'layout/head_assets.html' %}
 </head>
 <body>
 
@@ -361,7 +351,7 @@
         <label class="form-label">Project Name</label>
         <input class="form-input" id="project-name-input" placeholder="e.g. cars-detection"
                onkeydown="if(event.key==='Enter')ProjectsFeature.create()">
-        <p style="font-size:.74rem;color:var(--tx2);margin-top:.4rem">
+        <p style="font-size:var(--fs-12);color:var(--tx2);margin-top:calc(.4rem * var(--space-scale))">
           Lowercase letters, numbers and hyphens only.
         </p>
       </div>
@@ -472,12 +462,12 @@
 </div>
 
 <!-- ══ SCRIPTS ══════════════════════════════════════════════════════ -->
-<script src="/static/js/core/api.js"></script>
-<script src="/static/js/core/state.js"></script>
-<script src="/static/js/core/utils.js"></script>
-<script src="/static/js/features/auth.js"></script>
-<script src="/static/js/features/workspace.js"></script>
-<script src="/static/js/features/projects.js"></script>
+<script src="{{ asset('js/core/api.js') }}"></script>
+<script src="{{ asset('js/core/state.js') }}"></script>
+<script src="{{ asset('js/core/utils.js') }}"></script>
+<script src="{{ asset('js/features/auth.js') }}"></script>
+<script src="{{ asset('js/features/workspace.js') }}"></script>
+<script src="{{ asset('js/features/projects.js') }}"></script>
 <script>
   /**
    * DashboardChrome — the bits the shared navbar used to own, now that this

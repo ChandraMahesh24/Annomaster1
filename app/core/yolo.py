@@ -9,6 +9,32 @@ import uuid
 from pathlib import Path
 
 
+def validate_boxes(boxes):
+    """Reject invalid labels before any existing file is changed."""
+    if not isinstance(boxes, list):
+        raise ValueError('bboxes must be a list')
+    for b in boxes:
+        try:
+            cid = b['class_id']
+            if isinstance(cid, bool) or not isinstance(cid, (int, float)) or not math.isfinite(cid) or cid < 0 or int(cid) != cid:
+                raise ValueError('class_id must be a nonnegative integer')
+            if b.get('type', 'bbox') == 'polygon':
+                pts = b['points']
+                if not isinstance(pts, list) or len(pts) < 3:
+                    raise ValueError('Polygons require at least three points')
+                vals = [p[k] for p in pts for k in ('x', 'y')]
+            elif b.get('type', 'bbox') == 'bbox':
+                vals = [b[k] for k in ('x_center', 'y_center', 'width', 'height')]
+                if any(round(b[k], 6) <= 0 for k in ('width', 'height')):
+                    raise ValueError('Box dimensions must remain positive at YOLO precision')
+            else:
+                raise ValueError('Unknown annotation type')
+            if any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or not 0 <= v <= 1 for v in vals):
+                raise ValueError('Coordinates must be finite numbers between 0 and 1')
+        except (KeyError, TypeError, AttributeError, OverflowError) as exc:
+            raise ValueError('Invalid annotation shape or coordinates') from exc
+
+
 def is_valid_annotation_file(path: Path) -> bool:
     if not path.exists():
         return False
@@ -46,6 +72,9 @@ def parse_yolo_label(lbl_path: Path) -> list:
         if not parts:
             continue
         try:
+            class_value = float(parts[0])
+            if not math.isfinite(class_value) or class_value < 0 or not class_value.is_integer():
+                continue
             if len(parts) == 5:
                 cls_id = int(float(parts[0]))
                 xc, yc, w, h = map(float, parts[1:])
@@ -76,6 +105,7 @@ def write_yolo_label(lbl_path: Path, bboxes: list):
     so readers always see either the old complete file or the new complete file,
     never a partial write.
     """
+    validate_boxes(bboxes)
     lbl_path.parent.mkdir(parents=True, exist_ok=True)
     lines = []
     for b in bboxes:
@@ -86,7 +116,7 @@ def write_yolo_label(lbl_path: Path, bboxes: list):
                         for pair in b['points']
                         for x in (pair['x'], pair['y'])]
                 if all(math.isfinite(v) and 0.0 <= v <= 1.0 for v in vals):
-                    lines.append(f"{b['class_id']} {pts}\n")
+                    lines.append(f"{int(b['class_id'])} {pts}\n")
             else:
                 xc, yc, w, h = (b['x_center'], b['y_center'],
                                  b['width'], b['height'])
@@ -95,7 +125,7 @@ def write_yolo_label(lbl_path: Path, bboxes: list):
                         0.0 <= xc <= 1.0 and 0.0 <= yc <= 1.0 and
                         w > 0 and h > 0):
                     lines.append(
-                        f"{b['class_id']} {xc:.6f} {yc:.6f} {w:.6f} {h:.6f}\n"
+                        f"{int(b['class_id'])} {xc:.6f} {yc:.6f} {w:.6f} {h:.6f}\n"
                     )
         except (KeyError, ValueError, TypeError):
             continue

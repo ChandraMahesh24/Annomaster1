@@ -1,0 +1,736 @@
+/* ═══════════════════════════════════════════════════════════════
+   AnnoMaster — Shared UI Components
+   ───────────────────────────────────────────────────────────────
+   Every reusable component's look lives HERE, driven by the
+   component tokens in tokens.css (--btn-*, --input-*, --modal-*,
+   --text-* roles…). Pages use the classes; they do not restyle
+   them. Improve a component here and every page using it follows.
+
+   Load order (templates/layout/head_assets.html):
+     tokens.css → base.css → components.css → <page>.css → modes.css
+
+   Naming: the long-standing primitives keep their names
+   (.btn, .form-*, .card, .badge, .modal, .empty-state, .kmenu).
+   Components added by the design-system pass use a `ui-` prefix
+   (.ui-table, .ui-tabs, .ui-toast…) because names such as
+   .spinner, .toast and .card-title are already styled by page
+   sheets, and a global rule under those names would leak into them.
+   JS helpers for the dynamic ones: UI.* in static/js/core/ui.js.
+   Catalogue + examples: DESIGN_SYSTEM.md.
+═══════════════════════════════════════════════════════════════ */
+
+/* ── Form controls ─────────────────────────────────────────── */
+/* Native control chrome (date pickers, dropdown arrows, spinners)
+   follows color-scheme, which tokens.css sets per theme. */
+
+.form-group { margin-bottom: var(--sp-4); }
+.form-label {
+  display: block;
+  font-size: var(--text-label);
+  font-weight: var(--fw-label);
+  margin-bottom: var(--sp-1);
+  color: var(--tx2);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-wide);
+}
+.form-input, .form-select, .form-textarea {
+  width: 100%;
+  padding: var(--input-pad-y) var(--input-pad-x);
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: var(--input-radius);
+  color: var(--tx);
+  font-size: var(--text-input);
+  outline: none;
+  transition: border-color var(--dur-fast) var(--ease),
+              box-shadow var(--dur-fast) var(--ease);
+  /* 16px min on mobile — anything smaller makes iOS Safari
+     zoom the viewport on focus, which breaks the layout. */
+}
+@media (max-width: 639px) {
+  /* Literal on purpose: iOS zooms on focus below 16px, regardless of --font-scale. */
+  .form-input, .form-select, .form-textarea { font-size: 16px; } /* ds-allow: iOS no-zoom minimum */
+}
+.form-input:focus, .form-select:focus, .form-textarea:focus {
+  border-color: var(--accent);
+  box-shadow: var(--input-focus-ring);
+}
+.form-input::placeholder, .form-textarea::placeholder { color: var(--tx3); }
+.form-input:disabled, .form-select:disabled { opacity: .5; cursor: not-allowed; }
+.form-select { cursor: pointer; }
+.form-error   { color: var(--danger);  font-size: var(--fs-xs); min-height: 1.1rem; margin-top: var(--sp-1); }
+.form-success { color: var(--success); font-size: var(--fs-xs); margin-top: var(--sp-1); }
+
+/* ── Buttons ───────────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: var(--sp-1);
+  padding: var(--btn-pad-y) var(--btn-pad-x);
+  border-radius: var(--btn-radius);
+  font-size: var(--text-button);
+  font-weight: var(--fw-button);
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background-color var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease),
+              box-shadow var(--dur-fast) var(--ease),
+              transform var(--dur-fast) var(--ease);
+  /* 44px min touch target (WCAG 2.5.5) once on a coarse pointer */
+  min-height: var(--btn-min-h);
+  white-space: nowrap;
+}
+@media (pointer: coarse) { .btn { min-height: var(--btn-touch-min-h); } }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+
+/* `--accent-ink` rather than a hardcoded #000. In light mode the
+   accent is a dark green, so black-on-green was 1.9:1 contrast —
+   below the 4.5:1 AA floor. The token flips to white there. */
+.btn-primary {
+  background: var(--accent); color: var(--accent-ink);
+  font-weight: var(--fw-black);
+  box-shadow: var(--sh-accent);
+}
+.btn-primary:hover:not(:disabled) { background: var(--accent-dim); }
+
+.btn-secondary {
+  background: var(--panel); color: var(--tx); border-color: var(--border2);
+}
+.btn-secondary:hover:not(:disabled) { background: var(--card2); border-color: var(--border3); }
+
+.btn-ghost { background: transparent; color: var(--tx2); }
+.btn-ghost:hover:not(:disabled) { background: var(--glass-hover); color: var(--tx); }
+
+.btn-danger {
+  background: var(--danger-bg); color: var(--danger); border-color: var(--danger-br);
+}
+.btn-danger:hover:not(:disabled) { background: var(--danger); color: var(--accent-ink); }
+
+/* --on-fill, not #fff: the dark theme's danger fill is bright, so white text
+   on it was ~3.4:1; --on-fill flips per theme and clears 4.5:1. */
+.btn-danger-solid { background: var(--danger); color: var(--on-fill); }
+.btn-danger-solid:hover:not(:disabled) { filter: brightness(.9); }
+
+.btn-full { width: 100%; }
+.btn-sm   { padding: var(--sp-1) var(--sp-3); font-size: var(--text-button-sm); min-height: var(--btn-min-h-sm); }
+.btn-lg   { padding: var(--sp-3) var(--sp-6); font-size: var(--fs-md); }
+
+.btn-icon {
+  background: none; border: none; color: var(--tx2); cursor: pointer;
+  font-size: var(--fs-lg); padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--r-xs); line-height: 1;
+  transition: background-color var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
+}
+.btn-icon:hover { background: var(--panel); color: var(--accent-text); }
+@media (pointer: coarse) { .btn-icon { min-width: 44px; min-height: 44px; } }
+
+.btn-spinner { display: inline-block; animation: am-spin calc(650ms * var(--motion-scale)) linear infinite; }
+@keyframes am-spin { to { transform: rotate(360deg); } }
+
+/* ── Cards ─────────────────────────────────────────────────── */
+.card {
+  background: var(--card-bg);
+  color: var(--card-tx);
+  border: 1px solid var(--card-border);
+  border-radius: var(--card-radius);
+  padding: var(--card-padding);
+  box-shadow: var(--card-shadow);
+  opacity: var(--card-opacity);
+  transition: transform var(--dur-base) var(--ease),
+              box-shadow var(--dur-base) var(--ease),
+              border-color var(--dur-base) var(--ease);
+}
+.card:hover {
+  transform: var(--card-hover-transform);
+  box-shadow: var(--card-hover-shadow);
+  border-color: var(--card-hover-border);
+}
+
+/* ── Badges ────────────────────────────────────────────────── */
+.badge {
+  display: inline-block;
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--badge-radius);
+  font-size: var(--text-badge);
+  font-weight: var(--fw-black);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-wide);
+  line-height: 1.4;
+  border: 1px solid transparent;
+}
+.badge-owner  { background: var(--accent-bg);  color: var(--accent-text);  border-color: var(--accent-glow); }
+.badge-editor { background: var(--success-bg); color: var(--success); border-color: var(--success-br); }
+.badge-viewer { background: var(--glass);      color: var(--tx2);     border-color: var(--border); }
+.badge-danger { background: var(--danger-bg);  color: var(--danger);  border-color: var(--danger-br); }
+
+/* ── Wizard dialog (multi-step) ──────────────────────────────
+   Centred card: header · step rail | content · footer. Used by the
+   Create Dataset Version wizard; any multi-step flow should reuse it.
+   Markup: .ui-wizard-overlay > .ui-wizard-backdrop + .ui-wizard >
+   .ui-wizard-head, .ui-wizard-steps (> .ui-wizard-step[.active|.done]
+   with .ui-wizard-step-num / -text / -label / -hint, and
+   .ui-wizard-step-line[.done]), .ui-wizard-body, .ui-wizard-foot.
+   Geometry: --wizard-* tokens. */
+.ui-wizard-overlay {
+  position: fixed; inset: 0; z-index: var(--z-modal);
+  display: flex; align-items: center; justify-content: center;
+  padding: var(--sp-6);
+}
+.ui-wizard-backdrop {
+  position: absolute; inset: 0;
+  background: var(--overlay);
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  animation: uiWizFade calc(200ms * var(--motion-scale)) ease;
+}
+.ui-wizard {
+  position: relative; z-index: 1;
+  width: min(var(--wizard-w), 100%);
+  height: min(var(--wizard-h), 100%);
+  display: grid;
+  grid-template-columns: var(--wizard-rail-w) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas: "head head" "steps body" "steps foot";
+  background: var(--card);
+  border: 1px solid var(--border2);
+  border-radius: var(--modal-radius);
+  box-shadow: var(--sh-lg);
+  overflow: hidden;
+  animation: uiWizIn calc(220ms * var(--motion-scale)) cubic-bezier(.2, .8, .2, 1);
+}
+.ui-wizard.is-closing { animation: uiWizOut calc(160ms * var(--motion-scale)) ease forwards; }
+@keyframes uiWizIn  { from { opacity: 0; transform: translateY(12px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes uiWizOut { to   { opacity: 0; transform: translateY(8px) scale(.98); } }
+@keyframes uiWizFade { from { opacity: 0; } }
+
+.ui-wizard-head {
+  grid-area: head;
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
+  padding: var(--modal-head-pad-y) var(--modal-pad-x);
+  border-bottom: 1px solid var(--border);
+}
+.ui-wizard-head-main { display: flex; align-items: center; gap: var(--sp-3); min-width: 0; }
+.ui-wizard-icon {
+  width: 36px; height: 36px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--r-md);
+  background: var(--accent-bg); color: var(--accent-text);
+  font-size: var(--fs-15);
+}
+.ui-wizard-title { font-size: var(--text-modal-title); font-weight: var(--fw-modal-title); color: var(--tx); line-height: 1.25; }
+.ui-wizard-sub   { font-size: var(--text-secondary); color: var(--tx2); margin-top: var(--s-2); }
+.ui-wizard-close {
+  width: var(--modal-close-size); height: var(--modal-close-size); flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border: none; background: none; border-radius: var(--r-sm);
+  color: var(--tx2); cursor: pointer; font-size: var(--fs-14);
+  transition: background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.ui-wizard-close:hover { background: var(--ink-a06); color: var(--tx); }
+
+/* Step rail (desktop): vertical list, one row per step */
+.ui-wizard-steps {
+  grid-area: steps;
+  display: flex; flex-direction: column;
+  padding: var(--sp-5) var(--sp-3);
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+}
+.ui-wizard-step {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-md);
+  cursor: default;
+  transition: background-color var(--dur-fast) var(--ease);
+}
+.ui-wizard-step.done { cursor: pointer; }
+.ui-wizard-step.done:hover { background: var(--ink-a04); }
+.ui-wizard-step.active { background: var(--accent-bg); }
+.ui-wizard-step-num {
+  width: var(--wizard-step-dot); height: var(--wizard-step-dot); flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--r-full);
+  border: 1.5px solid var(--border2);
+  background: var(--card);
+  color: var(--tx2);
+  font-size: var(--fs-12); font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+  transition: background-color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.ui-wizard-step.active .ui-wizard-step-num { background: var(--accent); border-color: var(--accent); color: var(--on-fill); }
+.ui-wizard-step.done .ui-wizard-step-num   { background: var(--accent-bg); border-color: var(--accent-a30); color: var(--accent-text); font-size: 0; }
+.ui-wizard-step.done .ui-wizard-step-num::before { content: '\2713'; font-size: var(--fs-12); font-weight: var(--fw-bold); }
+.ui-wizard-step-text  { display: flex; flex-direction: column; min-width: 0; }
+.ui-wizard-step-label { font-size: var(--text-body); font-weight: var(--fw-semibold); color: var(--tx2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ui-wizard-step-hint  { font-size: var(--text-label); color: var(--tx3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ui-wizard-step.active .ui-wizard-step-label,
+.ui-wizard-step.done   .ui-wizard-step-label { color: var(--tx); }
+/* connector between step dots */
+.ui-wizard-step-line {
+  width: var(--wizard-line-w); height: var(--sp-3); flex-shrink: 0;
+  margin-left: calc(var(--sp-3) + (var(--wizard-step-dot) - var(--wizard-line-w)) / 2);
+  background: var(--border2); border-radius: var(--r-full);
+}
+.ui-wizard-step-line.done { background: var(--accent); }
+
+.ui-wizard-body { grid-area: body; overflow-y: auto; padding: var(--sp-6) var(--sp-6) var(--sp-5); }
+.ui-wizard-foot {
+  grid-area: foot;
+  display: flex; align-items: center; gap: var(--modal-gap);
+  padding: var(--modal-foot-pad-y) var(--sp-6);
+  border-top: 1px solid var(--border);
+  background: var(--card);
+}
+
+/* Tablet/phone: one column, steps become a compact strip under the header */
+@media (max-width: 1023px) {
+  .ui-wizard-overlay { padding: var(--sp-4); }
+  .ui-wizard {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    grid-template-areas: "head" "steps" "body" "foot";
+  }
+  .ui-wizard-steps {
+    flex-direction: row; align-items: center;
+    padding: var(--sp-3) var(--modal-pad-x);
+    border-right: none; border-bottom: 1px solid var(--border);
+    overflow-x: auto; overflow-y: hidden;
+  }
+  .ui-wizard-step { padding: var(--sp-1); gap: var(--sp-2); flex-shrink: 0; }
+  .ui-wizard-step.active { background: none; }
+  .ui-wizard-step-hint { display: none; }
+  .ui-wizard-step-label { font-size: var(--text-secondary); }
+  .ui-wizard-step-line { width: auto; height: var(--wizard-line-w); flex: 1 1 var(--sp-4); min-width: var(--sp-3); margin: 0 var(--sp-1); }
+  .ui-wizard-body { padding: var(--sp-5) var(--modal-pad-x); }
+  .ui-wizard-foot { padding: var(--modal-foot-pad-y) var(--modal-pad-x); }
+}
+@media (max-width: 639px) {
+  .ui-wizard-overlay { padding: 0; align-items: stretch; }
+  .ui-wizard { width: 100%; height: 100%; border-radius: 0; border: none; }
+  /* on a phone only the current step keeps its label */
+  .ui-wizard-step:not(.active) .ui-wizard-step-text { display: none; }
+}
+
+/* ── Modals ────────────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: var(--overlay);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: var(--z-modal);
+  padding: var(--sp-4);
+  /* Long modals must scroll rather than overflow the viewport */
+  overflow-y: auto;
+}
+.modal {
+  background: var(--card);
+  border: 1px solid var(--border2);
+  border-radius: var(--modal-radius);
+  width: var(--modal-w);
+  max-width: 100%;
+  max-height: calc(100dvh - var(--sp-8));
+  display: flex; flex-direction: column;
+  box-shadow: var(--sh-lg);
+}
+.modal-wide { width: var(--modal-w-wide); }
+.modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--modal-head-pad-y) var(--modal-pad-x);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.modal-header h3 { font-size: var(--text-modal-title); font-weight: var(--fw-modal-title); }
+.modal-close {
+  background: none; border: none; color: var(--tx2);
+  font-size: var(--fs-lg); cursor: pointer;
+  padding: var(--sp-1) var(--sp-2); border-radius: var(--r-xs);
+  transition: background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+  flex-shrink: 0;
+}
+.modal-close:hover { color: var(--tx); background: var(--panel); }
+.modal-body   { padding: var(--modal-body-pad-y) var(--modal-pad-x); overflow-y: auto; flex: 1; }
+.modal-footer {
+  padding: var(--modal-foot-pad-y) var(--modal-pad-x);
+  border-top: 1px solid var(--border);
+  display: flex; justify-content: flex-end; gap: var(--modal-gap);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+/* On mobile, dock the modal to the bottom and let buttons go
+   full-width — a centred 420px box with side-by-side actions is
+   unusable at 360px. */
+@media (max-width: 639px) {
+  .modal-overlay { padding: 0; align-items: flex-end; }
+  .modal {
+    width: 100%;
+    max-height: 92dvh;
+    border-radius: var(--modal-radius) var(--modal-radius) 0 0;
+  }
+  .modal-footer { flex-direction: column-reverse; }
+  .modal-footer .btn { width: 100%; }
+}
+
+/* ── Empty & loading states ────────────────────────────────── */
+.empty-state { text-align: center; padding: var(--sp-16) var(--sp-8); color: var(--tx2); }
+.empty-state.sub { padding: var(--sp-10) var(--sp-8); }
+.empty-icon { font-size: var(--fs-3xl); margin-bottom: var(--sp-4); opacity: .4; }
+.empty-state h2, .empty-state h3 { color: var(--tx); margin-bottom: var(--sp-2); }
+.empty-state p { margin-bottom: var(--sp-6); font-size: var(--fs-md); }
+.loading-state { text-align: center; padding: var(--sp-8); color: var(--tx2); }
+
+
+/* ═══════════════════════════════════════════════════════════════
+   KEBAB MENU (⋮) — shared card-actions primitive
+   ───────────────────────────────────────────────────────────────
+   Used by the dashboard project cards and by the upload page's
+   Active Work / Completed Datasets cards. Driven by KebabMenu in
+   core/utils.js, which both pages load.
+
+   Lives in base.css (not a page sheet) because it is a shared
+   primitive AND because the open menu is re-parented to <body>:
+   outside every page wrapper, so it can only rely on the global
+   token layer — never a page's private --up-* / --v2-* / --dsh-*
+   aliases, which would resolve to nothing there.
+
+   ⚠️ Why <body> and not the card: every card that uses this has a
+   `transform` on :hover, and a transformed element becomes the
+   containing block for `position:fixed` descendants — so a menu
+   left inside the card resolves viewport coordinates against the
+   card and flies off-screen. Several of them also set
+   `overflow:hidden`, which would clip it outright.
+═══════════════════════════════════════════════════════════════ */
+
+.kmenu-btn {
+  width: 26px; height: 26px; border-radius: var(--r-xs);
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--surface); border: 1px solid var(--border2);
+  color: var(--tx2); font: inherit; font-size: var(--fs-12);
+  cursor: pointer; flex-shrink: 0; padding: 0;
+  transition: color var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease),
+              background-color var(--dur-fast) var(--ease);
+}
+.kmenu-btn:hover,
+.kmenu-btn[aria-expanded="true"] { color: var(--accent-text); border-color: var(--accent); }
+
+.kmenu {
+  position: fixed; top: 0; left: 0;
+  min-width: 190px; padding: var(--s-5);
+  background: var(--menu-bg); border: 1px solid var(--border2);
+  border-radius: var(--menu-radius); box-shadow: var(--menu-shadow);
+  z-index: var(--z-toast);
+  display: flex; flex-direction: column; gap: var(--s-1);
+  cursor: default;
+  /* Never taller than the viewport — scroll rather than overflow it. */
+  max-height: calc(100dvh - 16px); overflow-y: auto;
+}
+
+.kmenu-item {
+  display: flex; align-items: center; gap: var(--s-9);
+  padding: var(--s-8) var(--s-10); border-radius: var(--r-xs);
+  background: none; border: none; font: inherit;
+  font-size: var(--fs-xs); font-weight: var(--fw-medium); color: var(--tx2);
+  cursor: pointer; text-align: left; width: 100%; white-space: nowrap;
+  transition: background-color var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
+}
+.kmenu-item i { width: 14px; text-align: center; font-size: var(--fs-11); flex-shrink: 0; }
+.kmenu-item:hover { background: var(--glass-hover); color: var(--tx); }
+.kmenu-item.danger { color: var(--danger); }
+.kmenu-item.danger:hover { background: var(--danger-bg); color: var(--danger); }
+.kmenu-item:disabled { opacity: .45; cursor: not-allowed; }
+.kmenu-item:disabled:hover { background: none; color: var(--tx2); }
+.kmenu-sep { height: 1px; background: var(--border); margin: var(--s-4) var(--s-2); flex-shrink: 0; }
+
+
+/* ═══════════════════════════════════════════════════════════════
+   COMPONENTS ADDED BY THE DESIGN-SYSTEM PASS (ui- prefix)
+═══════════════════════════════════════════════════════════════ */
+
+/* ── Page header: title, subtitle, breadcrumb, actions ───────
+   <header class="ui-page-header">
+     <div><nav class="ui-breadcrumb">…</nav>
+          <h1 class="ui-page-title">Members</h1>
+          <p class="ui-page-subtitle">Who can open this workspace</p></div>
+     <div class="ui-page-actions"><button class="btn btn-primary">…</button></div>
+   </header> */
+.ui-page-header {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: var(--sp-4); flex-wrap: wrap;
+  margin-bottom: var(--section-gap);
+}
+.ui-page-title {
+  font-size: var(--text-page-title); font-weight: var(--fw-page-title);
+  letter-spacing: var(--ls-tight); line-height: var(--lh-tight); color: var(--tx);
+}
+.ui-page-subtitle { font-size: var(--text-body); color: var(--tx2); margin-top: var(--sp-1); }
+.ui-page-actions  { display: flex; gap: var(--sp-2); flex-wrap: wrap; align-items: center; }
+.ui-section-title {
+  font-size: var(--text-section-title); font-weight: var(--fw-heading);
+  letter-spacing: var(--ls-snug); color: var(--tx); margin-bottom: var(--sp-3);
+}
+
+.ui-breadcrumb {
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-1);
+  font-size: var(--text-secondary); color: var(--tx2); margin-bottom: var(--sp-1);
+}
+.ui-breadcrumb a { color: var(--tx2); }
+.ui-breadcrumb a:hover { color: var(--accent-text); text-decoration: none; }
+.ui-breadcrumb > * + *::before { content: '/'; margin-right: var(--sp-1); color: var(--tx3); }
+.ui-breadcrumb [aria-current="page"] { color: var(--tx); font-weight: var(--fw-semibold); }
+
+/* ── Search field: input with a leading icon ────────────────
+   <label class="ui-search"><i class="fas fa-search" aria-hidden="true"></i>
+     <input class="form-input" type="search" placeholder="Search…"></label> */
+.ui-search { position: relative; display: flex; align-items: center; min-width: 0; }
+.ui-search > i, .ui-search > svg {
+  position: absolute; left: var(--input-pad-x); color: var(--tx3);
+  font-size: var(--text-secondary); pointer-events: none;
+}
+.ui-search > .form-input { padding-left: calc(var(--input-pad-x) * 2 + 1em); }
+
+/* ── Table ──────────────────────────────────────────────────
+   <div class="ui-table-wrap"><table class="ui-table">…</table></div>
+   The wrapper scrolls sideways so a wide table never widens the page. */
+.ui-table-wrap {
+  /* position:relative keeps absolutely-positioned children (e.g. .visually-hidden
+     header labels) inside the scroll box; without it they widened the page. */
+  position: relative; overflow-x: auto; max-width: 100%;
+  border: 1px solid var(--border); border-radius: var(--r-md); background: var(--card);
+}
+.ui-table { width: 100%; border-collapse: collapse; font-size: var(--text-table); color: var(--tx); }
+.ui-table th {
+  text-align: left; font-size: var(--text-table-head); font-weight: var(--fw-label);
+  text-transform: uppercase; letter-spacing: var(--ls-wide); color: var(--tx2);
+  background: var(--panel); padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--border);
+}
+.ui-table td { padding: var(--sp-2) var(--sp-3); height: var(--table-row-h); border-bottom: 1px solid var(--border); }
+.ui-table tbody tr:last-child td { border-bottom: none; }
+.ui-table tbody tr:hover td { background: var(--glass-hover); }
+
+/* ── Tabs ───────────────────────────────────────────────────
+   <div class="ui-tabs" role="tablist">
+     <button class="ui-tab" role="tab" aria-selected="true">Images</button>…</div>
+   UI.tabs(container, onChange) wires click, arrow keys and aria-selected. */
+.ui-tabs {
+  display: flex; gap: var(--sp-1); border-bottom: 1px solid var(--border);
+  overflow-x: auto; scrollbar-width: none;
+}
+.ui-tab {
+  min-height: var(--tab-h); padding: 0 var(--sp-3);
+  background: none; border: none; border-bottom: 2px solid transparent;
+  color: var(--tx2); font-size: var(--text-nav); font-weight: var(--fw-semibold);
+  cursor: pointer; white-space: nowrap; margin-bottom: calc(var(--s-1) * -1);
+  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+.ui-tab:hover { color: var(--tx); }
+.ui-tab[aria-selected="true"], .ui-tab.active { color: var(--accent-text); border-bottom-color: var(--accent); }
+
+/* ── Tooltip — one themed tooltip for the whole app ───────────
+   Every element with a `title` gets it automatically (UI in core/ui.js
+   shows it on hover / keyboard focus after 350ms; never on touch).
+   Write normal markup: <button title="Delete image">…</button> */
+.ui-tooltip {
+  position: fixed; left: 0; top: 0; z-index: var(--z-toast);
+  max-width: min(280px, calc(100vw - 8px));
+  padding: var(--sp-1) var(--sp-2); border-radius: var(--r-xs);
+  background: var(--tooltip-bg); color: var(--tooltip-tx);
+  font-family: var(--font-sans); font-size: var(--text-secondary);
+  font-weight: var(--fw-medium); line-height: var(--lh-snug);
+  box-shadow: var(--sh-md); pointer-events: none;
+  opacity: 0; transform: translateY(2px);
+  transition: opacity var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+.ui-tooltip.show { opacity: 1; transform: none; }
+
+/* ── Alerts / inline messages ───────────────────────────────
+   <div class="ui-alert ui-alert-warning" role="status"><i class="fas fa-…"></i><span>…</span></div> */
+.ui-alert {
+  display: flex; gap: var(--sp-2); align-items: flex-start;
+  padding: var(--sp-3) var(--sp-4); border-radius: var(--r-md);
+  border: 1px solid var(--border2); background: var(--panel);
+  font-size: var(--text-body); color: var(--tx); line-height: var(--lh-snug);
+}
+.ui-alert-info    { background: var(--info-bg);    border-color: var(--info-br);    }
+.ui-alert-success { background: var(--success-bg); border-color: var(--success-br); }
+.ui-alert-warning { background: var(--warning-bg); border-color: var(--warning-br); }
+.ui-alert-danger  { background: var(--danger-bg);  border-color: var(--danger-br);  }
+.ui-alert-info    > i { color: var(--info); }
+.ui-alert-success > i { color: var(--success); }
+.ui-alert-warning > i { color: var(--warning); }
+.ui-alert-danger  > i { color: var(--danger); }
+
+/* ── Confirm dialog body (UI.confirm): keep the message's line breaks ── */
+.ui-confirm-body { white-space: pre-line; color: var(--tx2); font-size: var(--text-body); }
+
+/* ── Error state (pairs with .empty-state) ──────────────────
+   <div class="empty-state ui-error-state">…<button class="btn btn-secondary">Retry</button></div> */
+.ui-error-state .empty-icon { color: var(--danger); opacity: .8; }
+
+/* ── Loading spinner ────────────────────────────────────────
+   <span class="ui-spinner" role="status" aria-label="Loading"></span> */
+.ui-spinner {
+  display: inline-block; width: 1.25em; height: 1.25em; flex-shrink: 0;
+  border: 2px solid var(--border2); border-top-color: var(--accent);
+  border-radius: var(--r-full); animation: am-spin calc(700ms * var(--motion-scale)) linear infinite;
+}
+.ui-spinner-lg { width: 2rem; height: 2rem; border-width: 3px; }
+
+/* ── Toasts — created by UI.toast() ─────────────────────────
+   One stack per page, appended to <body> on first use. */
+.ui-toast-stack {
+  position: fixed; right: var(--sp-4); bottom: var(--sp-4);
+  display: flex; flex-direction: column; gap: var(--sp-2); align-items: flex-end;
+  z-index: var(--z-toast); pointer-events: none;
+  max-width: calc(100vw - var(--sp-8));
+}
+.ui-toast {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4); border-radius: var(--r-md);
+  background: var(--surface); color: var(--tx);
+  border: 1px solid var(--border2); border-left: 3px solid var(--accent);
+  box-shadow: var(--sh-md); font-size: var(--text-body); font-weight: var(--fw-medium);
+  pointer-events: auto; max-width: 420px;
+  animation: ui-toast-in var(--dur-base) var(--ease-out);
+}
+.ui-toast > i { color: var(--accent-text); }
+.ui-toast-success { border-left-color: var(--success); } .ui-toast-success > i { color: var(--success); }
+.ui-toast-error   { border-left-color: var(--danger);  } .ui-toast-error   > i { color: var(--danger); }
+.ui-toast-warning { border-left-color: var(--warning); } .ui-toast-warning > i { color: var(--warning); }
+.ui-toast-info    { border-left-color: var(--info);    } .ui-toast-info    > i { color: var(--info); }
+.ui-toast.leaving {
+  opacity: 0; transform: translateY(6px);
+  transition: opacity var(--dur-base) var(--ease), transform var(--dur-base) var(--ease);
+}
+@keyframes ui-toast-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (max-width: 639px) {
+  .ui-toast-stack { left: var(--sp-4); right: var(--sp-4); align-items: stretch; }
+  .ui-toast { max-width: none; }
+}
+
+/* ── Add-to-Dataset split card ───────────────────────────────
+   ONE component for both entry points (Upload page dialog and the
+   Annotate page floating panel). Size, colours and type come from the
+   --split-card-* / --split-* tokens in tokens.css; only the CONTAINER
+   differs (.ui-split-overlay centres it; .atd-panel anchors it above the
+   Annotate pill). Markup: templates/pages/annotate.html (#uspModal, #atdPanel). */
+.ui-split-overlay {
+  position: fixed; inset: 0; z-index: var(--z-modal);
+  display: flex; align-items: center; justify-content: center;
+  padding: var(--sp-4);
+  background: var(--overlay);
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+}
+.ui-split-card {
+  /* Same gutter as .ui-split-overlay's padding, so both containers give the
+     card the same width on phones. */
+  width: var(--split-card-w); max-width: calc(100vw - 2 * var(--sp-4));
+  max-height: calc(100dvh - var(--sp-8)); overflow-y: auto;
+  display: flex; flex-direction: column;
+  background: var(--surface); color: var(--tx);
+  border: 1px solid var(--border2); border-radius: var(--modal-radius);
+  box-shadow: var(--sh-lg);
+  font-family: var(--font-sans);
+}
+.ui-split-head {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--split-card-pad);
+  border-bottom: 1px solid var(--border);
+}
+.ui-split-icon {
+  width: 32px; height: 32px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--r-sm); background: var(--accent-bg); color: var(--accent-text);
+  font-size: var(--fs-14);
+}
+.ui-split-titles { flex: 1; min-width: 0; }
+.ui-split-title { font-size: var(--text-modal-title); font-weight: var(--fw-modal-title); line-height: var(--lh-tight); }
+.ui-split-sub {
+  font-size: var(--text-secondary); color: var(--tx2); margin-top: var(--s-2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ui-split-close {
+  width: var(--modal-close-size); height: var(--modal-close-size); flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border); border-radius: var(--icon-btn-radius);
+  background: transparent; color: var(--tx2); cursor: pointer; font-size: var(--fs-12);
+  transition: background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.ui-split-close:hover { background: var(--danger-bg); color: var(--danger); }
+
+.ui-split-body { display: flex; flex-direction: column; gap: var(--split-card-gap); padding: var(--split-card-pad); }
+
+.ui-split-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-2); }
+.ui-split-stat {
+  padding: var(--sp-2) var(--sp-3); border-radius: var(--r-sm);
+  background: var(--panel); border: 1px solid var(--border);
+}
+.ui-split-stat-n {
+  display: block; font-family: var(--font-mono); font-size: var(--split-stat-size);
+  font-weight: var(--fw-bold); line-height: 1.2; color: var(--tx);
+}
+.ui-split-stat-l {
+  display: block; font-size: var(--text-label); font-weight: var(--fw-semibold);
+  color: var(--tx2); margin-top: var(--s-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ui-split-stat.is-good .ui-split-stat-n { color: var(--success); }
+.ui-split-stat.is-warn .ui-split-stat-n { color: var(--warning); }
+
+.ui-split-section-head {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2);
+  font-size: var(--text-label); font-weight: var(--fw-label); color: var(--tx2);
+  text-transform: uppercase; letter-spacing: var(--ls-wide);
+}
+.ui-split-error { color: var(--danger); text-transform: none; letter-spacing: 0; font-weight: var(--fw-semibold); }
+
+.ui-split-bar {
+  display: flex; height: var(--split-bar-h); border-radius: var(--r-sm); overflow: hidden;
+  background: var(--ink-a06);
+}
+.ui-split-bar > div {
+  display: flex; align-items: center; justify-content: center; min-width: 0; overflow: hidden;
+  font-size: var(--text-label); font-weight: var(--fw-bold); white-space: nowrap;
+  transition: width var(--dur-base) var(--ease);
+}
+.ui-split-bar .is-train { background: var(--split-train); color: var(--split-train-tx); }
+.ui-split-bar .is-val   { background: var(--split-val);   color: var(--split-val-tx); }
+.ui-split-bar .is-test  { background: var(--split-test);  color: var(--split-test-tx); }
+
+.ui-split-rows { display: flex; flex-direction: column; gap: var(--sp-2); }
+.ui-split-row {
+  display: grid; grid-template-columns: 64px minmax(0, 1fr) 40px;
+  align-items: center; gap: var(--sp-3);
+}
+.ui-split-row-l {
+  display: flex; align-items: center; gap: var(--sp-2);
+  font-size: var(--text-secondary); font-weight: var(--fw-semibold); color: var(--tx);
+}
+.ui-split-row-l::before { content: ''; width: 8px; height: 8px; border-radius: var(--r-full); flex-shrink: 0; }
+.ui-split-row.is-train .ui-split-row-l::before { background: var(--split-train); }
+.ui-split-row.is-val   .ui-split-row-l::before { background: var(--split-val); }
+.ui-split-row.is-test  .ui-split-row-l::before { background: var(--split-test); }
+.ui-split-row input[type=range] { width: 100%; margin: 0; cursor: pointer; }
+.ui-split-row.is-train input { accent-color: var(--split-train); }
+.ui-split-row.is-val   input { accent-color: var(--split-val); }
+.ui-split-row.is-test  input { accent-color: var(--split-test); }
+.ui-split-pct {
+  font-family: var(--font-mono); font-size: var(--text-secondary); font-weight: var(--fw-bold);
+  color: var(--tx); text-align: right;
+}
+
+.ui-split-note {
+  display: flex; gap: var(--sp-2); align-items: flex-start;
+  font-size: var(--text-secondary); line-height: var(--lh-snug); color: var(--tx2);
+}
+.ui-split-note > i { color: var(--info); margin-top: var(--s-2); }
+
+.ui-split-foot {
+  display: flex; justify-content: flex-end; gap: var(--modal-gap);
+  padding: var(--split-card-pad); border-top: 1px solid var(--border);
+}
+.ui-split-foot .btn { flex: 1; }

@@ -200,11 +200,13 @@ def _image_dims(path: Path):
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def add_image(project_dir: Path, img_path: Path,
-              job_name: str) -> dict:
+              job_name: str, keep_duplicate: bool = False) -> dict:
     """
     Register a newly uploaded image in the index.
     Returns {'duplicate': True, 'original': path} if MD5 already exists.
     Returns {'duplicate': False, 'path': rel_path} on success.
+    keep_duplicate=True indexes a retained copy at its own path and reports
+    content_duplicate separately. Use this when the upload keeps the file.
     """
     rel   = str(img_path.relative_to(project_dir))
     md5   = _md5(img_path)
@@ -212,6 +214,7 @@ def add_image(project_dir: Path, img_path: Path,
     size  = img_path.stat().st_size
     now   = datetime.utcnow().isoformat()
 
+    duplicate_info = {}
     with _tx(project_dir) as conn:
         # Duplicate check
         if md5:
@@ -219,12 +222,14 @@ def add_image(project_dir: Path, img_path: Path,
                 'SELECT path, filename, job_name FROM hashes WHERE md5 = ?', (md5,)
             ).fetchone()
             if row:
-                return {
+                duplicate_info = {
                     'duplicate': True,
                     'original_path':     row['path'],
                     'original_filename': row['filename'],
                     'original_job':      row['job_name'],
                 }
+                if not keep_duplicate:
+                    return duplicate_info
 
         # Insert into media table
         conn.execute('''
@@ -242,7 +247,9 @@ def add_image(project_dir: Path, img_path: Path,
             ''', (md5, rel, job_name, img_path.name))
 
     return {'duplicate': False, 'path': rel,
-            'width': w, 'height': h, 'size_bytes': size}
+            'width': w, 'height': h, 'size_bytes': size,
+            'content_duplicate': bool(duplicate_info),
+            'original_path': duplicate_info.get('original_path')}
 
 
 def mark_annotated(project_dir: Path, rel_path: str, annotated: bool):

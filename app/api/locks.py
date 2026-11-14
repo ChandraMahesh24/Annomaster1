@@ -20,8 +20,23 @@ from flask import Blueprint, request, jsonify, g
 from app import db
 from app.models.annotation_lock import AnnotationLock, LOCK_TTL_SECONDS
 from app.utils.security import login_required, workspace_role_required
+from app.core.paths import project_dir, resolve_project_path
+from app.models.workspace import Workspace
 
 locks_bp = Blueprint('locks', __name__)
+
+
+@locks_bp.before_request
+def validate_lock_path():
+    if request.method == 'POST':
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify({'error': 'Request body must be a JSON object'}), 400
+        if 'path' in data:
+            ws = db.session.get(Workspace, request.view_args['workspace_id'])
+            if ws:
+                resolve_project_path(project_dir(ws.folder_name, request.view_args['project']), data['path'])
+                data['path'] = data['path'].replace('\\', '/')
 
 
 # ── Shared helpers ─────────────────────────────────────────────────────────────

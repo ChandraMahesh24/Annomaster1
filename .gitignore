@@ -17,6 +17,20 @@ htmlcov/
 venv/
 env/
 .venv/
+.audit-tools/
+.audit-browser/
+
+# ── Generated test/audit output (re-created by scripts/run_audit_tests.py,
+#    browser_audit.py and audit_inventory.py — results, not source) ──
+docs/audit-*.json
+docs/audit-screenshots/
+
+# ── One-time design-system conversion tools (job finished; not
+#    needed to run or test the app) ──
+scripts/find_unused_css.py
+scripts/remove_unused_css.py
+scripts/tokenize_typography.py
+scripts/tokenize_geometry.py
 
 # ── Secrets / local config ──────────────────────────────────
 # Real keys live in .env; only the template is committed.
